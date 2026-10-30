@@ -20,6 +20,7 @@ import (
 	"codist/internal/incident"
 	"codist/internal/review"
 	"codist/internal/watch"
+	"codist/prompts"
 )
 
 type Server struct {
@@ -58,6 +59,7 @@ func (s *Server) Handler() http.Handler {
 	s.extensionRoutes(mux)
 	mux.HandleFunc("POST /api/fix", s.proposeFix)
 	mux.HandleFunc("POST /api/fix/{id}/apply", s.applyFix)
+	mux.HandleFunc("GET /api/prompts", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, prompts.All()) })
 	mux.HandleFunc("GET /api/working", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, review.WorkingReview(s.Repo, s.Fixer.Rules, s.Reviews.Ignores))
 	})
