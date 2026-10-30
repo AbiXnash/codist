@@ -15,6 +15,9 @@ export const STEREOTYPE: Record<string, { label: string; glyph: string; shape: s
   test: { label: 'Test', glyph: 'T', shape: 'ellipse' },
 };
 
+/** Rules with a mechanical fix: the Fix button opens instantly, no model involved. */
+export const INSTANT_REFS = new Set(['console-output', 'literal-instead-of-constant', 'duplicate-log', 'log-helper-method', 'uninjected-dependency', 'copy-paste-wrong-constant']);
+
 export const SEVERITIES: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 
 export const SEVERITY_COLOR: Record<Severity, string> = {

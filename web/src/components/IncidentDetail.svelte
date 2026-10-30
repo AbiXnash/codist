@@ -34,8 +34,8 @@
   }
   function goToCommit(sha: string) {
     app.mode = 'review';
-    app.sidebar = 'commits';
-    void selectCommit(sha);
+    void selectCommit(sha, true);
+    app.tab = 'review';
   }
   async function confirm(i: number) {
     const d = await api.updateIncident(inc.id, { confirmed: inc.confirmed === i ? -1 : i });

@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { AskMessage, CommitItem, Detail, FindingWithPath, FixProposal, Graph, IgnoreScope, Incident, IncidentRow, IssueList, Mode, OpenFile, Status, Tab } from './types';
+import type { AskMessage, CommitItem, Detail, FindingWithPath, FixProposal, Graph, IgnoreScope, Incident, Issue, IssueList, IncidentRow, Mode, OpenFile, Severity, Status, Tab } from './types';
 
 export interface Toast {
   id: number;
@@ -17,6 +17,23 @@ function initialTheme(): Theme {
     /* storage unavailable */
   }
   return matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function prefStr<T extends string>(key: string, allowed: readonly T[], def: T): T {
+  try {
+    const v = localStorage.getItem('codist.' + key) as T | null;
+    return v && allowed.includes(v) ? v : def;
+  } catch {
+    return def;
+  }
+}
+
+export function saveStr(key: string, value: string) {
+  try {
+    localStorage.setItem('codist.' + key, value);
+  } catch {
+    /* storage unavailable */
+  }
 }
 
 function pref(key: string, def: boolean): boolean {
@@ -47,7 +64,7 @@ class AppState {
 
   selectedSha = $state<string | null>(null);
   selectedNode = $state<string | null>(null);
-  tab = $state<Tab>('review');
+  tab = $state<Tab>('issues');
   search = $state('');
   live = $state(false);
   toasts = $state<Toast[]>([]);
@@ -63,9 +80,18 @@ class AppState {
   incident = $state.raw<Incident | null>(null);
   incidentMarkdown = $state('');
   incidentId = $state<string | null>(null); // null = "new analysis" form
-  sidebar = $state<'commits' | 'issues'>('commits');
-  issueState = $state<'open' | 'resolved' | 'ignored'>('open');
+  /** Every tracked issue (all states); the hub filters it client-side. */
   issueList = $state.raw<IssueList | null>(null);
+
+  // History rail: whose commits to list.
+  history = $state<'mine' | 'everyone'>(prefStr('history', ['mine', 'everyone'] as const, 'mine'));
+  // Issues hub: what to show. The graph highlights the same set.
+  scope = $state<'all' | 'commit' | 'mine'>('all');
+  issueState = $state<'open' | 'resolved' | 'ignored'>('open');
+  level = $state<Severity | null>(null);
+  hubQuery = $state('');
+  /** The issue open in the hub's detail view (id of its root). */
+  picked = $state<string | null>(null);
   ask = $state<AskMessage[]>([]);
   asking = $state(false);
 
@@ -78,6 +104,41 @@ class AppState {
   showCommits = $state(pref('commits', true));
   showPanel = $state(pref('panel', true));
   showLegend = $state(pref('legend', true));
+
+  me = $derived((this.status?.user ?? '').trim().toLowerCase());
+  isMe = (name?: string) => !!this.me && (name ?? '').trim().toLowerCase() === this.me;
+  myCommits = $derived(this.commits.filter((c) => this.isMe(c.commit.author)));
+  shownCommits = $derived(this.history === 'mine' && this.me ? this.myCommits : this.commits);
+
+  /** Issues in the hub's scope and state, before the level filter: one entry per root cause, root first. */
+  scoped: Issue[][] = $derived.by(() => {
+    const all = this.issueList?.issues ?? [];
+    const sha = this.selectedSha;
+    const q = this.hubQuery.trim().toLowerCase();
+    const inScope = (i: Issue) =>
+      this.scope === 'all' ? true
+      : this.scope === 'mine' ? this.isMe(i.firstBy) || this.isMe(i.fixedBy)
+      : !!sha && (i.firstSeen === sha || i.fixedIn === sha);
+    const list = all.filter((i) => i.state === this.issueState && inScope(i) && (!q || `${i.title} ${i.path} ${i.ref ?? ''}`.toLowerCase().includes(q)));
+    const m = new Map<string, Issue[]>();
+    for (const i of list) {
+      const k = i.state === 'open' && i.group ? i.group : i.id;
+      m.set(k, [...(m.get(k) ?? []), i]);
+    }
+    return [...m.values()]
+      .map((g) => [...g].sort((a, b) => Number(!!b.groupRoot) - Number(!!a.groupRoot)))
+      .sort((a, b) => SEV_ORDER.indexOf(a[0].severity) - SEV_ORDER.indexOf(b[0].severity) || b[0].firstTime - a[0].firstTime);
+  });
+  /** What the hub lists and the graph highlights. */
+  hub: Issue[][] = $derived(this.level ? this.scoped.filter((g) => g[0].severity === this.level) : this.scoped);
+  /** The picked issue with the other places of the same root cause, root first. */
+  pickedIssue: Issue[] | null = $derived.by(() => {
+    const all = this.issueList?.issues ?? [];
+    const root = all.find((i) => i.id === this.picked);
+    if (!root) return null;
+    const g = root.state === 'open' && root.group ? all.filter((i) => i.state === 'open' && i.group === root.group) : [root];
+    return [...g].sort((a, b) => Number(!!b.groupRoot) - Number(!!a.groupRoot));
+  });
 
   allFindings: FindingWithPath[] = $derived(
     (this.detail?.review?.files ?? []).flatMap((f) => f.findings.map((x) => ({ ...x, path: f.path }))),
@@ -146,16 +207,37 @@ export async function loadCommits() {
 
 export async function loadIssues() {
   try {
-    app.issueList = await api.issues(app.issueState);
+    app.issueList = await api.issues('all');
   } catch {
     /* tracker unavailable until the first review */
   }
 }
 
-export async function selectCommit(sha: string) {
+export async function selectCommit(sha: string, focus = false) {
   app.selectedSha = sha;
+  if (focus) {
+    app.scope = 'commit';
+    app.picked = null;
+    if (app.tab !== 'review' && app.tab !== 'diff') app.tab = 'issues';
+  }
   await refreshDetail();
-  app.tab = 'review';
+}
+
+/** Opens an issue in the hub and points the graph at it. */
+export function pickIssue(id: string | null) {
+  app.picked = id;
+  app.tab = 'issues';
+  app.showPanel = true;
+  const is = app.issueList?.issues.find((i) => i.id === id);
+  const node = is && nodeFor(is.path, is.line);
+  if (node) window.dispatchEvent(new CustomEvent('codist:center', { detail: node }));
+}
+
+/** The graph type that holds a file line: the innermost type spanning it, else the file's first type. */
+export function nodeFor(path: string, line: number): string | null {
+  const nodes = (app.graph?.nodes ?? []).filter((n) => n.file === path);
+  const spanning = nodes.filter((n) => line >= n.startLine && line <= n.endLine).sort((a, b) => a.endLine - a.startLine - (b.endLine - b.startLine));
+  return (spanning[0] ?? nodes[0])?.id ?? null;
 }
 
 export async function refreshDetail() {

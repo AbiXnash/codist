@@ -4,7 +4,7 @@
   const known = $derived(app.commits.some((c) => c.commit.sha === sha));
 </script>
 
-<button class="ref mono" disabled={!known} title={known ? 'Open this commit' : sha} onclick={(e) => { e.stopPropagation(); app.sidebar = 'commits'; void selectCommit(sha); }}>{sha.slice(0, 7)}</button>
+<button class="ref mono" disabled={!known} title={known ? 'Open this commit' : sha} onclick={(e) => { e.stopPropagation(); void selectCommit(sha, true); app.tab = 'review'; }}>{sha.slice(0, 7)}</button>
 
 <style>
   .ref { padding: 0 4px; border: 0; border-radius: 3px; background: var(--surface-3); color: var(--accent-text); font-size: 11px; cursor: pointer; }

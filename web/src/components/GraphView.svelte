@@ -2,10 +2,10 @@
   import { onMount, untrack } from 'svelte';
   import cytoscape, { type Core, type ElementDefinition, type StylesheetJson } from 'cytoscape';
   import fcose from 'cytoscape-fcose';
-  import { app, selectNode } from '../lib/store.svelte';
+  import { app, nodeFor, selectNode } from '../lib/store.svelte';
   import { cssVar, SEVERITY_COLOR, STATE_COLOR, STEREOTYPE, stereo, worst } from '../lib/theme';
   import Glyph from './Glyph.svelte';
-  import type { Graph } from '../lib/types';
+  import type { Graph, Severity } from '../lib/types';
 
   cytoscape.use(fcose);
 
@@ -70,7 +70,7 @@
   }
 
   function styles(): StylesheetJson {
-    const bg = cssVar('--surface');
+    const bg = cssVar('--canvas');
     const edge = cssVar('--graph-edge');
     const label = cssVar('--graph-label');
     const accent = cssVar('--accent');
@@ -115,6 +115,7 @@
       { selector: 'node.added', style: { 'border-color': STATE_COLOR.added, 'border-width': 3, 'underlay-color': STATE_COLOR.added, 'underlay-opacity': 0.18, 'font-weight': 600, color: cssVar('--text') } },
       { selector: 'node.impacted', style: { 'border-color': STATE_COLOR.impacted, 'border-width': 2, 'border-style': 'dashed' } },
       { selector: 'node.issue', style: { 'underlay-color': 'data(issueColor)', 'underlay-opacity': 0.28, 'underlay-padding': 8, 'border-color': 'data(issueColor)', 'border-width': 3 } },
+      { selector: 'node.target', style: { 'border-color': 'data(issueColor)', 'border-width': 4, 'underlay-color': 'data(issueColor)', 'underlay-opacity': 0.45, 'underlay-padding': 12, 'font-weight': 700, color: cssVar('--text') } },
       { selector: 'node.picked', style: { 'border-color': accent, 'border-width': 3, 'underlay-color': accent, 'underlay-opacity': 0.2 } },
       { selector: 'node.match', style: { 'underlay-color': accent, 'underlay-opacity': 0.35 } },
       { selector: 'edge.impact', style: { 'line-color': STATE_COLOR.impacted, 'target-arrow-color': STATE_COLOR.impacted, width: 1.8 } },
@@ -204,15 +205,17 @@
   function highlight() {
     if (!cy) return;
     const a = app.detail?.analysis;
-    const findings = app.findings;
     const picked = app.selectedNode;
     const q = app.search.trim().toLowerCase();
+    const commitScope = app.scope === 'commit';
 
     cy.batch(() => {
-      cy!.elements().removeClass('changed added impacted issue impact hl picked dim match');
+      cy!.elements().removeClass('changed added impacted issue impact hl picked dim match target');
       let keep: cytoscape.Collection | null = null;
+
+      // The selected commit: what it changed and what depends on that.
+      const changed = new Set<string>();
       if (a) {
-        const changed = new Set<string>();
         for (const c of a.changed) {
           const n = cy!.getElementById(c.id);
           if (n.empty()) continue;
@@ -224,18 +227,47 @@
         cy!.edges().forEach((e) => {
           if (changed.has(e.target().id()) && impacted.has(e.source().id())) e.addClass('impact');
         });
-        const byNode = new Map<string, typeof findings>();
-        for (const f of findings) if (f.nodeId) byNode.set(f.nodeId, [...(byNode.get(f.nodeId) ?? []), f]);
-        for (const [id, list] of byNode) {
-          const n = cy!.getElementById(id);
-          if (n.nonempty()) n.addClass('issue').data('issueColor', SEVERITY_COLOR[worst(list)]);
+      }
+
+      // The issues the hub lists, as rings in the worst severity per type.
+      const byNode = new Map<string, { severity: Severity }[]>();
+      for (const g of app.hub) {
+        for (const i of g) {
+          const id = i.line ? nodeFor(i.path, i.line) : nodeFor(i.path, 0);
+          if (id) byNode.set(id, [...(byNode.get(id) ?? []), i]);
         }
-        if (app.focusChanges && changed.size) {
+      }
+      for (const [id, list] of byNode) {
+        const n = cy!.getElementById(id);
+        if (n.nonempty()) n.addClass('issue').data('issueColor', SEVERITY_COLOR[worst(list)]);
+      }
+
+      if (app.focusChanges) {
+        if (commitScope && changed.size) {
           let k = cy!.collection();
           cy!.nodes('.changed, .added').forEach((n) => { k = k.union(n.closedNeighborhood()); });
           keep = k.union(k.nodes().ancestors());
+        } else if (!commitScope && byNode.size) {
+          let k = cy!.collection();
+          cy!.nodes('.issue').forEach((n) => { k = k.union(n.closedNeighborhood()); });
+          keep = k.union(k.nodes().ancestors());
         }
       }
+
+      // The issue open in the hub: its places stand out.
+      const targets = (app.pickedIssue ?? []).map((i) => nodeFor(i.path, i.line)).filter((x): x is string => !!x);
+      if (targets.length) {
+        let k = cy!.collection();
+        for (const id of targets) {
+          const n = cy!.getElementById(id);
+          if (n.empty()) continue;
+          n.addClass('target');
+          k = k.union(n.closedNeighborhood());
+          n.connectedEdges().addClass('hl');
+        }
+        keep = k.union(k.nodes().ancestors());
+      }
+
       if (picked) {
         const n = cy!.getElementById(picked);
         if (n.nonempty()) {
@@ -318,7 +350,9 @@
 
   $effect(() => {
     void app.detail;
-    void app.findings;
+    void app.hub;
+    void app.pickedIssue;
+    void app.scope;
     void app.selectedNode;
     void app.focusChanges;
     void app.search;
@@ -341,7 +375,7 @@
 
   <div class="toolbar">
     <div class="seg">
-      <button class:on={app.focusChanges} onclick={() => (app.focusChanges = !app.focusChanges)} title="Dim everything not touched by the selected commit">Focus</button>
+      <button class:on={app.focusChanges} onclick={() => (app.focusChanges = !app.focusChanges)} title="Dim what is not relevant: the commit's changes in commit scope, otherwise types with listed issues">Focus</button>
       <button class:on={app.groupPackages} onclick={() => (app.groupPackages = !app.groupPackages)} title="Group types by package">Packages</button>
       <button class:on={app.showTests} onclick={() => (app.showTests = !app.showTests)} title="Show test classes">Tests</button>
     </div>
@@ -372,7 +406,7 @@
       <span><i class="ring" style:border-color={STATE_COLOR.changed}></i>Changed</span>
       <span><i class="ring" style:border-color={STATE_COLOR.added}></i>Added</span>
       <span><i class="ring dashed" style:border-color={STATE_COLOR.impacted}></i>Impacted</span>
-      <span><i class="ring" style:border-color={STATE_COLOR.issue}></i>Has findings</span>
+      <span><i class="ring" style:border-color={STATE_COLOR.issue}></i>Has issues (as listed)</span>
       <span class="faint">dashed = interface / abstract</span>
     </div>
   {/if}
@@ -383,7 +417,7 @@
 </section>
 
 <style>
-  .graph { position: relative; min-width: 0; min-height: 360px; background: var(--surface); }
+  .graph { position: relative; min-width: 0; min-height: 360px; background-color: var(--canvas); background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px); background-size: 18px 18px; }
   .canvas { position: absolute; inset: 0; }
 
   .toolbar { position: absolute; top: 10px; left: 10px; display: flex; gap: 6px; z-index: 2; }

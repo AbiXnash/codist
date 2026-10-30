@@ -2,22 +2,24 @@
 
 :root,
 :root[data-theme='dark'] {
-  --bg: #0b0c0e;
-  --surface: #111214;
-  --surface-2: #17181b;
-  --surface-3: #1e2024;
-  --hover: rgba(255, 255, 255, 0.04);
-  --active: rgba(255, 255, 255, 0.07);
-  --border: #23252a;
-  --border-strong: #2f3238;
-  --text: #e7e8ea;
-  --text-2: #a1a4ab;
-  --text-3: #6b6f78;
-  --accent: #3b82f6;
-  --accent-text: #7aa7ff;
-  --accent-soft: rgba(59, 130, 246, 0.14);
-  --code-bg: #0d0e10;
-  --graph-edge: #3a3e46;
+  --bg: #0a0b0d;
+  --surface: #101115;
+  --surface-2: #16181d;
+  --surface-3: #1d2027;
+  --hover: rgba(255, 255, 255, 0.045);
+  --active: rgba(255, 255, 255, 0.08);
+  --border: #22252c;
+  --border-strong: #2e323b;
+  --text: #eceef2;
+  --text-2: #a4a9b4;
+  --text-3: #6c7280;
+  --accent: #6366f1;
+  --accent-text: #a5b4fc;
+  --accent-soft: rgba(99, 102, 241, 0.15);
+  --code-bg: #0c0d10;
+  --canvas: #0d0e12;
+  --canvas-dot: rgba(255, 255, 255, 0.055);
+  --graph-edge: #3a3e48;
   --graph-label: #c4c7cd;
   --graph-pkg: rgba(255, 255, 255, 0.025);
   --node-fill: #24272d;
@@ -28,21 +30,23 @@
 }
 
 :root[data-theme='light'] {
-  --bg: #f6f7f9;
+  --bg: #f3f4f7;
   --surface: #ffffff;
-  --surface-2: #f7f8fa;
-  --surface-3: #eef0f3;
+  --surface-2: #f6f7f9;
+  --surface-3: #eceef2;
   --hover: rgba(15, 23, 42, 0.04);
   --active: rgba(15, 23, 42, 0.07);
-  --border: #e4e6ea;
-  --border-strong: #d4d7dd;
-  --text: #16181d;
-  --text-2: #555a64;
-  --text-3: #8b909a;
-  --accent: #2563eb;
-  --accent-text: #2563eb;
-  --accent-soft: rgba(37, 99, 235, 0.1);
-  --code-bg: #fbfbfc;
+  --border: #e3e5ea;
+  --border-strong: #d2d6dd;
+  --text: #14161b;
+  --text-2: #535965;
+  --text-3: #8a909b;
+  --accent: #4f46e5;
+  --accent-text: #4338ca;
+  --accent-soft: rgba(79, 70, 229, 0.09);
+  --code-bg: #fafbfc;
+  --canvas: #f8f9fb;
+  --canvas-dot: rgba(15, 23, 42, 0.08);
   --graph-edge: #c6cad2;
   --graph-label: #3b3f47;
   --graph-pkg: rgba(15, 23, 42, 0.025);
@@ -70,10 +74,10 @@
   --impacted: #ea580c;
 
   --r: 6px;
-  --r-lg: 8px;
+  --r-lg: 9px;
   --ease: cubic-bezier(0.2, 0, 0, 1);
-  --panel-w: 42%;
-  --side-w: 272px;
+  --panel-w: min(460px, 40vw);
+  --side-w: 296px;
 }
 
 * { box-sizing: border-box; }
