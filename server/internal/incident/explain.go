@@ -3,6 +3,7 @@ package incident
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -35,6 +36,10 @@ func (e *Engine) explain(in *Incident) error {
 			fmt.Fprintf(&b, "    at %s.%s(%s:%d)\n", f.Class, f.Method, f.File, f.Line)
 			shown++
 		}
+	}
+
+	if p := NullPattern(in.Errors); p != "" {
+		b.WriteString("\n## Pattern across the errors (computed from the NPE messages)\n" + p + "\n")
 	}
 
 	b.WriteString("\n## Code where the errors occur (\">>\" marks the line in the stack trace)\n")
@@ -366,4 +371,54 @@ func num(v any) int {
 		return n
 	}
 	return 0
+}
+
+var nullValue = regexp.MustCompile(`because (?:the return value of "([^"]+)"|"([^"]+)") is null`)
+
+// NullPattern summarises NullPointerExceptions that fail in the same method on different null
+// values. That shape usually has one root cause (an input whose fields can be null, handled nowhere),
+// which a model looking at the errors one by one tends to miss.
+func NullPattern(events []ErrorEvent) string {
+	type site struct {
+		values map[string]int
+		total  int
+	}
+	sites := map[string]*site{}
+	var order []string
+	for _, e := range events {
+		if !strings.HasSuffix(e.Exception, "NullPointerException") || len(e.Frames) == 0 {
+			continue
+		}
+		m := nullValue.FindStringSubmatch(e.Message)
+		if m == nil {
+			continue
+		}
+		v := m[1]
+		if v == "" {
+			v = "local variable " + m[2]
+		}
+		f := e.Frames[0]
+		key := f.Class[strings.LastIndex(f.Class, ".")+1:] + "." + f.Method
+		if sites[key] == nil {
+			sites[key] = &site{values: map[string]int{}}
+			order = append(order, key)
+		}
+		sites[key].values[v] += e.Count
+		sites[key].total += e.Count
+	}
+	var b strings.Builder
+	for _, k := range order {
+		s := sites[k]
+		if len(s.values) < 2 {
+			continue
+		}
+		var vals []string
+		for v, n := range s.values {
+			vals = append(vals, fmt.Sprintf("%s (×%d)", v, n))
+		}
+		sort.Strings(vals)
+		fmt.Fprintf(&b, "- %d NullPointerExceptions in %s on %d different null values: %s. One cause probably explains all of them: "+
+			"values that can be null reach this method unchecked. Look for where that null handling was lost.\n", s.total, k, len(s.values), strings.Join(vals, ", "))
+	}
+	return b.String()
 }
