@@ -1,0 +1,246 @@
+- id: tx-self-invocation
+  title: Self-invocation bypasses @Transactional
+  category: spring
+  severity: high
+  triggers: ['@Transactional']
+  check: A method in the same class calling a @Transactional (or @Cacheable, @Async, @Retryable) method on this.
+  why: The proxy is skipped; the call runs without a transaction, cache or retry.
+  bad: |
+    public void cancel(Long id) { refund(id); }
+    @Transactional public void refund(Long id) { ... }
+  good: |
+    @Transactional public void cancel(Long id) { refund(id); }   // or move refund to another bean
+
+- id: tx-missing-on-writes
+  title: Multiple writes without a transaction
+  category: spring
+  severity: high
+  triggers: ['.save(', '.delete', '.saveAll(', 'jdbc.update', 'set']
+  check: Public service methods that write more than once (or read, modify and write) with no @Transactional.
+  why: A failure halfway leaves partial data; changes to loaded entities are not flushed.
+  bad: |
+    public void transfer(Account a, Account b, BigDecimal x) { a.debit(x); repo.save(a); b.credit(x); repo.save(b); }
+  good: |
+    @Transactional public void transfer(...) { ... }
+
+- id: tx-readonly-write
+  title: Write inside a read-only transaction
+  category: spring
+  severity: medium
+  triggers: ['readOnly = true']
+  check: Methods marked @Transactional(readOnly = true) that save, delete or modify entities.
+  why: Depending on the driver the write is silently dropped or fails in production only.
+  bad: |
+    @Transactional(readOnly = true) public Order touch(Long id) { Order o = find(id); o.setSeen(true); return o; }
+  good: |
+    @Transactional public Order touch(Long id) { ... }
+
+- id: tx-checked-exception
+  title: Checked exception does not roll back
+  category: spring
+  severity: medium
+  triggers: ['@Transactional', 'throws ']
+  check: "@Transactional methods that throw checked exceptions without rollbackFor."
+  why: Spring only rolls back on unchecked exceptions by default; the partial write is committed.
+  bad: |
+    @Transactional public void importFile(Path p) throws IOException { ... }
+  good: |
+    @Transactional(rollbackFor = Exception.class) public void importFile(Path p) throws IOException { ... }
+
+- id: tx-remote-call
+  title: Remote call inside a transaction
+  category: spring
+  severity: medium
+  triggers: ['@Transactional', 'RestTemplate', 'WebClient', 'RestClient', 'restClient', 'kafkaTemplate', 'send(', 'Feign']
+  check: HTTP calls, message sends or e-mails inside @Transactional methods.
+  why: Holds a DB connection while waiting; on rollback the message or charge has already gone out.
+  bad: |
+    @Transactional public void place(Order o) { repo.save(o); payments.charge(o); kafka.send("orders", o); }
+  good: |
+    // save in the transaction, publish after commit:
+    @TransactionalEventListener(phase = AFTER_COMMIT) void on(OrderPlaced e) { kafka.send("orders", e); }
+
+- id: event-before-commit
+  title: Event published before the transaction commits
+  category: spring
+  severity: medium
+  triggers: ['publishEvent', '@EventListener']
+  check: "@EventListener handlers that send messages or call other systems for events published inside a transaction."
+  why: Listeners act on data that may still roll back.
+  bad: |
+    @EventListener void onPlaced(OrderPlaced e) { mail.send(e); }
+  good: |
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT) void onPlaced(OrderPlaced e) { mail.send(e); }
+
+- id: field-injection
+  title: Field injection
+  category: spring
+  severity: low
+  triggers: ['@Autowired', '@Inject']
+  check: "@Autowired or @Inject on fields."
+  why: Hides dependencies, prevents final fields and immutability, needs reflection in tests.
+  bad: |
+    @Autowired private OrderRepository orders;
+  good: |
+    private final OrderRepository orders;
+    public OrderService(OrderRepository orders) { this.orders = orders; }
+
+- id: value-instead-of-properties
+  title: Scattered @Value configuration
+  category: spring
+  severity: low
+  triggers: ['@Value(']
+  check: Several @Value("${...}") fields, missing defaults, or values parsed by hand.
+  why: Typos fail at runtime, there is no validation and no single place to see the config.
+  bad: |
+    @Value("${payments.timeout}") private int timeout;
+  good: |
+    @ConfigurationProperties("payments") @Validated record PaymentProps(@NotNull Duration timeout) {}
+
+- id: request-body-validation
+  title: Request body not validated
+  category: spring
+  severity: medium
+  triggers: ['@RequestBody']
+  check: "@RequestBody parameters without @Valid, or nested objects and lists without @Valid on the field."
+  why: Constraint annotations are ignored and bad data reaches the database.
+  bad: |
+    public OrderResponse place(@RequestBody CreateOrderRequest req)
+  good: |
+    public OrderResponse place(@Valid @RequestBody CreateOrderRequest req)
+
+- id: http-status
+  title: Wrong HTTP status
+  category: spring
+  severity: low
+  triggers: ['@PostMapping', '@DeleteMapping', '@PutMapping', 'ResponseEntity', 'return null']
+  check: Create endpoints returning 200, deletes returning a body, not-found returning 200 with null, client errors returning 500.
+  why: Clients and retries behave wrongly; monitoring counts user errors as outages.
+  bad: |
+    @PostMapping public Order create(...)   // 200 and maybe null
+  good: |
+    @PostMapping @ResponseStatus(HttpStatus.CREATED) public OrderResponse create(...)
+
+- id: entity-in-api
+  title: JPA entity used as request or response
+  category: spring
+  severity: medium
+  triggers: ['@RequestBody', '@GetMapping', '@PostMapping', 'ResponseEntity<']
+  check: Controllers that accept or return @Entity classes directly.
+  why: Mass assignment (clients set id, role, price), lazy-loading exceptions, and the API breaks when the schema changes.
+  bad: |
+    @PostMapping public Customer create(@RequestBody Customer c) { return repo.save(c); }
+  good: |
+    @PostMapping public CustomerResponse create(@Valid @RequestBody CreateCustomerRequest req) { ... }
+
+- id: unpaginated-list
+  title: Unbounded list endpoint
+  category: performance
+  severity: medium
+  triggers: ['findAll()', 'List<', '@GetMapping']
+  check: Endpoints or services returning findAll() or unbounded queries.
+  why: Fine with 50 rows in dev, times out with 2 million in production.
+  bad: |
+    @GetMapping public List<ProductResponse> list() { return repo.findAll().stream().map(...).toList(); }
+  good: |
+    @GetMapping public Page<ProductResponse> list(Pageable page) { return repo.findAll(page).map(...); }
+
+- id: exception-handler-coverage
+  title: Exceptions mapped to the wrong status
+  category: spring
+  severity: low
+  triggers: ['@ExceptionHandler', '@RestControllerAdvice', '@ControllerAdvice']
+  check: Handlers that map every exception to 500, return stack traces, or miss validation and conflict errors.
+  why: Users see 500 for their own mistakes; internals leak.
+  bad: |
+    @ExceptionHandler(Exception.class) ResponseEntity<String> all(Exception e) { return ResponseEntity.status(500).body(e.toString()); }
+  good: |
+    @ExceptionHandler(NotFoundException.class) ProblemDetail notFound(NotFoundException e) { return ProblemDetail.forStatusAndDetail(NOT_FOUND, e.getMessage()); }
+
+- id: cacheable-pitfalls
+  title: Caching pitfalls
+  category: spring
+  severity: medium
+  triggers: ['@Cacheable', '@CacheEvict', '@CachePut']
+  check: Caches with no eviction on update, keys missing a parameter, caching entities or mutable objects, self-invocation.
+  why: Users see stale or another user's data; mutating the cached object changes it for everyone.
+  bad: |
+    @Cacheable("products") public Product get(Long id) { ... }   // update() never evicts
+  good: |
+    @Cacheable(value = "products", key = "#id") public ProductResponse get(Long id) { ... }
+    @CacheEvict(value = "products", key = "#id") public void update(Long id, ...) { ... }
+
+- id: http-client-timeouts
+  title: HTTP client without timeouts
+  category: performance
+  severity: high
+  triggers: ['RestTemplate', 'WebClient', 'RestClient', 'HttpClient', 'HttpURLConnection', 'Feign']
+  check: Clients created without connect and read timeouts, or a new client per call.
+  why: One slow dependency hangs every request thread; the service goes down with it.
+  bad: |
+    new RestTemplate().getForObject(url, Rate.class);
+  good: |
+    restClient = RestClient.builder().requestFactory(factoryWithTimeouts(Duration.ofSeconds(2), Duration.ofSeconds(5))).build();
+
+- id: blocking-in-reactive
+  title: Blocking call in reactive code
+  category: performance
+  severity: high
+  triggers: ['Mono', 'Flux', '.block()', 'subscribe(']
+  check: .block(), JDBC, Thread.sleep or blocking HTTP inside reactive chains.
+  why: Blocks the event loop; throughput collapses under load.
+  bad: |
+    return Mono.just(id).map(i -> repo.findById(i).orElseThrow());
+  good: |
+    return Mono.fromCallable(() -> repo.findById(id).orElseThrow()).subscribeOn(Schedulers.boundedElastic());
+
+- id: circular-dependency-lazy
+  title: "@Lazy used to hide a circular dependency"
+  category: design
+  severity: low
+  triggers: ['@Lazy']
+  check: "@Lazy injection or setter injection added to break a cycle."
+  why: The cycle is a design problem; it surfaces later as proxies and initialisation-order bugs.
+  bad: |
+    public OrderService(@Lazy PaymentService payments) { ... }
+  good: |
+    // extract the shared logic both services need into a third bean, or use events
+
+- id: open-in-view
+  title: Open Session in View enabled
+  category: config
+  severity: medium
+  applies: [yaml, properties]
+  triggers: ['spring.jpa', 'jpa:', 'open-in-view']
+  check: spring.jpa.open-in-view not set to false.
+  why: Lazy loading in views and JSON serialisation issues hidden queries and holds connections for the whole request.
+  bad: |
+    spring.jpa.open-in-view: true   # or not set (default true)
+  good: |
+    spring.jpa.open-in-view: false
+
+- id: ddl-auto-prod
+  title: Hibernate ddl-auto in application config
+  category: config
+  severity: high
+  applies: [yaml, properties]
+  triggers: ['ddl-auto']
+  check: ddl-auto update, create or create-drop outside a dev or test profile.
+  why: Schema changes happen at startup without review; create-drop wipes data.
+  bad: |
+    spring.jpa.hibernate.ddl-auto: update
+  good: |
+    spring.jpa.hibernate.ddl-auto: validate   # schema via Flyway or Liquibase
+
+- id: actuator-exposure
+  title: Actuator endpoints exposed
+  category: security
+  severity: high
+  applies: [yaml, properties]
+  triggers: ['management.endpoints', 'exposure', "include: '*'", 'include: "*"']
+  check: management.endpoints.web.exposure.include set to * or including env, heapdump, beans without security.
+  why: Leaks secrets and heap dumps to anyone who can reach the port.
+  bad: |
+    management.endpoints.web.exposure.include: "*"
+  good: |
+    management.endpoints.web.exposure.include: health,info,prometheus

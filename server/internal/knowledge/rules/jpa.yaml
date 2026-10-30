@@ -1,0 +1,132 @@
+- id: n-plus-one
+  title: N+1 queries from lazy relations
+  category: jpa
+  severity: high
+  triggers: ['FetchType.LAZY', '@ManyToOne', '@OneToMany', '.stream()', 'for (', '.map(', '.forEach(']
+  check: Loops, streams or DTO mappers that call getters of lazy relations on each element of a list.
+  why: 1 query becomes 1 + N; a page of 100 orders runs 101 queries.
+  bad: |
+    orders.findByStatus(NEW).stream().map(o -> o.getCustomer().getEmail()).toList();
+  good: |
+    @Query("select o from Order o join fetch o.customer where o.status = :s") List<Order> findWithCustomer(Status s);
+    // or @EntityGraph(attributePaths = "customer"), or a DTO projection
+
+- id: eager-collections
+  title: EAGER fetching on relations
+  category: jpa
+  severity: medium
+  triggers: ['FetchType.EAGER', '@OneToMany', '@ManyToMany', '@ManyToOne', '@OneToOne']
+  check: FetchType.EAGER, or @ManyToOne/@OneToOne left at their EAGER default.
+  why: Every load pulls the object graph; cartesian products and memory blowups.
+  bad: |
+    @ManyToOne private Customer customer;   // EAGER by default
+  good: |
+    @ManyToOne(fetch = FetchType.LAZY) private Customer customer;
+
+- id: entity-equals-lombok
+  title: Lombok @Data or generated-id equals on entities
+  category: jpa
+  severity: medium
+  triggers: ['@Data', '@EqualsAndHashCode', '@ToString', '@Entity']
+  check: "@Data, @EqualsAndHashCode or @ToString on entities; equals/hashCode based on a generated id."
+  why: hashCode changes after persist (entities vanish from sets); toString walks lazy relations and recurses.
+  bad: |
+    @Entity @Data public class Order { @Id @GeneratedValue Long id; @ManyToOne Customer customer; }
+  good: |
+    @Entity @Getter public class Order { ... }   // equals/hashCode on a natural key, or id with a constant hashCode
+
+- id: in-memory-filtering
+  title: Filtering in Java instead of in the query
+  category: performance
+  severity: medium
+  triggers: ['findAll()', '.filter(', '.stream()']
+  check: findAll() followed by stream().filter, count or sort.
+  why: Loads the whole table into memory for a handful of rows.
+  bad: |
+    repo.findAll().stream().filter(o -> o.getStatus() == NEW).count();
+  good: |
+    repo.countByStatus(NEW);
+
+- id: save-in-loop
+  title: Saving or querying one row at a time in a loop
+  category: performance
+  severity: medium
+  triggers: ['for (', '.forEach(', '.save(', 'findById(']
+  check: repository.save or findById inside loops over many items.
+  why: One round trip per row; imports take minutes instead of seconds.
+  bad: |
+    for (Row r : rows) repo.save(toEntity(r));
+  good: |
+    repo.saveAll(rows.stream().map(this::toEntity).toList());   // with hibernate.jdbc.batch_size
+
+- id: modifying-query
+  title: "@Modifying query leaves a stale persistence context"
+  category: jpa
+  severity: medium
+  triggers: ['@Modifying']
+  check: "@Modifying queries without clearAutomatically/flushAutomatically, or without @Transactional."
+  why: Entities already loaded keep old values; later saves overwrite the bulk update.
+  bad: |
+    @Modifying @Query("update Product p set p.price = :p") int reprice(BigDecimal p);
+  good: |
+    @Modifying(clearAutomatically = true, flushAutomatically = true) @Query(...) int reprice(BigDecimal p);
+
+- id: cascade-misuse
+  title: Dangerous cascade
+  category: jpa
+  severity: high
+  triggers: ['CascadeType', 'cascade', 'orphanRemoval']
+  check: CascadeType.ALL or REMOVE on @ManyToOne/@ManyToMany, or orphanRemoval on shared children.
+  why: Deleting an order deletes the customer and every other order of that customer.
+  bad: |
+    @ManyToOne(cascade = CascadeType.ALL) private Customer customer;
+  good: |
+    @ManyToOne(fetch = FetchType.LAZY) private Customer customer;   // cascade only from parent to owned children
+
+- id: enum-ordinal
+  title: Enum stored as its ordinal
+  category: jpa
+  severity: high
+  triggers: ['enum ', '@Enumerated', 'Status', 'Type']
+  check: Enum fields on entities without @Enumerated(EnumType.STRING).
+  why: Inserting a constant in the middle of the enum silently remaps every existing row.
+  bad: |
+    private OrderStatus status;   // stored as 0, 1, 2
+  good: |
+    @Enumerated(EnumType.STRING) private OrderStatus status;
+
+- id: detached-modification
+  title: Entity changed outside a transaction
+  category: jpa
+  severity: high
+  triggers: ['.set', 'findById(', 'orElseThrow']
+  check: Service methods without @Transactional that load an entity, change it and never save it.
+  why: The change is never written; the API says OK and nothing happened.
+  bad: |
+    public void cancel(Long id) { orders.findById(id).orElseThrow().cancel(); }
+  good: |
+    @Transactional public void cancel(Long id) { orders.findById(id).orElseThrow().cancel(); }
+
+- id: bidirectional-sync
+  title: Bidirectional relation not kept in sync
+  category: jpa
+  severity: low
+  triggers: ['mappedBy']
+  check: Adding to one side of a bidirectional relation without setting the other side.
+  why: The in-memory model disagrees with the database until the next load; nothing is saved from the inverse side.
+  bad: |
+    order.getItems().add(item);
+  good: |
+    order.addItem(item);   // sets item.setOrder(this) as well
+
+- id: missing-unique-index
+  title: Lookup or uniqueness without an index
+  category: jpa
+  severity: low
+  triggers: ['findBy', 'existsBy', 'unique']
+  check: Repository lookups by a column (email, code, slug) that has no index or unique constraint.
+  why: Full table scans, and duplicates when two requests race.
+  bad: |
+    Optional<Customer> findByEmail(String email);   // email has no unique constraint
+  good: |
+    @Column(nullable = false, unique = true) private String email;

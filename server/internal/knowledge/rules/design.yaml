@@ -1,0 +1,60 @@
+- id: magic-values
+  title: Magic numbers and strings
+  category: design
+  severity: info
+  triggers: ['re:[^\w.]\d{3,}[^\w.]', 're:"[A-Z_]{4,}"']
+  check: Unexplained literals for limits, timeouts, statuses or keys repeated in code.
+  why: Hard to change consistently; the meaning is lost.
+  bad: |
+    if (attempts > 5) lock(user);
+  good: |
+    private static final int MAX_LOGIN_ATTEMPTS = 5;
+
+- id: exposed-internal-state
+  title: Internal collection exposed
+  category: design
+  severity: low
+  triggers: ['return this.', 'return items', 'List<', 'public static']
+  check: Getters returning mutable internal collections; public static non-final fields.
+  why: Callers modify the object's state without going through its rules.
+  bad: |
+    public List<Item> getItems() { return items; }
+  good: |
+    public List<Item> getItems() { return Collections.unmodifiableList(items); }
+
+- id: api-compatibility
+  title: Breaking API change
+  category: design
+  severity: medium
+  triggers: ['record ', '@JsonProperty', 'Mapping(', 'Response', 'Request']
+  check: Renamed or removed fields in request/response DTOs, changed paths or status codes, enum values removed.
+  why: Mobile apps and other services break on deploy; they cannot be updated at the same time.
+  bad: |
+    public record OrderResponse(Long id, BigDecimal amount) {}   // was "total"
+  good: |
+    // add the new field, keep the old one deprecated until clients move
+    public record OrderResponse(Long id, @Deprecated BigDecimal total, BigDecimal amount) {}
+
+- id: leftover-code
+  title: Debug or commented-out code left in
+  category: design
+  severity: info
+  triggers: ['// TODO', 'FIXME', 'XXX', 're://\s*\w+(\.\w+)*\(.*\);', 'System.exit']
+  check: Commented-out code, TODO/FIXME without a ticket, System.exit, temporary hacks.
+  why: Noise that hides real changes; System.exit kills the whole server.
+  bad: |
+    // orders.deleteAll();
+  good: |
+    // remove it; git keeps history
+
+- id: domain-constants-in-common
+  title: Domain-specific constant in a shared constants class
+  category: design
+  severity: low
+  triggers: ['final class', 'static final String', 'interface']
+  check: Constants classes in common packages holding values that belong to one domain (CUSTOMER, ORDER) and reused elsewhere.
+  why: Encourages reusing the wrong constant in other domains.
+  bad: |
+    public final class DataConstant { public static final String LOG_PREFIX = "CUSTOMER"; }
+  good: |
+    // keep the constant next to its owner (CustomerService.LOG_PREFIX), or name it CUSTOMER_LOG_PREFIX

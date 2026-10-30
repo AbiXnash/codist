@@ -1,0 +1,229 @@
+- id: optional-get-unchecked
+  title: Optional.get() without a presence check
+  category: bug
+  severity: high
+  triggers: ['.get()', 'Optional']
+  check: Optional.get() or orElseThrow() with no argument on a lookup that can be empty.
+  why: Throws NoSuchElementException, which becomes an HTTP 500 instead of a clear 404 or 400.
+  bad: |
+    Order o = orders.findById(id).get();
+  good: |
+    Order o = orders.findById(id).orElseThrow(() -> new NotFoundException("No order " + id));
+
+- id: return-null-collection
+  title: Returning null instead of an empty collection or Optional
+  category: bug
+  severity: medium
+  triggers: ['return null']
+  check: Methods that return List, Set, Map or a lookup result and return null on "nothing found".
+  why: Every caller must remember a null check; the one that forgets throws NullPointerException.
+  bad: |
+    if (rows.isEmpty()) return null;
+  good: |
+    if (rows.isEmpty()) return List.of();   // or Optional.empty() for single results
+
+- id: boxed-equality
+  title: Boxed numbers or strings compared with ==
+  category: bug
+  severity: high
+  triggers: ['re:\b(Long|Integer|Short|Byte|Double|String)\b', ' == ', ' != ']
+  check: == or != between Long, Integer, String or other objects (ids, codes, status strings).
+  why: Works in tests for small values (Integer cache -128..127) and fails in production for real ids.
+  bad: |
+    if (order.getCustomerId() == customer.getId()) { ... }   // Long == Long
+  good: |
+    if (Objects.equals(order.getCustomerId(), customer.getId())) { ... }
+
+- id: null-unboxing
+  title: Unboxing a value that can be null
+  category: bug
+  severity: high
+  triggers: ['re:\b(int|long|double|boolean)\s+\w+\s*=\s*[\w.]+\.(get|getOrDefault)\w*\(', 'Integer', 'Long', 'Boolean']
+  check: A Map.get, getter or JPA column of type Integer/Long/Boolean assigned to a primitive or used in arithmetic.
+  why: Auto-unboxing a null throws NullPointerException on a line that looks harmless.
+  bad: |
+    int qty = quantities.get(productId);
+  good: |
+    int qty = quantities.getOrDefault(productId, 0);
+
+- id: int-overflow
+  title: Integer overflow in arithmetic
+  category: bug
+  severity: medium
+  triggers: ['re:\bint\b[^;]*\*', '* 1000', '* 60', '* 24', 'Integer.MAX_VALUE']
+  check: int multiplication for durations, sizes, money in cents or counters that can exceed 2^31.
+  why: Silently wraps to a negative number; timeouts and totals become nonsense.
+  bad: |
+    int timeoutMs = days * 24 * 60 * 60 * 1000;
+  good: |
+    long timeoutMs = Duration.ofDays(days).toMillis();   // or Math.multiplyExact
+
+- id: floating-point-money
+  title: double or float used for money
+  category: bug
+  severity: high
+  triggers: ['re:(?i)\b(double|float)\s+\w*(price|amount|total|cost|balance|fee|tax|discount)']
+  check: Monetary values held or computed in double/float.
+  why: 0.1 + 0.2 != 0.3; totals drift by cents and reconciliation fails.
+  bad: |
+    double total = price * quantity;
+  good: |
+    BigDecimal total = price.multiply(BigDecimal.valueOf(quantity));
+
+- id: bigdecimal-equals
+  title: BigDecimal compared with equals
+  category: bug
+  severity: medium
+  triggers: ['BigDecimal', '.equals(']
+  check: BigDecimal.equals or BigDecimal used as a map or set key.
+  why: equals compares scale, so 2.0 and 2.00 are "different"; checks fail for equal amounts.
+  bad: |
+    if (paid.equals(order.getTotal())) { ... }
+  good: |
+    if (paid.compareTo(order.getTotal()) == 0) { ... }
+
+- id: bigdecimal-divide
+  title: BigDecimal.divide without a rounding mode
+  category: bug
+  severity: high
+  triggers: ['.divide(']
+  check: BigDecimal.divide(x) with no scale and RoundingMode.
+  why: Throws ArithmeticException for non-terminating results such as 10 / 3, only for some inputs.
+  bad: |
+    BigDecimal share = total.divide(BigDecimal.valueOf(people));
+  good: |
+    BigDecimal share = total.divide(BigDecimal.valueOf(people), 2, RoundingMode.HALF_EVEN);
+
+- id: immutable-result-ignored
+  title: Result of an immutable operation ignored
+  category: bug
+  severity: high
+  triggers: ['re:^\s*\w+\.(add|subtract|multiply|negate|plus|minus|trim|strip|replace|toUpperCase|toLowerCase|with\w*)\([^;]*\);']
+  check: Calls on BigDecimal, String, LocalDate, Instant or other immutable values whose return value is dropped.
+  why: The call does nothing; the total or value silently stays unchanged.
+  bad: |
+    total.add(item.getPrice());
+  good: |
+    total = total.add(item.getPrice());
+
+- id: datetime-zone
+  title: Local time used where an instant is meant
+  category: bug
+  severity: medium
+  triggers: ['LocalDateTime.now', 'new Date(', 'Calendar.getInstance', 'LocalDate.now', 'System.currentTimeMillis']
+  check: LocalDateTime/LocalDate.now() for timestamps, expiry or ordering; time read directly instead of from an injected Clock.
+  why: Results depend on the server's zone and DST; cannot be tested deterministically.
+  bad: |
+    order.setCreatedAt(LocalDateTime.now());
+  good: |
+    order.setCreatedAt(Instant.now(clock));   // inject java.time.Clock
+
+- id: modify-while-iterating
+  title: Collection modified while iterating
+  category: bug
+  severity: high
+  triggers: ['.remove(', 'for (']
+  check: list.remove or add inside a for-each over the same list.
+  why: ConcurrentModificationException, or skipped elements when using indexes.
+  bad: |
+    for (Item i : items) if (i.isExpired()) items.remove(i);
+  good: |
+    items.removeIf(Item::isExpired);
+
+- id: immutable-list-mutation
+  title: Mutating an immutable list
+  category: bug
+  severity: high
+  triggers: ['.toList()', 'List.of(', 'Set.of(', 'Map.of(', 'Arrays.asList', 'Collections.unmodifiable']
+  check: add/remove/set on results of Stream.toList(), List.of, Arrays.asList or unmodifiable views.
+  why: UnsupportedOperationException at runtime, often far from where the list was created.
+  bad: |
+    List<Order> open = orders.stream().filter(Order::isOpen).toList();
+    open.add(extra);
+  good: |
+    List<Order> open = new ArrayList<>(orders.stream().filter(Order::isOpen).toList());
+
+- id: equals-hashcode-contract
+  title: equals and hashCode out of sync
+  category: bug
+  severity: medium
+  triggers: ['equals(Object', 'hashCode()']
+  check: equals overridden without hashCode (or the reverse), or hashCode using mutable fields.
+  why: Objects disappear from HashSet/HashMap and caches return wrong entries.
+  bad: |
+    @Override public boolean equals(Object o) { ... }   // no hashCode
+  good: |
+    @Override public boolean equals(Object o) { ... }
+    @Override public int hashCode() { return Objects.hash(code); }
+
+- id: optional-misuse
+  title: Optional used as field, parameter or with isPresent/get
+  category: design
+  severity: low
+  triggers: ['Optional<', 'Optional.of(', 'isPresent()']
+  check: Optional fields or parameters, Optional.of on a value that can be null, isPresent() followed by get().
+  why: Optional.of(null) throws; Optional parameters push null handling onto callers.
+  bad: |
+    if (opt.isPresent()) { use(opt.get()); }
+  good: |
+    opt.ifPresent(this::use);
+
+- id: default-charset
+  title: Platform default charset
+  category: bug
+  severity: medium
+  triggers: ['.getBytes()', 'new String(', 'new FileReader', 'new FileWriter', 'new InputStreamReader(', 'new OutputStreamWriter(']
+  check: Byte/char conversion without an explicit charset.
+  why: Different output on different machines; non-ASCII names and signatures break.
+  bad: |
+    byte[] body = json.getBytes();
+  good: |
+    byte[] body = json.getBytes(StandardCharsets.UTF_8);
+
+- id: locale-case
+  title: Locale-sensitive case conversion for keys
+  category: bug
+  severity: low
+  triggers: ['.toUpperCase()', '.toLowerCase()']
+  check: toUpperCase/toLowerCase without Locale on codes, keys, enum names or emails.
+  why: In Turkish locale "i".toUpperCase() is "İ"; lookups fail on those servers.
+  bad: |
+    Status.valueOf(input.toUpperCase());
+  good: |
+    Status.valueOf(input.toUpperCase(Locale.ROOT));
+
+- id: format-placeholder-mismatch
+  title: Placeholders and arguments do not match
+  category: bug
+  severity: low
+  triggers: ['String.format', '.formatted(', '{}', 'log.']
+  check: Number of %s or {} placeholders differs from the number of arguments.
+  why: Messages lose values or show literal {}; exceptions passed as the last argument lose their stack trace if a placeholder consumes them.
+  bad: |
+    log.info("Order {} for {} created", orderId);
+  good: |
+    log.info("Order {} for {} created", orderId, customerId);
+
+- id: switch-without-default
+  title: switch over an enum without handling new values
+  category: bug
+  severity: low
+  triggers: ['switch (', 'case ']
+  check: switch statements over enums or status strings with no default branch.
+  why: Adding an enum constant silently skips logic instead of failing loudly.
+  bad: |
+    switch (status) { case NEW -> ship(); case PAID -> bill(); }
+  good: |
+    switch (status) { case NEW -> ship(); case PAID -> bill(); default -> throw new IllegalStateException("Unhandled " + status); }
+
+- id: missing-input-validation
+  title: Business input not validated
+  category: bug
+  severity: medium
+  triggers: ['quantity', 'amount', 'price', 'count', 'size', 'limit', 'page']
+  check: Quantities, amounts, page sizes or limits accepted without bounds (negative, zero, huge).
+  why: Negative quantities add stock, huge page sizes take the database down.
+  bad: |
+    public record CreateOrderRequest(Long productId, int quantity) {}
+  good: |
+    public record CreateOrderRequest(@NotNull Long productId, @Min(1) @Max(100) int quantity) {}

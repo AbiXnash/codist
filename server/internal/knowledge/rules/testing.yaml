@@ -1,0 +1,38 @@
+- id: test-no-assertion
+  title: Test without a meaningful assertion
+  category: testing
+  severity: medium
+  paths: ['src/test/']
+  triggers: ['@Test']
+  check: Tests that only call code, assert not-null, or catch and ignore exceptions.
+  why: The test passes while the behaviour is broken.
+  bad: |
+    @Test void creates() { service.create(req); }
+  good: |
+    @Test void creates() { var c = service.create(req); assertThat(c.getEmail()).isEqualTo("a@b.c"); }
+
+- id: test-sleep-time
+  title: Thread.sleep or real time in tests
+  category: testing
+  severity: low
+  paths: ['src/test/']
+  triggers: ['Thread.sleep', 'LocalDateTime.now', 'Instant.now', 'System.currentTimeMillis']
+  check: Sleeping to wait for async work, or depending on the current time.
+  why: Slow and flaky; fails on busy CI machines or around midnight.
+  bad: |
+    service.startAsync(); Thread.sleep(2000); assertThat(repo.count()).isEqualTo(1);
+  good: |
+    await().atMost(Duration.ofSeconds(5)).until(() -> repo.count() == 1);   // and a fixed Clock
+
+- id: test-hardcoded-ids
+  title: Test depends on generated ids or order
+  category: testing
+  severity: medium
+  paths: ['src/test/']
+  triggers: ['Id":1', 'Id\":1', '/1"', '(1L)', 'productId\":', 'get(0)']
+  check: Tests that assume generated ids (1, 2...) or the order of rows or other tests.
+  why: Breaks when the id sequence or test order changes; passes locally, fails in CI.
+  bad: |
+    .content("{\"customerId\":1,\"productId\":2}")
+  good: |
+    long productId = idOf(createProduct());   // use the ids the API returned

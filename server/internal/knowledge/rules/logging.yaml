@@ -1,0 +1,69 @@
+- id: console-output
+  title: System.out / printStackTrace instead of a logger
+  category: logging
+  severity: low
+  triggers: ['System.out', 'System.err', 'printStackTrace']
+  check: Console output in production code.
+  why: No levels, no context, not shipped to the log system, and synchronised writes slow requests.
+  bad: |
+    System.out.println("Request: " + req);
+  good: |
+    private static final Logger log = LoggerFactory.getLogger(CustomerService.class);
+    log.info("Creating customer {}", req.email());
+
+- id: exception-logged-without-stack
+  title: Exception logged without its stack trace
+  category: logging
+  severity: medium
+  triggers: ['e.getMessage()', 'log.error', 'log.warn']
+  check: log.error(e.getMessage()) or log.error("..." + e) instead of passing the exception as the last argument.
+  why: The stack trace is lost; the failure cannot be located.
+  bad: |
+    log.error("Payment failed: " + e.getMessage());
+  good: |
+    log.error("Payment failed for order {}", orderId, e);
+
+- id: wrong-log-level
+  title: Wrong log level
+  category: logging
+  severity: low
+  triggers: ['log.error', 'log.warn', 'log.info', 'log.debug']
+  check: Expected business outcomes (not found, validation) logged as error; noisy info logs in loops.
+  why: Alerts fire for normal behaviour, real errors drown in noise.
+  bad: |
+    log.error("Customer {} not found", id);
+  good: |
+    log.debug("Customer {} not found", id);
+
+- id: log-without-context
+  title: Log line without identifying context
+  category: logging
+  severity: info
+  triggers: ['log.']
+  check: Messages like "failed" or "done" with no ids, counts or durations.
+  why: Useless when debugging an incident across many requests.
+  bad: |
+    log.info("Done");
+  good: |
+    log.info("Imported {} products from {} in {} ms", count, file, ms);
+
+- id: logging-in-loop
+  title: Per-item logging in a loop
+  category: logging
+  severity: medium
+  triggers: ['for (', '.forEach(', 'while (', 'log.info', 'log.warn', 'log.error']
+  check: Several INFO/WARN logs inside a loop over records (reconciliation, imports, batch jobs).
+  why: Log volume grows with the data; 10,000 records x 3 lines drowns real errors and costs money.
+  bad: |
+    for (Payment p : payments) {
+        log.info("Checking {}", p.getId());
+        Status s = gateway.status(p.getId());
+        log.info("Got {}", s);
+    }
+  good: |
+    int matched = 0, mismatched = 0;
+    for (Payment p : payments) {
+        Status s = gateway.status(p.getId());
+        if (s.matches(p)) matched++; else { mismatched++; log.warn("Mismatch payment={} status={}", p.getId(), s); }
+    }
+    log.info("Recon done: {} matched, {} mismatched", matched, mismatched);

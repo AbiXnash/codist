@@ -1,0 +1,136 @@
+- id: sql-injection
+  title: SQL or JPQL built from strings
+  category: security
+  severity: critical
+  triggers: ['createQuery', 'createNativeQuery', 'jdbc', '@Query', 'executeQuery', 'executeUpdate', 'update(', 'query(']
+  check: Queries assembled with +, String.format or formatted() from values.
+  why: SQL injection; also defeats statement caching.
+  bad: |
+    jdbc.update("UPDATE orders SET status = '" + status + "' WHERE id = " + id);
+  good: |
+    jdbc.update("UPDATE orders SET status = ? WHERE id = ?", status, id);
+
+- id: idor
+  title: Missing ownership or authorization check
+  category: security
+  severity: high
+  triggers: ['@PathVariable', 'findById(', '@RequestParam']
+  check: Endpoints that load or modify a record by id from the URL without checking it belongs to the current user or tenant.
+  why: Any logged-in user can read or change anyone's orders by changing the id (IDOR).
+  bad: |
+    @GetMapping("/{id}") public OrderResponse get(@PathVariable Long id) { return of(orders.findById(id).orElseThrow()); }
+  good: |
+    @GetMapping("/{id}") public OrderResponse get(@PathVariable Long id, @AuthenticationPrincipal User me) {
+        return of(orders.findByIdAndCustomerId(id, me.id()).orElseThrow(NotFoundException::new));
+    }
+
+- id: sensitive-logging
+  title: Sensitive data written to logs
+  category: security
+  severity: medium
+  triggers: ['log.', 'System.out', 'password', 'token', 'secret', 'email', 'card', 'ssn', 'req)', 'request)', 'Request: ']
+  check: Logging whole requests, DTOs, emails, tokens, passwords, card or ID numbers.
+  why: Logs are widely readable and retained; this is a data-protection incident waiting to happen.
+  bad: |
+    log.info("Request: " + req);   // req contains email and name
+  good: |
+    log.info("Creating customer id={}", customerId);
+
+- id: hardcoded-secret
+  title: Hard-coded credential or key
+  category: security
+  severity: critical
+  applies: [java, yaml, properties, xml]
+  triggers: ['re:(?i)(password|passwd|secret|api[-_]?key|token|private[-_]?key)\s*[:=]\s*["'']?[^"''\s${]{4,}', 'Bearer ', 'AKIA']
+  check: Passwords, API keys, tokens or private keys written literally in code or config.
+  why: Anyone with repo access (or a leaked jar) has production credentials; rotating them needs a release.
+  bad: |
+    spring.datasource.password: s3cr3t!
+  good: |
+    spring.datasource.password: ${DB_PASSWORD}
+
+- id: weak-randomness-crypto
+  title: Weak randomness or hashing
+  category: security
+  severity: high
+  triggers: ['new Random(', 'Math.random', 'MD5', 'SHA-1', 'SHA1', 'MessageDigest', 'DES', 'ECB']
+  check: Random or Math.random for tokens, codes or ids; MD5/SHA-1 for passwords or signatures; ECB mode.
+  why: Tokens can be predicted; password hashes are cracked in minutes.
+  bad: |
+    String code = String.valueOf(new Random().nextInt(999999));
+  good: |
+    String code = String.valueOf(new SecureRandom().nextInt(1_000_000));   // passwords: BCryptPasswordEncoder
+
+- id: path-traversal
+  title: File path built from user input
+  category: security
+  severity: high
+  triggers: ['new File(', 'Paths.get(', 'Path.of(', 'Files.', 'getOriginalFilename']
+  check: File names or paths taken from requests and used without normalising and checking the base directory.
+  why: ../../etc/passwd reads or overwrites any file the process can access.
+  bad: |
+    Files.copy(upload.getInputStream(), Path.of("/uploads", upload.getOriginalFilename()));
+  good: |
+    Path target = base.resolve(UUID.randomUUID() + ext).normalize();
+    if (!target.startsWith(base)) throw new BadRequestException();
+
+- id: ssrf
+  title: Server-side request to a user-supplied URL
+  category: security
+  severity: high
+  triggers: ['new URL(', 'URI.create(', 'getForObject(', 'webClient', 'restClient', 'url']
+  check: HTTP calls to URLs that come from request data (webhooks, image URLs, callbacks).
+  why: Attackers reach internal services and cloud metadata endpoints through your server.
+  bad: |
+    restTemplate.getForObject(req.imageUrl(), byte[].class);
+  good: |
+    // allow-list hosts and schemes, resolve and block private address ranges before fetching
+
+- id: unsafe-deserialization
+  title: Unsafe deserialization
+  category: security
+  severity: critical
+  triggers: ['ObjectInputStream', 'enableDefaultTyping', 'activateDefaultTyping', '@JsonTypeInfo', 'XMLDecoder']
+  check: Java serialization of untrusted data, or Jackson polymorphic typing open to any class.
+  why: Remote code execution through gadget chains.
+  bad: |
+    mapper.activateDefaultTyping(LaissezFaireSubTypeValidator.instance);
+  good: |
+    // closed hierarchies with @JsonSubTypes, or a PolymorphicTypeValidator allow-list
+
+- id: xxe
+  title: XML parser open to XXE
+  category: security
+  severity: high
+  triggers: ['DocumentBuilderFactory', 'SAXParserFactory', 'XMLInputFactory', 'TransformerFactory']
+  check: XML parsers created without disabling external entities and DTDs.
+  why: Reads local files and makes network requests from crafted XML.
+  bad: |
+    DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in);
+  good: |
+    var f = DocumentBuilderFactory.newInstance();
+    f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+
+- id: cors-csrf
+  title: CORS or CSRF opened up
+  category: security
+  severity: high
+  triggers: ['allowedOrigins', '@CrossOrigin', 'allowCredentials', 'csrf', 'permitAll']
+  check: Allowed origins "*" (especially with credentials), CSRF disabled for cookie sessions, permitAll on sensitive paths.
+  why: Other sites can act as your logged-in users.
+  bad: |
+    config.setAllowedOrigins(List.of("*")); config.setAllowCredentials(true);
+  good: |
+    config.setAllowedOrigins(List.of("https://app.example.com"));
+
+- id: error-detail-leak
+  title: Internal details returned to clients
+  category: security
+  severity: medium
+  triggers: ['getMessage()', 'printStackTrace', 'e.toString()', 'ResponseEntity']
+  check: Exception messages, stack traces or SQL errors returned in API responses.
+  why: Reveals table names, versions and internals that help attackers.
+  bad: |
+    return ResponseEntity.status(500).body(e.getMessage());
+  good: |
+    log.error("Order {} failed", id, e); return ResponseEntity.status(500).body(ProblemDetail.forStatus(500));

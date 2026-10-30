@@ -1,0 +1,39 @@
+- id: copy-paste-wrong-constant
+  title: Constant, label or prefix copied from another area
+  category: bug
+  severity: medium
+  triggers: ['re:\b[A-Z][A-Za-z]*\.[A-Z][A-Z0-9_]{2,}\b', 'PREFIX', 'KEY', 'TOPIC', 'QUEUE', 'CACHE', 're:"[A-Z_]{3,}"']
+  check: A constant, log prefix, cache name, topic, metric or error code whose name or value belongs to another class or domain than where it is used.
+  why: Logs, metrics and messages are attributed to the wrong area; on-call engineers chase the wrong service.
+  bad: |
+    // in ProductService
+    log.info(DataConstant.LOG_PREFIX + "created");   // LOG_PREFIX = "CUSTOMER"
+  good: |
+    log.info(DataConstant.PRODUCT_LOG_PREFIX + "created");
+
+- id: copy-paste-wrong-variable
+  title: Duplicated block uses the wrong variable
+  category: bug
+  severity: high
+  triggers: []
+  check: Near-identical lines next to each other where one still refers to the variable, field or getter of the copied line.
+  why: The classic last-line bug; it compiles, passes the happy-path test, and is wrong.
+  bad: |
+    dto.setFirstName(user.getFirstName());
+    dto.setLastName(user.getFirstName());
+  good: |
+    dto.setFirstName(user.getFirstName());
+    dto.setLastName(user.getLastName());
+
+- id: name-does-not-match-behaviour
+  title: Name and behaviour disagree
+  category: design
+  severity: low
+  triggers: []
+  check: getX/isX/findX methods that modify state, a method called validate that does not throw, messages that mention another entity.
+  why: Callers trust the name; side effects in getters cause heisenbugs.
+  bad: |
+    public Order getOrder(Long id) { Order o = find(id); o.setViewedAt(now()); return o; }
+  good: |
+    public Order getOrder(Long id) { return find(id); }
+    public void markViewed(Order o) { o.setViewedAt(now()); }
