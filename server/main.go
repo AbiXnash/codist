@@ -101,7 +101,19 @@ func main() {
 		return out
 	}
 	srv.Fixer.OnReady = func(sha, key string) { hub.Publish("fix-ready", map[string]string{"sha": sha, "key": key}) }
-	reviews.OnDone = srv.Fixer.Prefetch
+	lessons := review.NewLessons(repo, srv.Tracker, reviews.Ignores, cfg.DataDir)
+	learn := func() {
+		if n, err := lessons.Write(); err != nil {
+			slog.Warn("lessons", "err", err)
+		} else if n > 0 {
+			slog.Info("lessons from this repository's history", "entries", n)
+		}
+	}
+	go learn()
+	reviews.OnDone = func(sha string) {
+		srv.Fixer.Prefetch(sha)
+		go learn() // fixes and dismissals become knowledge for the next review
+	}
 	srv.SignOffs = review.NewSignOffs(cfg.DataDir, repo.Name())
 	srv.Incidents = incident.NewEngine(repo, g, askLLM, srv.Tracker, reviews, incident.NewStore(cfg.DataDir, repo.Name()), hub)
 	httpServer := &http.Server{Addr: cfg.Addr, Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
