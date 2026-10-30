@@ -37,6 +37,12 @@ type Issue struct {
 	FixedBy    string `json:"fixedBy,omitempty"`
 	FixedAt    int64  `json:"fixedAt,omitempty"`
 	FixedMsg   string `json:"fixedMsg,omitempty"`
+	// Reopened: the issue was fixed, then the code came back (a revert, a bad merge, a copy).
+	WasFixedIn  string `json:"wasFixedIn,omitempty"`
+	ReopenedIn  string `json:"reopenedIn,omitempty"`
+	ReopenedBy  string `json:"reopenedBy,omitempty"`
+	ReopenedAt  int64  `json:"reopenedAt,omitempty"`
+	ReopenedMsg string `json:"reopenedMsg,omitempty"`
 	// Uncommitted: the code is gone from the working tree but still in the last commit.
 	Uncommitted bool     `json:"uncommitted,omitempty"`
 	Commits     []string `json:"commits"`
@@ -209,6 +215,12 @@ func (t *Tracker) compute() []Issue {
 		default:
 			if line := t.locate(is); line > 0 && recheck(is, line) {
 				is.State, is.Line = "open", line
+				if fixed, back := t.reopened(is); back != "" {
+					is.WasFixedIn, is.ReopenedIn = fixed, back
+					if c, ok := bySHA[back]; ok {
+						is.ReopenedBy, is.ReopenedAt, is.ReopenedMsg = c.Author, c.Time, c.Message
+					}
+				}
 			} else if line > 0 {
 				// The code is still there but the rule no longer flags it: fixed by a change elsewhere.
 				is.State, is.Line = "resolved", 0
@@ -399,6 +411,37 @@ func (t *Tracker) ruleFixedIn(is *Issue) string {
 	t.fixedAt[key] = sha
 	t.mu.Unlock()
 	return sha
+}
+
+// reopened finds an open issue's last comeback: the commit that removed its code after it was
+// introduced, and the later commit that brought it back. Both are "" when it never went away.
+func (t *Tracker) reopened(is *Issue) (fixed, back string) {
+	touching := t.repo.CommitsTouching(is.Path) // newest first
+	want := normalizeCode(is.Snippet)
+	present := false
+	for i := len(touching) - 1; i >= 0; i-- {
+		sha := touching[i]
+		if sha == is.FirstSeen {
+			present = true
+			continue
+		}
+		if !present && fixed == "" {
+			continue // before the issue was first seen
+		}
+		src, ok := t.fileAt(sha, is.Path)
+		has := ok && containsLine(src, want)
+		switch {
+		case present && !has:
+			fixed, back = sha, ""
+		case !present && has:
+			back = sha
+		}
+		present = has
+	}
+	if back == "" {
+		fixed = ""
+	}
+	return fixed, back
 }
 
 // fixedIn finds the commit that removed the flagged code for good: walking the commits that

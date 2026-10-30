@@ -83,6 +83,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		"head": s.Repo.Head(), "model": s.LLM.Model, "llmProblem": s.LLM.Problem(),
 		"graphSource": g.Source, "graphBuiltAt": g.BuiltAt,
 		"canFix": s.Fixer.Enabled(), "rules": len(s.Reviews.Knowledge().Rules), "user": s.Repo.UserName(),
+		"operation": s.Repo.Operation(), "conflicts": s.Repo.Conflicts(),
 		"models": map[string]string{"review": s.LLM.Model, "summary": firstNonEmpty(s.Cfg.SummaryModel, s.LLM.Model),
 			"fix": firstNonEmpty(s.Cfg.FixModel, s.LLM.Model), "ask": firstNonEmpty(s.Cfg.AskModel, s.LLM.Model)},
 	})

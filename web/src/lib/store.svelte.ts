@@ -474,6 +474,7 @@ export function connect() {
     await loadGraph();
     void loadIssues(); // edits can resolve issues
     void loadWorking(); // and raise new ones on the lines you changed
+    void loadStatus(); // a merge or rebase may have started or ended
     const f = app.file;
     if (f && !f.sha) {
       app.file = null;

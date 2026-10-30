@@ -77,6 +77,7 @@
         <span class="sev {i.severity}">{i.severity}</span>
         <span class="cat">{i.category}</span>
         {#if i.state === 'resolved'}<span class="tag good">✓ fixed</span>{:else if i.state === 'ignored'}<span class="tag">ignored</span>{/if}
+        {#if i.reopenedIn}<span class="tag bad" title="It was fixed, then the code came back">reopened</span>{/if}
         {#if i.ref && INSTANT_REFS.has(i.ref) && i.state === 'open'}<span class="tag accent" title="Mechanical fix: no model needed">⚡ instant fix</span>{/if}
       </div>
       <h3>{i.title}</h3>
@@ -106,6 +107,10 @@
         <ol class="tl">
           <li><span class="dot intro"></span>Introduced in <CommitRef sha={i.firstSeen} /> by <b>{who(i.firstBy)}</b> · {ago(i.firstTime)}<div class="tmsg">{i.firstMsg}</div></li>
           {#if i.commits.length > 1}<li><span class="dot seen"></span>Still reported in {i.commits.length - 1} later review{i.commits.length > 2 ? 's' : ''}</li>{/if}
+          {#if i.reopenedIn}
+            <li><span class="dot done"></span>Fixed in <CommitRef sha={i.wasFixedIn ?? ''} /></li>
+            <li><span class="dot intro"></span>Brought back in <CommitRef sha={i.reopenedIn} /> by <b>{who(i.reopenedBy)}</b> · {ago(i.reopenedAt ?? 0)}<div class="tmsg">{i.reopenedMsg}</div></li>
+          {/if}
           {#if i.state === 'resolved'}
             <li><span class="dot done"></span>
               {#if i.fixedIn}Fixed in <CommitRef sha={i.fixedIn} /> by <b>{who(i.fixedBy)}</b> · {ago(i.fixedAt ?? 0)}<div class="tmsg">{i.fixedMsg}</div>
@@ -199,6 +204,7 @@
                   </span>
                 </span>
                 {#if i.state === 'open' && i.ref && INSTANT_REFS.has(i.ref)}<span class="zap" title="Instant fix">⚡</span>{/if}
+                {#if i.reopenedIn}<span class="src re" title="Fixed in {short(i.wasFixedIn)}, brought back in {short(i.reopenedIn)} by {who(i.reopenedBy)}">reopened</span>{/if}
                 {#if i.source === 'llm'}<span class="src" title="Found by the AI model">AI</span>{/if}
               </button>
             {/each}
@@ -275,6 +281,8 @@
   .dhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .cat { font-size: 11.5px; color: var(--text-3); text-transform: capitalize; }
   .tag { font: 600 10.5px var(--font); padding: 1px 7px; border-radius: 9px; background: var(--surface-3); color: var(--text-2); }
+  .tag.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 13%, transparent); }
+  .src.re { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
   .tag.good { color: var(--good); background: color-mix(in srgb, var(--good) 13%, transparent); }
   .tag.accent { color: var(--accent-text); background: var(--accent-soft); }
   h3 { margin: 0; font-size: 15px; line-height: 1.4; font-weight: 600; }

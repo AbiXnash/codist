@@ -17,6 +17,10 @@ import (
 	"codist/internal/review"
 )
 
+// maxCatchUp is how many new commits are reviewed at once (a big pull from teammates, or commits
+// made while Codist was stopped). Older ones stay listed as not reviewed and can be reviewed on demand.
+const maxCatchUp = 30
+
 type Watcher struct {
 	cfg     config.Config
 	repo    *gitx.Repo
@@ -49,7 +53,7 @@ func (w *Watcher) Start() {
 		seen := w.loadSeen()
 		var missed []gitx.Commit
 		if seen != "" && seen != w.lastHead {
-			missed = w.repo.CommitsSince(seen, w.lastHead, 10)
+			missed = w.repo.CommitsSince(seen, w.lastHead, maxCatchUp)
 		} else if !w.reviews.Reviewed(w.lastHead) {
 			missed = w.repo.CommitsSince("", w.lastHead, 1) // first run: just the latest commit
 		}
@@ -102,7 +106,7 @@ func (w *Watcher) tick() {
 
 	reindexed := false
 	if head := w.repo.Head(); head != "" && head != w.lastHead {
-		fresh := w.repo.CommitsSince(w.lastHead, head, 10)
+		fresh := w.repo.CommitsSince(w.lastHead, head, maxCatchUp)
 		slog.Info("new commits", "count", len(fresh), "branch", w.repo.Tracking())
 		w.lastHead = head
 		w.saveSeen(head)

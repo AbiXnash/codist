@@ -23,7 +23,7 @@ func RuleScan(path string, src []byte, ctx javaidx.Context, kb *knowledge.Base) 
 		all[n] = true
 	}
 	ctx.Path = path
-	out := []Finding{}
+	out := ConflictMarkers(ls, nil)
 	for _, x := range javaidx.Check(src, all, ctx) {
 		out = append(out, Finding{Line: x.Line, EndLine: x.EndLine, Severity: x.Severity, Category: x.Category,
 			Title: x.Title, Detail: x.Detail, Suggestion: x.Suggestion, Source: "rule", Ref: x.ID, Snippet: lineAt(ls, x.Line)})
@@ -36,6 +36,31 @@ func RuleScan(path string, src []byte, ctx javaidx.Context, kb *knowledge.Base) 
 			out = append(out, Finding{Line: h.Line, EndLine: h.Line, Severity: h.Rule.Severity, Category: h.Rule.Category,
 				Title: h.Rule.Title, Detail: strings.Join(strings.Fields(h.Rule.Why), " "), Suggestion: strings.TrimRight(h.Rule.Good, "\n"),
 				Source: "rule", Ref: h.Rule.ID, Snippet: lineAt(ls, h.Line)})
+		}
+	}
+	return out
+}
+
+var conflictMarker = regexp.MustCompile(`^(<{7}|={7}|>{7})( |$)`)
+
+// ConflictMarkers reports unresolved merge-conflict markers on the given lines (all when changed is nil).
+// They break the build, and Java parsing, so they are found by text.
+func ConflictMarkers(lines []string, changed map[int]bool) []Finding {
+	var out []Finding
+	for i, l := range lines {
+		if (changed == nil || changed[i+1]) && conflictMarker.MatchString(l) && strings.HasPrefix(l, "<<<<<<<") {
+			end := i + 1
+			for j := i + 1; j < len(lines); j++ {
+				if strings.HasPrefix(lines[j], ">>>>>>>") {
+					end = j + 1
+					break
+				}
+			}
+			out = append(out, Finding{Line: i + 1, EndLine: end, Severity: "critical", Category: "bug", Source: "rule",
+				Ref: "merge-conflict-marker", Title: "Unresolved merge conflict",
+				Detail:     "The file still holds conflict markers from a merge; it does not compile and both versions of the code are present.",
+				Suggestion: "Pick the right version of the conflicting lines (or combine them), delete the <<<<<<<, ======= and >>>>>>> lines, then build and test.",
+				Snippet:    strings.TrimSpace(l), OnChangedLine: true})
 		}
 	}
 	return out
