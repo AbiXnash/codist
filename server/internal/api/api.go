@@ -72,7 +72,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		"repo": s.Repo.Name(), "path": s.Repo.Root, "branch": s.Repo.Branch, "tracking": s.Repo.Tracking(),
 		"head": s.Repo.Head(), "model": s.LLM.Model, "llmProblem": s.LLM.Problem(),
 		"graphSource": g.Source, "graphBuiltAt": g.BuiltAt,
-		"canFix": s.Fixer.Enabled(), "rules": len(s.Reviews.Knowledge().Rules),
+		"canFix": s.Fixer.Enabled(), "rules": len(s.Reviews.Knowledge().Rules), "user": s.Repo.UserName(),
 		"models": map[string]string{"review": s.LLM.Model, "summary": firstNonEmpty(s.Cfg.SummaryModel, s.LLM.Model),
 			"fix": firstNonEmpty(s.Cfg.FixModel, s.LLM.Model), "ask": firstNonEmpty(s.Cfg.AskModel, s.LLM.Model)},
 	})

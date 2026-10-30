@@ -22,6 +22,7 @@ export interface Status {
   graphSource: string;
   graphBuiltAt: number;
   canFix: boolean;
+  user: string;
   rules: number;
   models: { review: string; summary: string; fix: string; ask: string };
 }
@@ -213,7 +214,7 @@ export interface OpenFile {
 
 export type FindingWithPath = Finding & { path: string };
 
-export type Tab = 'review' | 'code' | 'diff' | 'type' | 'ask';
+export type Tab = 'issues' | 'review' | 'code' | 'diff' | 'type' | 'ask';
 
 export type IgnoreScope = 'commit' | 'code' | 'rule';
 

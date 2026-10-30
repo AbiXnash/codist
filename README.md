@@ -41,14 +41,26 @@ cd server && CODIST_REPO_URL=https://github.com/you/app.git GITHUB_TOKEN=ghp_...
 
 Reviews are stored as JSON in `~/.codist/<repo>/reviews/`.
 
+## Layout
+
+- **History** (left): your commits by default (who "you" are comes from `git config user.name`), or everyone's.
+  Your totals sit on top: commits, open issues your commits introduced, issues you fixed. Each commit shows its
+  new issues by level, what it fixed, and whether it is still being reviewed.
+- **Graph** (centre): the selected commit's changed, added and impacted types, and a ring on every type that has
+  an issue in the list on the right, in its worst severity. **Focus** dims everything else.
+- **Issues** (right): every issue in one place. Choose the scope (all code, this commit, mine), the state (open,
+  fixed, ignored) and a level (critical, high, medium, low); the list is grouped by level. Open an issue for its
+  places, suggested fix, history (who introduced and fixed it), and Fix / Ignore. The graph jumps to it. The
+  Commit, Diff, Code and Ask tabs sit next to it.
+
 ## Keyboard
 
 | Key | Action |
 |---|---|
 | `/` or `⌘K` | Go to class |
-| `[` / `]` | Hide or show the commits list / details panel |
+| `[` / `]` | Hide or show the history / right panel |
 | `j` / `k` | Next / previous commit |
-| `1`–`5` | Review, Code, Diff, Type, Ask tab |
+| `1`–`5` | Issues, Commit, Diff, Code, Ask tab |
 | `⌘↵` | Commit the fix in the fix dialog; "change code" in the Ask tab |
 
 ## Fixing and editing from the UI
@@ -65,12 +77,13 @@ Reviews are stored as JSON in `~/.codist/<repo>/reviews/`.
 Every finding is tracked as an **issue**, identified by its rule and its line of code (not its line number), so
 the same problem is recognised in every commit and wherever the line moves.
 
-- **Open** while the flagged code still exists in the working tree, **resolved** once a commit removes it (Codist
-  records which commit fixed it), **ignored** if you ignored it.
+- **Open** while the flagged code still exists in the working tree and, for rule findings, the rule still flags it;
+  **resolved** once that stops (Codist records which commit fixed it, even when the fix was in another file, such
+  as a constant given the right value), **ignored** if you ignored it.
 - A commit's review lists only the issues it **introduced**; issues still present from earlier commits are under
   "From earlier commits". Commit badges count new issues; `✓N` shows how many earlier issues the commit fixed.
-- The **Issues** tab in the sidebar shows every open issue once, grouped by root cause, with filters by state,
-  severity and text, and Fix / Ignore on each.
+- The **Issues** panel shows every issue once, grouped by root cause, with filters by scope, state, level and
+  text, and Fix / Ignore on each.
 - Findings with the same root cause (the same rule in several files, or a constant and the classes using it) are
   grouped into one issue, counted once and fixed in one commit.
 

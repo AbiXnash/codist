@@ -3,7 +3,7 @@
   import { app, boot, savePref, selectCommit } from './lib/store.svelte';
   import { preload } from './lib/highlight';
   import TopBar from './components/TopBar.svelte';
-  import Sidebar from './components/Sidebar.svelte';
+  import HistoryRail from './components/HistoryRail.svelte';
   import GraphView from './components/GraphView.svelte';
   import Panel from './components/Panel.svelte';
   import Toasts from './components/Toasts.svelte';
@@ -42,11 +42,12 @@
     if (e.key === '[') app.showCommits = !app.showCommits;
     else if (e.key === ']') app.showPanel = !app.showPanel;
     else if (e.key === 'j' || e.key === 'k') {
-      const i = app.commits.findIndex((c) => c.commit.sha === app.selectedSha);
-      const next = app.commits[Math.max(0, Math.min(app.commits.length - 1, i + (e.key === 'j' ? 1 : -1)))];
-      if (next) void selectCommit(next.commit.sha);
+      const list = app.shownCommits;
+      const i = list.findIndex((c) => c.commit.sha === app.selectedSha);
+      const next = list[Math.max(0, Math.min(list.length - 1, i + (e.key === 'j' ? 1 : -1)))];
+      if (next) void selectCommit(next.commit.sha, true);
     } else if ('12345'.includes(e.key) && e.key.length === 1) {
-      app.tab = (['review', 'code', 'diff', 'type', 'ask'] as const)[Number(e.key) - 1];
+      app.tab = (['issues', 'review', 'diff', 'code', 'ask'] as const)[Number(e.key) - 1];
       app.showPanel = true;
     }
   }
@@ -67,7 +68,7 @@
     class:no-side={!app.showCommits}
     class:no-panel={!app.showPanel}
   >
-    {#if app.showCommits}<Sidebar />{/if}
+    {#if app.showCommits}<HistoryRail />{/if}
     <GraphView />
     {#if app.showPanel}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
