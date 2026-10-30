@@ -469,6 +469,17 @@ func (r *Repo) Fingerprint() string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
+// BuildFingerprint covers the build files, which issues can point at too (dependency findings).
+func (r *Repo) BuildFingerprint() string {
+	var b strings.Builder
+	for _, p := range []string{"pom.xml", "build.gradle", "build.gradle.kts"} {
+		if info, err := os.Stat(filepath.Join(r.Root, p)); err == nil {
+			fmt.Fprintf(&b, "%s:%d:%d;", p, info.Size(), info.ModTime().UnixNano())
+		}
+	}
+	return b.String()
+}
+
 // CurrentBranch is the branch checked out in the working tree.
 func (r *Repo) CurrentBranch() string {
 	out, err := r.git("rev-parse", "--abbrev-ref", "HEAD")

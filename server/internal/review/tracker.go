@@ -3,6 +3,7 @@ package review
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -67,9 +68,33 @@ type Tracker struct {
 	// unchanged) is resolved. Nil disables the re-check.
 	Rules RuleContext
 
+	// Stamp adds to the cache key whatever else the issues depend on (the rules' version).
+	Stamp func() string
+
 	mu      sync.Mutex
 	files   map[string]string // "sha:path" -> content, for resolution checks
 	fixedAt map[string]string // issue id + head -> commit where the rule stopped firing
+
+	// Issues are derived data: recomputed only when their inputs change.
+	issuesMu  sync.Mutex
+	issuesKey string
+	issues    []Issue
+}
+
+// Version identifies the state the issues are computed from; it changes when they may change.
+func (t *Tracker) Version() string { return t.key() }
+
+// issuesKey identifies everything Issues depends on: the tracked head, the working tree, the
+// reviews, the ignores and the rules.
+func (t *Tracker) key() string {
+	k := fmt.Sprintf("%s|%d|%s", t.repo.Head(), t.store.Version(), t.ignores.Version())
+	if !t.repo.Remote {
+		k += "|" + t.repo.Fingerprint() + "|" + t.repo.BuildFingerprint()
+	}
+	if t.Stamp != nil {
+		k += "|" + t.Stamp()
+	}
+	return k
 }
 
 func NewTracker(repo *gitx.Repo, store *Store, ignores *Ignores) *Tracker {
@@ -102,8 +127,19 @@ func (t *Tracker) current(path string) (string, bool) {
 	return c, ok && err == nil
 }
 
-// Issues computes every tracked issue, newest activity first.
+// Issues returns every tracked issue, newest activity first. The result is cached until something
+// it depends on changes; concurrent callers share one computation.
 func (t *Tracker) Issues() []Issue {
+	t.issuesMu.Lock()
+	defer t.issuesMu.Unlock()
+	k := t.key()
+	if t.issues == nil || k != t.issuesKey {
+		t.issues, t.issuesKey = t.compute(), k
+	}
+	return append([]Issue(nil), t.issues...)
+}
+
+func (t *Tracker) compute() []Issue {
 	commits := t.repo.Log(300)
 	bySHA := map[string]gitx.Commit{}
 	for _, c := range commits {

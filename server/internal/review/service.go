@@ -3,6 +3,7 @@ package review
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -44,6 +45,10 @@ type Service struct {
 	pending map[string]bool
 
 	OnDone func(sha string) // called after a review finishes (used to prefetch fixes)
+
+	kbMu    sync.Mutex
+	kb      *knowledge.Base
+	kbStamp string
 
 	summaryLLM *Ollama
 	cache      *cache
@@ -89,14 +94,36 @@ func (s *Service) KnowledgeDirs() []string {
 	return dirs
 }
 
-// Knowledge loads the rules fresh, so edited rule files apply to the next review without a restart.
+// Knowledge returns the rules, reloaded only when a rule file is added, edited or removed, so
+// edits apply to the next review without a restart.
 func (s *Service) Knowledge() *knowledge.Base {
+	stamp := s.KnowledgeVersion()
+	s.kbMu.Lock()
+	defer s.kbMu.Unlock()
+	if s.kb != nil && s.kbStamp == stamp {
+		return s.kb
+	}
 	kb, err := knowledge.Load(s.KnowledgeDirs()...)
 	if err != nil {
 		slog.Warn("knowledge base", "err", err)
 		return &knowledge.Base{}
 	}
+	s.kb, s.kbStamp = kb, stamp
 	return kb
+}
+
+// KnowledgeVersion changes when any rule file in the knowledge directories changes.
+func (s *Service) KnowledgeVersion() string {
+	var b strings.Builder
+	for _, d := range s.KnowledgeDirs() {
+		entries, _ := os.ReadDir(d)
+		for _, e := range entries {
+			if info, err := e.Info(); err == nil {
+				fmt.Fprintf(&b, "%s/%s:%d:%d;", d, e.Name(), info.Size(), info.ModTime().UnixNano())
+			}
+		}
+	}
+	return b.String()
 }
 
 func NewService(cfg config.Config, repo *gitx.Repo, g *graph.Service, a *Analyzer, llm *Ollama, store *Store, hub *events.Hub) *Service {

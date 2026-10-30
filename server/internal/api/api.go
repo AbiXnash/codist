@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"codist/internal/config"
 	"codist/internal/events"
@@ -37,6 +38,9 @@ type Server struct {
 	Tracker   *review.Tracker
 	Incidents *incident.Engine
 	SignOffs  *review.SignOffs
+
+	relMu    sync.Mutex
+	relCache map[string]review.ReleaseReport // release commit + tracker version -> report
 }
 
 func (s *Server) Handler() http.Handler {

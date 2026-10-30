@@ -397,7 +397,23 @@ func (s *Server) release(w http.ResponseWriter, r *http.Request) {
 	if label == "HEAD" || strings.HasPrefix(c.SHA, label) {
 		label = c.ShortSHA + " " + c.Message
 	}
-	rep := review.Release(s.Repo, s.Tracker, s.Store, s.Reviews.Ignores, s.Reviews.Knowledge(), c.SHA, label)
+	// The report only changes with the release commit, the reviews, ignores, rules or working tree.
+	key := c.SHA + "|" + label + "|" + s.Tracker.Version()
+	s.relMu.Lock()
+	rep, ok := s.relCache[key]
+	s.relMu.Unlock()
+	if !ok {
+		rep = review.Release(s.Repo, s.Tracker, s.Store, s.Reviews.Ignores, s.Reviews.Knowledge(), c.SHA, label)
+		s.relMu.Lock()
+		if len(s.relCache) > 16 {
+			s.relCache = nil
+		}
+		if s.relCache == nil {
+			s.relCache = map[string]review.ReleaseReport{}
+		}
+		s.relCache[key] = rep
+		s.relMu.Unlock()
+	}
 	so := s.SignOffs.For(rep.To, rep.Checklist)
 	refs := []map[string]string{}
 	for i, c := range s.Repo.Log(30) {
