@@ -87,7 +87,9 @@ func (s *Service) Interrupted(sha string) bool {
 
 // KnowledgeDirs are the folders searched for extra rule files, in override order.
 func (s *Service) KnowledgeDirs() []string {
-	dirs := []string{filepath.Join(s.cfg.DataDir, "rules"), filepath.Join(s.repo.Root, ".codist", "rules")}
+	dirs := []string{filepath.Join(s.cfg.DataDir, "rules"), filepath.Join(s.cfg.DataDir, "bugbase"),
+		filepath.Join(s.repo.Root, ".codist", "rules"), filepath.Join(s.repo.Root, ".codist", "bugbase"),
+		filepath.Join(s.cfg.DataDir, s.repo.Name(), "lessons")}
 	if s.cfg.RulesDir != "" {
 		dirs = append(dirs, s.cfg.RulesDir)
 	}
@@ -483,8 +485,8 @@ func (s *Service) modelPass(a Analysis, f gitx.FileChange, fr FileReview, in fil
 		fr.Skipped = "only imports, comments or formatting changed"
 		return fr
 	}
-	guidelines := kb.Select(f.NewPath, in.src, in.added, 10)
-	prompt := s.fileContext(a, f, in, fr.Findings, guidelines, build)
+	known := kb.Retrieve(f.NewPath, in.src, in.added, 6) // RAG: the bug patterns most like this code
+	prompt := s.fileContext(a, f, in, fr.Findings, known, build)
 
 	system := prompts.Get("review-file") // part of the cache key, so editing the prompt re-reviews
 	key := s.cache.key(system, s.llm.Model, prompt)
@@ -600,7 +602,7 @@ func lineAt(lines []string, n int) string {
 
 // fileContext builds the per-file prompt. Sections are ranked so that, when the file is large, the
 // diff and the changed code always fit and background (overview, history) is trimmed first.
-func (s *Service) fileContext(a Analysis, f gitx.FileChange, in fileInput, known []Finding, guidelines []knowledge.Rule, build Build) string {
+func (s *Service) fileContext(a Analysis, f gitx.FileChange, in fileInput, known []Finding, guidelines []knowledge.Entry, build Build) string {
 	var sec []section
 	add := func(title, body string, priority, keep int) {
 		if strings.TrimSpace(body) != "" {
@@ -668,7 +670,7 @@ func (s *Service) fileContext(a Analysis, f gitx.FileChange, in fileInput, known
 	}
 
 	if len(guidelines) > 0 {
-		add("## Knowledge: bug patterns that resemble this code (reference, not a checklist)", knowledge.Format(guidelines), 3, 1500)
+		add("## Knowledge: bug patterns that resemble this code (reference, not a checklist)", knowledge.FormatEntries(guidelines, 14), 3, 1800)
 	}
 	if len(known) > 0 {
 		var b strings.Builder
