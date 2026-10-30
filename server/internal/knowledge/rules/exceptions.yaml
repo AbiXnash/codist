@@ -1,0 +1,83 @@
+- id: swallowed-exception
+  title: Exception swallowed
+  category: bug
+  severity: medium
+  triggers: ['catch (']
+  check: Empty catch blocks, or catch blocks that only print or return a default.
+  why: The failure disappears and the system continues in an inconsistent state.
+  bad: |
+    try { payments.charge(order); } catch (Exception e) { }
+  good: |
+    try { payments.charge(order); } catch (PaymentException e) { throw new OrderFailedException(order.getId(), e); }
+
+- id: broad-catch
+  title: Catching Exception, Throwable or NullPointerException
+  category: bug
+  severity: medium
+  triggers: ['catch (Exception', 'catch (Throwable', 'catch (RuntimeException', 'catch (NullPointerException', 'catch (Error']
+  check: Catch blocks broader than the failure being handled.
+  why: Hides programming errors and catches things like OutOfMemoryError or rollback signals.
+  bad: |
+    catch (Exception e) { return false; }
+  good: |
+    catch (IOException e) { log.warn("Upload failed for {}", id, e); return false; }
+
+- id: lost-exception-cause
+  title: Exception rethrown without its cause
+  category: bug
+  severity: medium
+  triggers: ['e.getMessage()', 'throw new']
+  check: throw new X(e.getMessage()) or throw new X("...") inside a catch without passing e.
+  why: The original stack trace is lost; the root cause cannot be found from the logs.
+  bad: |
+    catch (SQLException e) { throw new RepositoryException(e.getMessage()); }
+  good: |
+    catch (SQLException e) { throw new RepositoryException("Saving order " + id, e); }
+
+- id: log-and-rethrow
+  title: Logged and rethrown
+  category: logging
+  severity: low
+  triggers: ['log.error', 'throw']
+  check: Catch blocks that log an exception and then rethrow it.
+  why: The same failure is logged several times up the stack; alerts and log volume multiply.
+  bad: |
+    catch (IOException e) { log.error("failed", e); throw new UploadException(e); }
+  good: |
+    catch (IOException e) { throw new UploadException("Upload " + id, e); }   // log once at the boundary
+
+- id: interrupted-swallowed
+  title: InterruptedException swallowed
+  category: concurrency
+  severity: medium
+  triggers: ['InterruptedException']
+  check: catch (InterruptedException) that does not restore the interrupt flag or rethrow.
+  why: Shutdown and cancellation stop working; threads hang during deploys.
+  bad: |
+    catch (InterruptedException e) { log.warn("interrupted"); }
+  good: |
+    catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new IllegalStateException(e); }
+
+- id: return-in-finally
+  title: return or throw inside finally
+  category: bug
+  severity: high
+  triggers: ['finally']
+  check: return, throw or code that can throw inside a finally block.
+  why: Discards the original exception or return value.
+  bad: |
+    try { return compute(); } finally { return -1; }
+  good: |
+    try { return compute(); } finally { cleanup(); }
+
+- id: generic-runtime-exception
+  title: Generic RuntimeException thrown
+  category: design
+  severity: low
+  triggers: ['new RuntimeException(', 'new Exception(']
+  check: throw new RuntimeException/Exception for domain errors.
+  why: Callers and the exception handler cannot tell a missing record from a bug; everything becomes 500.
+  bad: |
+    throw new RuntimeException("Order not found");
+  good: |
+    throw new NotFoundException("No order " + id);

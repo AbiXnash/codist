@@ -1,0 +1,140 @@
+- id: singleton-mutable-state
+  title: Mutable state in a singleton bean
+  category: concurrency
+  severity: high
+  triggers: ['@Service', '@Component', '@RestController', '@Controller', '++', '+=', 'this.']
+  check: Non-final instance fields in Spring beans that are written by request-handling methods.
+  why: All requests share one instance; concurrent writes race and lose updates.
+  bad: |
+    private int processed;
+    public void handle() { processed++; }
+  good: |
+    private final LongAdder processed = new LongAdder();
+    public void handle() { processed.increment(); }
+
+- id: check-then-act
+  title: Check-then-act race
+  category: concurrency
+  severity: high
+  triggers: ['.isPresent()', 'exists', 'findBy', 'containsKey', 'if (!']
+  check: Checking whether something exists and then creating it (unique email, username, slot) without a database constraint or lock.
+  why: Two concurrent requests both pass the check; you get duplicates or a constraint violation surfacing as 500.
+  bad: |
+    if (customers.findByEmail(email).isPresent()) throw new IllegalStateException("taken");
+    customers.save(new Customer(email));
+  good: |
+    // unique constraint on email, and translate the violation:
+    try { customers.saveAndFlush(new Customer(email)); }
+    catch (DataIntegrityViolationException e) { throw new ConflictException("Email already registered"); }
+
+- id: lost-update
+  title: Read-modify-write without locking (lost update)
+  category: concurrency
+  severity: high
+  triggers: ['stock', 'balance', 'quantity', 'counter', 'inventory', 're:\w+\s*[-+]=', 're:set\w+\(\s*\w+\.get\w+\(\)\s*[-+]']
+  check: Loading an entity, changing a counter or balance in Java and saving it, with no @Version or pessimistic lock.
+  why: Concurrent orders overwrite each other; stock goes negative or money disappears.
+  bad: |
+    @Entity class Product { private int stock; void removeStock(int q) { stock -= q; } }
+  good: |
+    @Entity class Product { @Version private long version; private int stock; ... }
+    // or: @Modifying @Query("update Product p set p.stock = p.stock - :q where p.id = :id and p.stock >= :q")
+
+- id: non-thread-safe-shared
+  title: Non-thread-safe object shared between threads
+  category: concurrency
+  severity: high
+  triggers: ['SimpleDateFormat', 'DecimalFormat', 'MessageDigest', 'new HashMap', 'new ArrayList', 'static']
+  check: SimpleDateFormat, HashMap, ArrayList or other unsynchronised objects in static or singleton fields used by many threads.
+  why: Corrupted dates, infinite loops in HashMap under contention, random failures under load only.
+  bad: |
+    private static final SimpleDateFormat FMT = new SimpleDateFormat("yyyy-MM-dd");
+  good: |
+    private static final DateTimeFormatter FMT = DateTimeFormatter.ISO_LOCAL_DATE;
+
+- id: double-checked-locking
+  title: Double-checked locking without volatile
+  category: concurrency
+  severity: medium
+  triggers: ['synchronized', 'volatile', '== null']
+  check: Lazy initialisation with if (x == null) synchronized ... where the field is not volatile.
+  why: Other threads can see a partially constructed object.
+  bad: |
+    private Client client;
+    Client get() { if (client == null) synchronized (this) { if (client == null) client = new Client(); } return client; }
+  good: |
+    private volatile Client client;   // or let Spring create it as a bean
+
+- id: lock-scope
+  title: Lock held too long or on the wrong object
+  category: concurrency
+  severity: medium
+  triggers: ['synchronized', 'ReentrantLock', '.lock()']
+  check: synchronized on a non-final field, a String literal, or around I/O and remote calls; locks that are not released in finally.
+  why: Deadlocks, or one slow call blocking every request; synchronized only works within one instance anyway.
+  bad: |
+    synchronized (this) { restTemplate.postForObject(url, body, Void.class); }
+  good: |
+    lock.lock(); try { updateCache(); } finally { lock.unlock(); }   // keep I/O outside
+
+- id: async-pitfalls
+  title: "@Async misuse"
+  category: concurrency
+  severity: medium
+  triggers: ['@Async']
+  check: "@Async methods called from the same class, returning void with unhandled exceptions, or using the default executor."
+  why: Self-invocation runs synchronously; void methods lose exceptions; the default executor may be unbounded.
+  bad: |
+    public void register(User u) { save(u); sendWelcome(u); }
+    @Async public void sendWelcome(User u) { ... }
+  good: |
+    // call through another bean and configure a bounded ThreadPoolTaskExecutor
+    @Async("mailExecutor") public CompletableFuture<Void> sendWelcome(User u) { ... }
+
+- id: completable-future-common-pool
+  title: CompletableFuture or parallel stream on the common pool
+  category: concurrency
+  severity: medium
+  triggers: ['CompletableFuture', 'supplyAsync', 'runAsync', 'parallelStream', '.parallel()']
+  check: supplyAsync/runAsync without an executor, or parallel streams doing blocking I/O.
+  why: All of them share ForkJoinPool.commonPool; one slow call starves the rest of the JVM.
+  bad: |
+    CompletableFuture.supplyAsync(() -> client.fetch(id));
+  good: |
+    CompletableFuture.supplyAsync(() -> client.fetch(id), ioExecutor);
+
+- id: threadlocal-leak
+  title: ThreadLocal not cleared
+  category: concurrency
+  severity: medium
+  triggers: ['ThreadLocal']
+  check: ThreadLocal.set without remove() in a finally block.
+  why: Pool threads keep the value; the next request sees another user's tenant or security context.
+  bad: |
+    TENANT.set(tenantId); chain.doFilter(req, res);
+  good: |
+    TENANT.set(tenantId); try { chain.doFilter(req, res); } finally { TENANT.remove(); }
+
+- id: scheduled-multi-instance
+  title: "@Scheduled job runs on every instance"
+  category: concurrency
+  severity: medium
+  triggers: ['@Scheduled']
+  check: Scheduled jobs that must run once (billing, emails, cleanup) without a distributed lock.
+  why: With 3 replicas customers get 3 emails or are billed 3 times; long runs also overlap.
+  bad: |
+    @Scheduled(cron = "0 0 * * * *") public void billCustomers() { ... }
+  good: |
+    @Scheduled(cron = "0 0 * * * *") @SchedulerLock(name = "billCustomers") public void billCustomers() { ... }
+
+- id: unmanaged-threads
+  title: Unmanaged threads or executors
+  category: concurrency
+  severity: medium
+  triggers: ['new Thread(', 'Executors.new']
+  check: new Thread per task, or executors created per call and never shut down.
+  why: Thread leaks, unbounded thread counts and lost work on shutdown.
+  bad: |
+    new Thread(() -> send(mail)).start();
+  good: |
+    mailExecutor.submit(() -> send(mail));   // a bean with bounded pool and graceful shutdown

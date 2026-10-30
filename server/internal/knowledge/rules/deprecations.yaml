@@ -1,0 +1,230 @@
+# Deprecated or legacy APIs. `detect` makes these deterministic: a changed line that matches is reported
+# without asking the model, with the replacement as the suggestion.
+
+- id: deprecated-javax-namespace
+  title: javax.* import in a Spring Boot 3 project
+  category: deprecation
+  severity: high
+  triggers: ['import javax.']
+  detect: ['^\s*import\s+javax\.(persistence|validation|servlet|transaction|inject|annotation\.(PostConstruct|PreDestroy|Resource)|ws\.rs|mail|websocket)\b']
+  check: Jakarta EE APIs imported from the old javax package.
+  why: Spring Boot 3 / Spring 6 use jakarta.*; javax annotations are silently ignored or fail to compile.
+  bad: |
+    import javax.persistence.Entity;
+  good: |
+    import jakarta.persistence.Entity;
+
+- id: deprecated-websecurity-adapter
+  title: WebSecurityConfigurerAdapter was removed
+  category: deprecation
+  severity: high
+  triggers: ['WebSecurityConfigurerAdapter']
+  detect: ['WebSecurityConfigurerAdapter']
+  check: Security config extending WebSecurityConfigurerAdapter.
+  why: Deprecated in Spring Security 5.7 and removed in 6; it no longer compiles on Boot 3.
+  bad: |
+    public class SecurityConfig extends WebSecurityConfigurerAdapter { ... }
+  good: |
+    @Bean SecurityFilterChain api(HttpSecurity http) throws Exception {
+        return http.authorizeHttpRequests(a -> a.anyRequest().authenticated()).build();
+    }
+
+- id: deprecated-jpa-getone
+  title: getOne / getById are deprecated
+  category: deprecation
+  severity: low
+  triggers: ['.getOne(', '.getById(']
+  detect: ['\.(getOne|getById)\(']
+  check: JpaRepository.getOne or getById.
+  why: Deprecated since Spring Data 2.7; the replacement name makes the lazy-proxy behaviour explicit.
+  bad: |
+    Customer c = customers.getById(id);
+  good: |
+    Customer c = customers.getReferenceById(id);   // or findById(id).orElseThrow() if you need the data
+
+- id: deprecated-mockbean
+  title: "@MockBean and @SpyBean are deprecated"
+  category: deprecation
+  severity: low
+  paths: ['src/test/']
+  triggers: ['@MockBean', '@SpyBean']
+  detect: ['@(MockBean|SpyBean)\b']
+  check: Spring Boot test annotations @MockBean / @SpyBean.
+  why: Deprecated in Spring Boot 3.4 in favour of Spring Framework's own annotations.
+  bad: |
+    @MockBean PaymentGateway gateway;
+  good: |
+    @MockitoBean PaymentGateway gateway;
+
+- id: deprecated-wrapper-constructor
+  title: Boxed-type constructor is deprecated
+  category: deprecation
+  severity: low
+  triggers: ['new Integer(', 'new Long(', 'new Double(', 'new Boolean(']
+  detect: ['new (Integer|Long|Double|Float|Short|Byte|Boolean|Character)\(']
+  check: new Integer(x), new Long(x) and friends.
+  why: Deprecated for removal since Java 9; always allocates instead of using the cache.
+  bad: |
+    Long id = new Long(raw);
+  good: |
+    Long id = Long.valueOf(raw);
+
+- id: deprecated-url-constructor
+  title: URL constructors are deprecated
+  category: deprecation
+  severity: low
+  triggers: ['new URL(']
+  detect: ['new URL\(']
+  check: new URL(String).
+  why: Deprecated in Java 20; it does not validate the URL and has surprising equals/hashCode (DNS lookups).
+  bad: |
+    URL url = new URL(endpoint);
+  good: |
+    URL url = URI.create(endpoint).toURL();
+
+- id: deprecated-locale-constructor
+  title: Locale constructors are deprecated
+  category: deprecation
+  severity: info
+  triggers: ['new Locale(']
+  detect: ['new Locale\(']
+  check: new Locale(...).
+  why: Deprecated in Java 19.
+  bad: |
+    new Locale("en", "IN")
+  good: |
+    Locale.of("en", "IN")
+
+- id: legacy-date-api
+  title: Legacy java.util.Date / Calendar API
+  category: deprecation
+  severity: low
+  triggers: ['java.util.Date', 'new Date(', 'Calendar.getInstance', 'SimpleDateFormat']
+  detect: ['new Date\(', 'Calendar\.getInstance\(', 'new SimpleDateFormat\(', '^\s*import\s+java\.util\.(Date|Calendar);']
+  check: Date, Calendar or SimpleDateFormat in new code.
+  why: Mutable, not thread-safe, zone-confusing; java.time has replaced them since Java 8.
+  bad: |
+    Date expires = new Date(System.currentTimeMillis() + ttl);
+  good: |
+    Instant expires = Instant.now(clock).plus(ttl);
+
+- id: legacy-synchronized-collections
+  title: Legacy synchronised collection
+  category: deprecation
+  severity: low
+  triggers: ['Vector', 'Hashtable', 'Stack', 'StringBuffer']
+  detect: ['new (Vector|Hashtable|Stack)\s*[<(]', 'new StringBuffer\(']
+  check: Vector, Hashtable, Stack or StringBuffer.
+  why: Synchronised on every call and superseded since Java 1.2/5; they suggest thread safety they do not give for compound actions.
+  bad: |
+    Stack<Node> stack = new Stack<>();
+  good: |
+    Deque<Node> stack = new ArrayDeque<>();   // StringBuffer -> StringBuilder
+
+- id: deprecated-finalize
+  title: finalize() is deprecated for removal
+  category: deprecation
+  severity: medium
+  triggers: ['finalize()']
+  detect: ['void\s+finalize\s*\(\s*\)']
+  check: Overriding finalize.
+  why: Deprecated for removal (JEP 421); it may never run and slows the GC.
+  bad: |
+    @Override protected void finalize() { close(); }
+  good: |
+    // implement AutoCloseable and use try-with-resources, or java.lang.ref.Cleaner
+
+- id: deprecated-listenable-future
+  title: ListenableFuture is deprecated
+  category: deprecation
+  severity: low
+  triggers: ['ListenableFuture']
+  detect: ['\bListenableFuture\b']
+  check: Spring's ListenableFuture / AsyncRestTemplate style APIs.
+  why: Deprecated in Spring 6 in favour of CompletableFuture.
+  bad: |
+    ListenableFuture<SendResult<String, Order>> f = kafka.send("orders", order);
+  good: |
+    CompletableFuture<SendResult<String, Order>> f = kafka.send("orders", order);
+
+- id: resttemplate-maintenance
+  title: RestTemplate is in maintenance mode
+  category: deprecation
+  severity: info
+  triggers: ['RestTemplate']
+  detect: ['new RestTemplate\(']
+  check: New code creating RestTemplate.
+  why: Spring recommends RestClient (6.1+) for synchronous calls; a new RestTemplate per use also loses pooling and timeouts.
+  bad: |
+    new RestTemplate().getForObject(url, Rate.class);
+  good: |
+    restClient.get().uri(url).retrieve().body(Rate.class);   // RestClient bean with timeouts
+
+- id: deprecated-spring-stringutils-isempty
+  title: Spring StringUtils.isEmpty is deprecated
+  category: deprecation
+  severity: info
+  triggers: ['StringUtils.isEmpty']
+  detect: ['org\.springframework\.util\.StringUtils', 'StringUtils\.isEmpty\(']
+  check: org.springframework.util.StringUtils.isEmpty.
+  why: Deprecated since Spring 5.3; it accepts Object and hides type mistakes.
+  bad: |
+    if (StringUtils.isEmpty(name)) ...
+  good: |
+    if (!StringUtils.hasText(name)) ...
+
+- id: springfox
+  title: Springfox is abandoned
+  category: deprecation
+  severity: medium
+  applies: [xml, gradle]
+  triggers: ['springfox']
+  detect: ['springfox']
+  check: io.springfox dependencies.
+  why: Unmaintained since 2020 and incompatible with Spring Boot 3.
+  bad: |
+    <artifactId>springfox-boot-starter</artifactId>
+  good: |
+    <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+
+- id: config-ddl-auto
+  title: Hibernate ddl-auto changes the schema at startup
+  category: config
+  severity: high
+  applies: [yaml, properties]
+  triggers: ['ddl-auto']
+  detect: ['ddl-auto\s*[:=]\s*(update|create|create-drop)\b']
+  check: ddl-auto update / create / create-drop in shared configuration.
+  why: Unreviewed schema changes in production; create-drop deletes all data on shutdown.
+  bad: |
+    spring.jpa.hibernate.ddl-auto: update
+  good: |
+    spring.jpa.hibernate.ddl-auto: validate   # manage the schema with Flyway or Liquibase
+
+- id: config-actuator-all
+  title: All actuator endpoints exposed
+  category: security
+  severity: high
+  applies: [yaml, properties]
+  triggers: ['exposure']
+  detect: ['include\s*[:=]\s*["'']?\*']
+  check: management.endpoints.web.exposure.include set to "*".
+  why: Exposes env (secrets), heapdump and beans to anyone who can reach the port.
+  bad: |
+    management.endpoints.web.exposure.include: "*"
+  good: |
+    management.endpoints.web.exposure.include: health,info,prometheus
+
+- id: config-plain-secret
+  title: Secret written in configuration
+  category: security
+  severity: critical
+  applies: [yaml, properties]
+  triggers: ['password', 'secret', 'key', 'token']
+  detect: ['(?i)(password|secret|api[-_.]?key|token|credentials)\s*[:=]\s*(?:"|'')?[^\s$"''{][^\s"'']{3,}']
+  check: Passwords, keys or tokens with literal values in application config.
+  why: Everyone with repository access has the credential; rotating it needs a release.
+  bad: |
+    spring.datasource.password: s3cr3t!
+  good: |
+    spring.datasource.password: ${DB_PASSWORD}

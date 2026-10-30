@@ -1,0 +1,108 @@
+- id: regex-recompile
+  title: Regex compiled on every call
+  category: performance
+  severity: low
+  triggers: ['Pattern.compile', '.matches(', '.replaceAll(', '.split(']
+  check: Pattern.compile, String.matches, replaceAll or split with a regex inside methods on hot paths or loops.
+  why: Compiles the regex each call; measurable CPU in request paths.
+  bad: |
+    boolean ok = email.matches("^[^@]+@[^@]+$");
+  good: |
+    private static final Pattern EMAIL = Pattern.compile("^[^@]+@[^@]+$");
+    boolean ok = EMAIL.matcher(email).matches();
+
+- id: string-concat-loop
+  title: String concatenation in a loop
+  category: performance
+  severity: low
+  triggers: ['+=', 'for (', 'while (']
+  check: s += ... on a String inside loops.
+  why: Quadratic copying; slow for large inputs.
+  bad: |
+    String csv = ""; for (Row r : rows) csv += r.toCsv() + "\n";
+  good: |
+    String csv = rows.stream().map(Row::toCsv).collect(Collectors.joining("\n"));
+
+- id: expensive-log-args
+  title: Expensive work for disabled log levels
+  category: performance
+  severity: low
+  triggers: ['log.debug', 'log.trace', 'log.info']
+  check: String concatenation, toString or JSON serialisation inside log calls instead of {} placeholders.
+  why: The work happens even when the level is off.
+  bad: |
+    log.debug("Order: " + mapper.writeValueAsString(order));
+  good: |
+    log.debug("Order {}", order.getId());
+
+- id: remote-call-in-loop
+  title: Database or HTTP call per item
+  category: performance
+  severity: high
+  triggers: ['for (', '.forEach(', '.map(', 'Repository', 'findBy', 'restTemplate', 'restClient', 'webClient', 'getForObject']
+  check: Calls to repositories, other services or HTTP APIs inside loops or stream mappers.
+  why: Latency multiplies with the number of items; timeouts under real data.
+  bad: |
+    ids.stream().map(id -> products.findById(id).orElseThrow()).toList();
+  good: |
+    products.findAllById(ids);
+
+- id: list-contains-loop
+  title: List.contains inside a loop
+  category: performance
+  severity: low
+  triggers: ['.contains(', 'List<']
+  check: contains, indexOf or remove on a List inside another loop.
+  why: O(n*m); a Set makes it O(n).
+  bad: |
+    for (Order o : orders) if (blockedIds.contains(o.getCustomerId())) ...
+  good: |
+    Set<Long> blocked = new HashSet<>(blockedIds);
+
+- id: unbounded-cache
+  title: Unbounded in-memory cache
+  category: performance
+  severity: medium
+  triggers: ['static', 'Map<', 'cache', 'Cache', 'new HashMap', 'new ConcurrentHashMap']
+  check: Static or singleton maps used as caches that only ever grow.
+  why: Memory leak; the service is OOM-killed after days.
+  bad: |
+    private final Map<Long, Product> cache = new ConcurrentHashMap<>();
+  good: |
+    private final Cache<Long, Product> cache = Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(Duration.ofMinutes(10)).build();
+
+- id: whole-file-in-memory
+  title: Whole file or response loaded into memory
+  category: performance
+  severity: medium
+  triggers: ['readAllBytes', 'Files.readString', 'readAllLines', 'getBytes()', 'toByteArray']
+  check: Reading uploads, exports or HTTP bodies fully into memory when they can be large.
+  why: A few concurrent large files exhaust the heap.
+  bad: |
+    byte[] data = upload.getBytes();
+  good: |
+    try (InputStream in = upload.getInputStream()) { storage.write(in); }
+
+- id: heavy-object-per-call
+  title: Heavy object created per call
+  category: performance
+  severity: medium
+  triggers: ['new ObjectMapper', 'new RestTemplate', 'HttpClient.new', 'new Gson', 'JAXBContext.newInstance', 'DocumentBuilderFactory.newInstance']
+  check: ObjectMapper, HTTP clients, JAXB contexts created inside methods.
+  why: Expensive to build and they lose connection pooling and caches.
+  bad: |
+    public String toJson(Object o) { return new ObjectMapper().writeValueAsString(o); }
+  good: |
+    private final ObjectMapper mapper;   // inject the Spring-configured bean
+
+- id: resource-leak
+  title: Resource not closed
+  category: bug
+  severity: high
+  triggers: ['InputStream', 'OutputStream', 'Reader', 'Writer', 'Connection', 'ResultSet', 'Statement', 'Files.lines', 'Files.list', 'Files.walk', 'Socket']
+  check: Streams, readers, JDBC objects or Files.lines/list/walk opened without try-with-resources.
+  why: File handles or pooled connections leak until the process stops working.
+  bad: |
+    var lines = Files.lines(path).filter(...).toList();
+  good: |
+    try (var lines = Files.lines(path)) { return lines.filter(...).toList(); }
