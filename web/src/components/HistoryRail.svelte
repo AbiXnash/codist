@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { app, saveStr, selectCommit } from '../lib/store.svelte';
+  import { app, saveStr, selectCommit, showWorking } from '../lib/store.svelte';
   import { ago, SEVERITIES, SEVERITY_COLOR } from '../lib/theme';
   import Toggle from './Toggle.svelte';
   import type { CommitItem, Severity } from '../lib/types';
@@ -75,9 +75,23 @@
   </div>
 
   <ol class="timeline">
+    {#if app.working?.changes.length}
+      {@const n = app.working.findings}
+      <li class:selected={app.scope === 'working'}>
+        <span class="node hollow" style:--c={n ? 'var(--warn)' : 'var(--good)'}></span>
+        <button class="item working" onclick={showWorking}>
+          <span class="msg">Uncommitted changes</span>
+          <span class="meta"><span>{app.working.changes.length} file{app.working.changes.length === 1 ? '' : 's'} changed</span><span class="time">now</span></span>
+          <span class="badges">
+            {#if n}<span class="pill warn">{n} suggestion{n === 1 ? '' : 's'}</span>{:else}<span class="pill good">clean so far</span>{/if}
+            {#if (app.issueList?.issues ?? []).some((i) => i.uncommitted)}<span class="pill good">✓ {(app.issueList?.issues ?? []).filter((i) => i.uncommitted).length} fixed locally</span>{/if}
+          </span>
+        </button>
+      </li>
+    {/if}
     {#each app.shownCommits as c, i (c.commit.sha)}
       {@const s = summary(c)}
-      {@const selected = c.commit.sha === app.selectedSha}
+      {@const selected = c.commit.sha === app.selectedSha && app.scope !== 'working'}
       <li class:selected class:last={i === app.shownCommits.length - 1}>
         <span class="node" style:--c={s.worst ? SEVERITY_COLOR[s.worst] : c.status === 'done' ? 'var(--good)' : 'var(--text-3)'}
           class:hollow={c.status !== 'done'} class:spin={c.status === 'running' || c.status === 'queued'}></span>
@@ -139,6 +153,7 @@
   .item { display: grid; gap: 3px; width: 100%; padding: 8px 10px; border: 1px solid transparent; border-radius: var(--r-lg); background: none; text-align: left; }
   .item:hover { background: var(--hover); }
   .selected .item { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+  .item.working { border-style: dashed; border-color: var(--border-strong); }
   .msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
   .meta { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 11.5px; color: var(--text-3); }
   .sha { font-size: 11px; color: var(--text-2); }

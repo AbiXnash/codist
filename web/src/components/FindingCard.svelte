@@ -4,7 +4,7 @@
   import type { FindingWithPath, IgnoreScope } from '../lib/types';
   import CodeBlock from './CodeBlock.svelte';
   import CommitRef from './CommitRef.svelte';
-  import { ago } from '../lib/theme';
+  import { ago, NOT_FIXABLE } from '../lib/theme';
 
   // `members` are every place of the same issue (root first); a single finding is an issue of one.
   let { f, members = [f], showPath = true }: { f: FindingWithPath; members?: FindingWithPath[]; showPath?: boolean } = $props();
@@ -82,7 +82,9 @@
             {/if}
           </span>
         {:else}
-          {#if app.status?.canFix && files.every((p) => p.endsWith('.java'))}
+          {#if NOT_FIXABLE.has(f.ref ?? '')}
+            <button class="btn secondary sm" title="A heads-up, not a defect: confirm the readers still expect the new value" onclick={(e) => { e.stopPropagation(); void ignoreFinding(members, 'code'); }}>Mark as checked</button>
+          {:else if app.status?.canFix && files.every((p) => p.endsWith('.java'))}
             <button class="btn sm" onclick={(e) => { e.stopPropagation(); void proposeFix(f); }}
               title={readiness === 'instant' ? 'Mechanical fix: opens instantly' : readiness === 'ready' ? 'Prepared in the background: opens instantly' : 'The model writes the fix (20–60 s)'}>
               {#if readiness}<svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M9.6 1.2 3 9h4.4l-1 5.8L13 7H8.6z"/></svg>{/if}

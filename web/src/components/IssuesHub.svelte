@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { app, ignoreFinding, loadIssues, openFile, pickIssue, proposeFix, selectCommit, unignore } from '../lib/store.svelte';
-  import { ago, INSTANT_REFS, SEVERITIES } from '../lib/theme';
+  import { app, ignoreFinding, loadIssues, loadWorking, openFile, pickIssue, proposeFix, selectCommit, showWorking, unignore } from '../lib/store.svelte';
+  import { ago, INSTANT_REFS, NOT_FIXABLE, SEVERITIES } from '../lib/theme';
   import CommitRef from './CommitRef.svelte';
   import type { FindingWithPath, Issue, Severity } from '../lib/types';
 
@@ -18,6 +18,7 @@
     return m;
   });
   const stateCount = (s: string) => {
+    if (app.scope === 'working') return app.workingIssues.filter((i) => i.state === s && (!i.group || i.groupRoot)).length;
     const all = app.issueList?.issues ?? [];
     const sha = app.selectedSha;
     return all.filter((i) => i.state === s && (s !== 'open' || !i.group || i.groupRoot) &&
@@ -52,7 +53,10 @@
     app.selectedSha = prev;
     app.picked = null;
     void loadIssues();
+    void loadWorking();
   }
+  const isWorking = (i: Issue) => i.firstSeen === 'working';
+  const changedFiles = $derived(app.working?.changes.length ?? 0);
   function openCommit(sha: string) {
     void selectCommit(sha, true);
     app.tab = 'review';
@@ -75,6 +79,7 @@
         {#if i.ref && INSTANT_REFS.has(i.ref) && i.state === 'open'}<span class="tag accent" title="Mechanical fix: no model needed">⚡ instant fix</span>{/if}
       </div>
       <h3>{i.title}</h3>
+      {#if isWorking(i)}<p class="note">In your uncommitted changes. Fix it before you commit: the fix goes into your working tree, nothing is committed.</p>{/if}
       {#if i.detail}<p class="muted">{i.detail}</p>{/if}
 
       <div class="block">
@@ -94,6 +99,7 @@
         </div>
       {/if}
 
+      {#if !isWorking(i)}
       <div class="block">
         <div class="label">History</div>
         <ol class="tl">
@@ -108,18 +114,23 @@
           {:else}<li><span class="dot open"></span>Still open</li>{/if}
         </ol>
       </div>
+      {/if}
 
       <div class="actions">
         {#if i.state === 'open'}
-          {#if app.status?.canFix && g.every((m) => m.path.endsWith('.java'))}
-            <button class="btn" onclick={() => proposeFix(asFinding(i), i.lastSeen)}>{i.ref && INSTANT_REFS.has(i.ref) ? '⚡ Fix' : 'Fix with AI'}</button>
+          {#if NOT_FIXABLE.has(i.ref ?? '')}
+            <button class="btn secondary" title="A heads-up, not a defect: confirm the readers still expect the new value" onclick={() => ignore(g)}>Mark as checked</button>
+          {:else}
+            {#if app.status?.canFix && g.every((m) => m.path.endsWith('.java'))}
+              <button class="btn" onclick={() => proposeFix(asFinding(i), i.lastSeen)}>{i.ref && INSTANT_REFS.has(i.ref) ? '⚡ Fix' : 'Fix with AI'}</button>
+            {/if}
+            <button class="btn secondary" onclick={() => ignore(g)}>Ignore</button>
           {/if}
-          <button class="btn secondary" onclick={() => ignore(g)}>Ignore</button>
         {:else if i.state === 'ignored' && i.ignoreId}
           <button class="btn secondary" onclick={() => unignore(i.ignoreId!).then(loadIssues)}>Stop ignoring</button>
         {/if}
         <button class="btn secondary" onclick={() => openFile(i.path, null, i.line || null)}>Open code</button>
-        <button class="btn secondary" onclick={() => openCommit(i.firstSeen)}>Open commit</button>
+        {#if !isWorking(i)}<button class="btn secondary" onclick={() => openCommit(i.firstSeen)}>Open commit</button>{/if}
         {#if i.ref}<span class="faint ref mono">{i.ref}</span>{/if}
       </div>
     </div>
@@ -131,6 +142,11 @@
           This commit{#if app.selectedSha}<span class="mono faint sha">{app.selectedSha.slice(0, 7)}</span>{/if}
         </button>
         <button class:on={app.scope === 'mine'} disabled={!app.me} onclick={() => setScope('mine')} title="Introduced or fixed by you">Mine</button>
+        {#if changedFiles}
+          <button class:on={app.scope === 'working'} onclick={showWorking} title="Instant checks on the lines you changed and have not committed">
+            Uncommitted{#if app.working?.findings}<span class="dotn">{app.working.findings}</span>{/if}
+          </button>
+        {/if}
       </div>
 
       <div class="levels">
@@ -173,7 +189,8 @@
                     {#if i.state === 'resolved'}
                       <span>✓ {i.fixedIn ? `${short(i.fixedIn)} by ${who(i.fixedBy)}` : i.uncommitted ? 'fixed locally' : 'fixed'}</span>
                     {:else}
-                      <span><span class="mono">{short(i.firstSeen)}</span> · {who(i.firstBy)} · {ago(i.firstTime)}</span>
+                      {#if isWorking(i)}<span class="uncommitted">uncommitted</span>
+                      {:else}<span><span class="mono">{short(i.firstSeen)}</span> · {who(i.firstBy)} · {ago(i.firstTime)}</span>{/if}
                     {/if}
                   </span>
                 </span>
@@ -187,7 +204,7 @@
         <div class="empty">
           {#if app.issueState === 'open'}
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--good)" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.5 2.5L16 9.5"/></svg>
-            <span>No open issues {app.scope === 'commit' ? 'from this commit' : app.scope === 'mine' ? 'by you' : 'in the code'}{app.level ? ` at ${app.level}` : ''}.</span>
+            <span>No open issues {app.scope === 'commit' ? 'from this commit' : app.scope === 'mine' ? 'by you' : app.scope === 'working' ? 'on the lines you changed' : 'in the code'}{app.level ? ` at ${app.level}` : ''}.</span>
           {:else}
             <span>No {app.issueState === 'resolved' ? 'fixed' : 'ignored'} issues here.</span>
           {/if}
@@ -207,6 +224,9 @@
   .seg button:disabled { opacity: 0.4; cursor: default; }
   .seg .mono { font-size: 10.5px; }
   .seg .sha { margin-left: 5px; }
+  .dotn { margin-left: 5px; min-width: 16px; padding: 0 4px; border-radius: 8px; font: 600 10px/15px var(--font); color: #fff; background: var(--warn); display: inline-block; }
+  .uncommitted { color: var(--warn); }
+  .note { margin: 0; padding: 8px 10px; border-radius: var(--r-lg); background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--text-2); font-size: 12px; }
   .n { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 
   .levels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }

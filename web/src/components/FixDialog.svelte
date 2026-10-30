@@ -46,7 +46,7 @@
         <h2 id="fix-title">Fix: {f.finding.title}</h2>
         <div class="sub mono">
           {#if f.proposal && f.proposal.paths.length > 1}{f.proposal.paths.length} files: {f.proposal.paths.map((p) => p.split('/').pop()).join(', ')}{:else}{f.finding.path}{f.finding.line ? ':' + f.finding.line : ''}{/if}
-          {f.proposal ? ` · commit to ${f.proposal.branch}` : ''}
+          {f.proposal ? (f.proposal.working ? ' · working tree, not committed' : ` · commit to ${f.proposal.branch}`) : ''}
         </div>
       </div>
       <button class="icon-btn" aria-label="Close" disabled={!!f.busy} onclick={closeFix}>
@@ -61,22 +61,26 @@
         <div class="diff-head">
           <span class="label">Changes</span>
           <span class="mono plus">+{stats.add}</span><span class="mono minus">−{stats.del}</span>
-          <span class="faint">Check the diff before committing. Only {f.proposal.paths.length > 1 ? 'these files are' : 'this file is'} committed.</span>
+          <span class="faint">{#if f.proposal.working}Check the diff before applying.{:else}Check the diff before committing. Only {f.proposal.paths.length > 1 ? 'these files are' : 'this file is'} committed.{/if}</span>
         </div>
         <pre class="diff">{#each lines as l}<span class={cls(l)}>{l || ' '}</span>{/each}</pre>
 
-        <label class="label" for="fix-msg">Commit message</label>
-        <textarea id="fix-msg" class="mono" rows="5" bind:value={message} spellcheck="false"></textarea>
+        {#if f.proposal?.working}
+          <p class="faint small">This fixes your uncommitted changes, so it is applied to the working tree and not committed. Commit it together with your changes.</p>
+        {:else}
+          <label class="label" for="fix-msg">Commit message</label>
+          <textarea id="fix-msg" class="mono" rows="5" bind:value={message} spellcheck="false"></textarea>
+        {/if}
       {/if}
       {#if f.error}<p class="error">{f.error}</p>{/if}
     </div>
 
     <footer>
-      <span class="faint hint">{f.proposal ? '⌘↵ to commit · Esc to discard' : ''}</span>
+      <span class="faint hint">{f.proposal ? `⌘↵ to ${f.proposal.working ? 'apply' : 'commit'} · Esc to discard` : ''}</span>
       <button class="btn secondary" disabled={!!f.busy} onclick={closeFix}>{f.proposal ? 'Discard' : 'Close'}</button>
       {#if f.proposal}
-        <button class="btn" disabled={!!f.busy || !message.trim()} onclick={() => applyFix(message)}>
-          {#if f.busy === 'applying'}<span class="spinner"></span>Committing…{:else}Apply & commit{/if}
+        <button class="btn" disabled={!!f.busy || (!f.proposal?.working && !message.trim())} onclick={() => applyFix(message)}>
+          {#if f.busy === 'applying'}<span class="spinner"></span>Applying…{:else if f.proposal?.working}Apply to working tree{:else}Apply & commit{/if}
         </button>
       {/if}
     </footer>

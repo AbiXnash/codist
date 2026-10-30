@@ -16,7 +16,10 @@ export const STEREOTYPE: Record<string, { label: string; glyph: string; shape: s
 };
 
 /** Rules with a mechanical fix: the Fix button opens instantly, no model involved. */
-export const INSTANT_REFS = new Set(['console-output', 'literal-instead-of-constant', 'duplicate-log', 'log-helper-method', 'uninjected-dependency', 'copy-paste-wrong-constant']);
+export const INSTANT_REFS = new Set(['console-output', 'literal-instead-of-constant', 'duplicate-log', 'log-helper-method', 'uninjected-dependency', 'copy-paste-wrong-constant', 'field-injection']);
+
+/** Heads-ups that ask you to check something; "fixing" them would only undo your change. */
+export const NOT_FIXABLE = new Set(['shared-constant-changed']);
 
 export const SEVERITIES: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 

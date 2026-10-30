@@ -53,6 +53,17 @@ Reviews are stored as JSON in `~/.codist/<repo>/reviews/`.
   places, suggested fix, history (who introduced and fixed it), and Fix / Ignore. The graph jumps to it. The
   Commit, Diff, Code and Ask tabs sit next to it.
 
+## Uncommitted changes
+
+While you edit (local checkout), Codist runs the rules and the knowledge base on the lines you changed but have
+not committed, in milliseconds and without the model. They appear at the top of History as **Uncommitted
+changes** and in the Issues hub's **Uncommitted** scope; the graph marks the types you are editing. Fixes there
+are applied to the working tree and **not committed**, so you commit them together with your own change. Issues
+your edit already fixes show as "fixed locally".
+
+Some findings are heads-ups rather than defects, such as "shared constant changed": they have **Mark as checked**
+instead of Fix, because a fix could only undo your change.
+
 ## Keyboard
 
 | Key | Action |

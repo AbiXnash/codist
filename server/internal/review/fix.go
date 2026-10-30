@@ -88,6 +88,7 @@ type Proposal struct {
 	Patch   string   `json:"patch"`
 	Message string   `json:"message"`
 	Branch  string   `json:"branch"`
+	Working bool     `json:"working"` // fixes uncommitted changes: applied to the working tree, not committed
 	edits   []edit
 	created time.Time
 }
@@ -154,7 +155,15 @@ func (x *Fixer) Propose(sha, path string, line int, title string) (*Proposal, er
 	if err != nil {
 		return nil, err
 	}
-	return x.build(plan)
+	if why, ok := notFixable[plan.target.Ref]; ok {
+		return nil, errors.New(why)
+	}
+	p, err := x.build(plan)
+	if err == nil && isWorking(sha) {
+		p.Working = true
+		p.Message = strings.Replace(p.Message, "Found by Codist reviewing working", "Found by Codist in your uncommitted changes", 1)
+	}
+	return p, err
 }
 
 // fixPlan is everything needed to produce a fix for one issue.
@@ -167,6 +176,9 @@ type fixPlan struct {
 
 func (x *Fixer) plan(sha, path string, line int, title string) (*fixPlan, error) {
 	rv, ok := x.store.Get(sha)
+	if isWorking(sha) {
+		rv, ok = x.workingReview(), true
+	}
 	if !ok {
 		return nil, errors.New("commit has not been reviewed")
 	}
@@ -589,6 +601,9 @@ func (x *Fixer) Apply(id, message string) (string, error) {
 			restore()
 			return "", err
 		}
+	}
+	if p.Working {
+		return "", nil // your changes are not committed yet, so neither is the fix: commit them together
 	}
 	sha, err := x.repo.CommitFiles(p.Paths, message)
 	if err != nil {

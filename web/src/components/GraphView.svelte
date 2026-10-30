@@ -207,7 +207,7 @@
     const a = app.detail?.analysis;
     const picked = app.selectedNode;
     const q = app.search.trim().toLowerCase();
-    const commitScope = app.scope === 'commit';
+    const commitScope = app.scope === 'commit' || app.scope === 'working';
 
     cy.batch(() => {
       cy!.elements().removeClass('changed added impacted issue impact hl picked dim match target');
@@ -215,7 +215,13 @@
 
       // The selected commit: what it changed and what depends on that.
       const changed = new Set<string>();
-      if (a) {
+      if (app.scope === 'working' && app.working) {
+        const files = new Set(app.working.changes.map((c) => c.newPath || c.path));
+        cy!.nodes().forEach((n) => {
+          const node = app.graph?.nodes.find((x) => x.id === n.id());
+          if (node && files.has(node.file)) { n.addClass('changed'); changed.add(n.id()); }
+        });
+      } else if (a) {
         for (const c of a.changed) {
           const n = cy!.getElementById(c.id);
           if (n.empty()) continue;
@@ -353,6 +359,7 @@
     void app.hub;
     void app.pickedIssue;
     void app.scope;
+    void app.working;
     void app.selectedNode;
     void app.focusChanges;
     void app.search;
