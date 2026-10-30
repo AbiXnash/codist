@@ -14,28 +14,8 @@ import (
 
 	"codist/internal/gitx"
 	"codist/internal/javaidx"
+	"codist/prompts"
 )
-
-const fixPrompt = `You are a senior Java engineer applying one code-review fix.
-Return the COMPLETE updated file in a single fenced code block and nothing else.
-Rules:
-- Fix only the reported problem. Keep every other line exactly as it is: same formatting, comments and order.
-- Add or remove imports the fix needs. Prefer SLF4J for logging, constructor injection, and java.time.
-- Never remove or rename existing fields, constants or methods: other files may use them. Add new ones instead.
-- Do not change signatures unless the finding requires it.
-- When the finding is about a wrong value or name, fix the value too (a renamed constant must hold the right value).
-- The result must compile.`
-
-const editPrompt = `You are a senior Java engineer making a change a developer asked for.
-Return the COMPLETE updated file in a single fenced code block and nothing else.
-Rules:
-- Do exactly what was asked, in the style of the existing code. Keep unrelated lines unchanged.
-- Add or remove imports as needed. The result must compile.`
-
-const askPrompt = `You are a senior Java and Spring Boot engineer answering questions about a codebase.
-Answer concisely and concretely, using the code and project context given. Point to line numbers.
-When you suggest code, show only the relevant snippet. If the question asks for a change, describe it;
-the developer can then click "Make this change" to have it applied as a reviewed commit.`
 
 // Ask answers a question about a file (or the whole project when path is empty).
 func (x *Fixer) Ask(path, question, context string) (string, error) {
@@ -51,7 +31,7 @@ func (x *Fixer) Ask(path, question, context string) (string, error) {
 		}
 	}
 	user.WriteString("\n## Question\n" + question + "\n")
-	answer, err := x.ask.ChatText(askPrompt, user.String())
+	answer, err := x.ask.ChatText(prompts.Get("ask"), user.String())
 	if err != nil {
 		return "", err
 	}
@@ -329,16 +309,15 @@ func (x *Fixer) build(p *fixPlan) (*Proposal, error) {
 		if done.Len() > 0 {
 			user.WriteString("\n## Changes already made to other files for this issue (stay consistent, e.g. use new names)\n```diff\n" + done.String() + "```\n")
 		}
-		proposed, patch, err := x.generate(fixPrompt, user.String(), file, cur)
+		proposed, patch, err := x.generate(prompts.Get("fix"), user.String(), file, cur)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", file, err)
 		}
 		// Do not hand the user a fix that breaks other files or adds a constant that already exists:
 		// retry once with the reason, then refuse.
 		if broken := x.brokenReferences(file, cur, proposed, files); len(broken) > 0 {
-			retry := user.String() + "\n## Your previous attempt broke other files\n" + strings.Join(broken, "\n") +
-				"\nKeep those members exactly as they are and add new ones instead.\n"
-			if proposed, patch, err = x.generate(fixPrompt, retry, file, cur); err != nil {
+			retry := user.String() + "\n" + prompts.Render("retry-broken-references", prompts.Items(broken)) + "\n"
+			if proposed, patch, err = x.generate(prompts.Get("fix"), retry, file, cur); err != nil {
 				return nil, fmt.Errorf("%s: %w", file, err)
 			}
 			if broken = x.brokenReferences(file, cur, proposed, files); len(broken) > 0 {
@@ -346,8 +325,8 @@ func (x *Fixer) build(p *fixPlan) (*Proposal, error) {
 			}
 		}
 		if dups := duplicateConstants(cur, proposed); len(dups) > 0 {
-			retry := user.String() + "\n## Your previous attempt added duplicate constants\n" + strings.Join(dups, "\n") + "\n"
-			if proposed, patch, err = x.generate(fixPrompt, retry, file, cur); err != nil {
+			retry := user.String() + "\n" + prompts.Render("retry-duplicate-constants", prompts.Items(dups)) + "\n"
+			if proposed, patch, err = x.generate(prompts.Get("fix"), retry, file, cur); err != nil {
 				return nil, fmt.Errorf("%s: %w", file, err)
 			}
 			if dups = duplicateConstants(cur, proposed); len(dups) > 0 {
@@ -467,7 +446,7 @@ func (x *Fixer) ProposeEdit(path, instruction string) (*Proposal, error) {
 	if err != nil || !exists {
 		return nil, fmt.Errorf("%s does not exist in the working tree", path)
 	}
-	proposed, _, err := x.generate(editPrompt, "## Change requested by the developer\n"+instruction+"\n", path, current)
+	proposed, _, err := x.generate(prompts.Get("edit"), "## Change requested by the developer\n"+instruction+"\n", path, current)
 	if err != nil {
 		return nil, err
 	}
@@ -502,8 +481,7 @@ func (x *Fixer) generate(system, task, path, current string) (string, string, er
 	}
 	var bad []string
 	if proposed, bad = x.checkImports(current, proposed); len(bad) > 0 {
-		retry := task + "\n## Your previous version imported classes that do not exist: " + strings.Join(bad, ", ") +
-			"\nUse the project's real packages (types in the same package need no import).\n"
+		retry := task + "\n" + prompts.Render("retry-bad-imports", prompts.Items(bad)) + "\n"
 		if answer, err = x.llm.ChatText(system, retry+fileBlock(path, current)); err != nil {
 			return "", "", err
 		}
@@ -734,18 +712,6 @@ func (x *Fixer) brokenReferences(path, before, after string, editing []string) [
 	return out
 }
 
-const testPrompt = `You are a senior Java engineer writing a regression test for a confirmed defect.
-Write ONE JUnit 5 test class that fails on the defect and passes once it is fixed.
-- Use only what the project has (JUnit 5, Mockito, AssertJ / Spring Boot test when present).
-- Assert the CORRECT behaviour. The test must fail today because of the defect and pass after the fix.
-  Never assert that the defect's exception is thrown.
-- Prefer a fast unit test with mocks over a full Spring context.
-- Create the class under test through its constructor (new Service(mockDependency)). Do not use @InjectMocks:
-  it injects fields by reflection and hides dependency-injection defects. For wiring defects prefer
-  @SpringBootTest that autowires the bean.
-- Name tests after the behaviour, e.g. createsCustomerWhenRepositoryIsInjected.
-Return the complete file in a single fenced code block and nothing else.`
-
 var assertsException = regexp.MustCompile(`(assertThrows\(\s*|isInstanceOf\(\s*|expected\s*=\s*|assertThatExceptionOfType\(\s*)(?:[\w.]+\.)?(\w+Exception)\.class`)
 
 // testProblems lists reasons a generated regression test is wrong.
@@ -794,7 +760,7 @@ func (x *Fixer) ProposeTest(sourcePath, defect, build string, forbid ...string) 
 	}
 	var test string
 	for attempt := 0; attempt < 2; attempt++ {
-		answer, err := x.llm.ChatText(testPrompt, user.String())
+		answer, err := x.llm.ChatText(prompts.Get("regression-test"), user.String())
 		if err != nil {
 			return nil, err
 		}
@@ -810,7 +776,7 @@ func (x *Fixer) ProposeTest(sourcePath, defect, build string, forbid ...string) 
 		if attempt == 1 {
 			return nil, errors.New("the generated test is not a valid regression test (" + strings.Join(problems, "; ") + "); nothing was changed, try again")
 		}
-		user.WriteString("\n## Your previous test was wrong\n- " + strings.Join(problems, "\n- ") + "\nWrite it again.\n")
+		user.WriteString("\n" + prompts.Render("retry-bad-test", prompts.Items(problems)) + "\n")
 	}
 	if !strings.HasSuffix(test, "\n") {
 		test += "\n"

@@ -20,14 +20,30 @@ import (
 	"codist/internal/knowledge"
 	"codist/internal/review"
 	"codist/internal/watch"
+	"codist/prompts"
 )
 
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
 	cfg := config.Load()
 
+	prompts.Configure(filepath.Join(cfg.DataDir, "prompts"), "")
 	if len(os.Args) > 1 && os.Args[1] == "export-training" {
 		exportTraining(cfg)
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "export-prompts" {
+		// codist export-prompts [dir]: copies the built-in prompts out for editing (default <data-dir>/prompts).
+		dir := filepath.Join(cfg.DataDir, "prompts")
+		if len(os.Args) > 2 {
+			dir = os.Args[2]
+		}
+		n, err := prompts.Export(dir)
+		if err != nil {
+			slog.Error("export failed", "err", err)
+			os.Exit(1)
+		}
+		slog.Info("exported prompts; edit them there, Codist picks up changes without a restart", "files", n, "dir", dir)
 		return
 	}
 
@@ -37,6 +53,7 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("watching", "repo", repo.Root, "tracking", repo.Tracking())
+	prompts.Configure(filepath.Join(cfg.DataDir, "prompts"), filepath.Join(repo.Root, ".codist", "prompts"))
 
 	hub := events.NewHub()
 	g := graph.New(repo, hub)

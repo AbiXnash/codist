@@ -9,22 +9,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"codist/internal/knowledge"
+	"codist/prompts"
 )
-
-const rcaPrompt = `You are a senior site-reliability and Java engineer doing a root cause analysis.
-You get the errors parsed from production logs, the code where they occur, the commits that most
-recently changed that code, and issues the code reviewer already flagged there.
-Rules:
-- Base every statement on the evidence given. Each cause must cite at least one log line and one code location.
-- Prefer the cause that explains ALL occurrences. Say when a commit is likely responsible and why.
-- If the evidence does not support a cause, say so: give it low confidence or leave it out. Do not invent commits.
-- "fix" is a concrete instruction for a developer (what to change in which method), not a vague advice.
-Respond with JSON only:
-{"causes":[{"title":"short name of the cause","explanation":"2-4 sentences","confidence":"high|medium|low",
-  "evidence":[{"kind":"log|code|commit|issue","text":"the line or fact","path":"src/...","line":18,"sha":"abc1234"}],
-  "fix":"what to change","path":"file to fix","line":18,"sha":"commit that introduced it, if known"}],
- "report":{"summary":"2-3 sentences for a non-specialist","impact":"who or what was affected, from the log counts",
-  "rootCause":"the technical root cause","fix":"the fix","prevention":"how to stop it recurring (tests, rules, monitoring)"}}`
 
 func (e *Engine) explain(in *Incident) error {
 	var b strings.Builder
@@ -113,7 +99,7 @@ func (e *Engine) explain(in *Incident) error {
 		}
 	}
 
-	out, err := e.llm.ChatJSON(rcaPrompt, trim(b.String(), 40000))
+	out, err := e.llm.ChatJSON(prompts.Get("incident-rca"), trim(b.String(), 40000))
 	if err != nil {
 		return err
 	}
@@ -185,14 +171,6 @@ func (e *Engine) explain(in *Incident) error {
 	return nil
 }
 
-const rulePrompt = `You turn a confirmed production root cause into a code-review rule, so the same class of defect is
-caught at commit time. Generalise from the incident to the pattern (do not mention this incident's ids).
-Respond with JSON only:
-{"id":"kebab-case-id","title":"short problem name","category":"bug|concurrency|spring|jpa|security|performance|logging|design",
- "severity":"critical|high|medium|low","triggers":["substrings that appear in code with this problem"],
- "detect":["optional Go regex that matches a changed line with the problem; empty list when a line regex would be too noisy"],
- "check":"what a reviewer looks for","why":"what goes wrong in production","bad":"short Java example","good":"the fixed version"}`
-
 // RuleFor drafts a knowledge-base rule from a cause, as YAML for the engineer to review.
 func (e *Engine) RuleFor(in *Incident, idx int) (string, error) {
 	if idx < 0 || idx >= len(in.Causes) {
@@ -204,7 +182,7 @@ func (e *Engine) RuleFor(in *Incident, idx int) (string, error) {
 	for _, ev := range c.Evidence {
 		fmt.Fprintf(&b, "- %s: %s\n", ev.Kind, ev.Text)
 	}
-	out, err := e.llm.ChatJSON(rulePrompt, b.String())
+	out, err := e.llm.ChatJSON(prompts.Get("incident-rule"), b.String())
 	if err != nil {
 		return "", err
 	}
@@ -260,11 +238,6 @@ func (e *Engine) RuleFor(in *Incident, idx int) (string, error) {
 	return "# Learned from incident: " + in.Title + "\n" + string(b2), nil
 }
 
-const runbookPrompt = `You write a runbook entry for the support team from a confirmed root cause analysis.
-Use Markdown with these sections: ## Symptoms, ## How to recognise it in the logs (exact patterns), ## Impact,
-## Diagnosis steps (numbered), ## Mitigation (immediate actions), ## Permanent fix, ## Escalation.
-Be specific to this incident's system; no generic filler. Respond with the Markdown only.`
-
 // Runbook drafts a runbook entry from the incident.
 func (e *Engine) Runbook(in *Incident) (string, error) {
 	var b strings.Builder
@@ -280,7 +253,7 @@ func (e *Engine) Runbook(in *Incident) (string, error) {
 		c := in.Causes[in.Confirmed]
 		fmt.Fprintf(&b, "\nConfirmed cause: %s. %s\n", c.Title, c.Explanation)
 	}
-	md, err := e.llm.ChatText(runbookPrompt, b.String())
+	md, err := e.llm.ChatText(prompts.Get("incident-runbook"), b.String())
 	if err != nil {
 		return "", err
 	}

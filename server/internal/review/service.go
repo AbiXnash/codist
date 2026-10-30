@@ -17,6 +17,7 @@ import (
 	"codist/internal/graph"
 	"codist/internal/javaidx"
 	"codist/internal/knowledge"
+	"codist/prompts"
 )
 
 var (
@@ -26,37 +27,7 @@ var (
 )
 
 // FilePrompt is the system prompt used for per-file reviews (also used for training data).
-func FilePrompt() string { return filePrompt }
-
-const filePrompt = `You are Codist, a meticulous senior Java and Spring Boot code reviewer. You review one file of a git commit.
-Focus on the CHANGED lines (marked ">>" in the numbered file) and on code they affect. Look for:
-- real bugs: null handling, wrong conditions, off-by-one, unhandled exceptions, resource leaks,
-  equals/hashCode mistakes, race conditions, lost updates
-- copy-paste slips: a constant, label, key, log prefix, message or variable that belongs to another class or
-  domain (for example a "CUSTOMER" prefix used in ProductService), or names that disagree with what the code does
-- Spring pitfalls: multi-step writes without @Transactional, lazy loading / N+1 queries inside loops or streams,
-  wrong HTTP status codes, blocking calls in reactive code, missing authorization checks
-- security: hard-coded secrets, logging passwords or tokens, unvalidated input reaching queries or files
-- performance and maintainability problems that are worth fixing now
-Rules:
-- Only report issues tied to a specific line. Do not invent problems. If the change is fine, return no findings.
-- "line" and "endLine" must be line numbers from the numbered file.
-- "suggestion" must be a concrete fix: corrected Java code where possible.
-- Work through the "Review guidelines" section one by one and check the changed code against each.
-  When a finding matches a guideline, set "ref" to the guideline id.
-Respond with JSON only, in exactly this shape:
-{"summary":"one or two sentences on what this change does",
- "findings":[{"line":12,"endLine":14,"severity":"critical|high|medium|low|info",
-              "category":"bug|security|performance|spring|design|style",
-              "title":"short title","detail":"why it is a problem","suggestion":"fixed code or concrete advice","ref":"guideline-id or empty"}]}`
-
-const commitPrompt = `You summarise a git commit for the developer who wrote it, based on per-file reviews.
-Also write the commit message the change deserves: a Conventional Commits subject (feat|fix|refactor|perf|chore|test|docs)
-with a scope, at most 72 characters, describing what the code actually does (not what the author typed), then a short body.
-Respond with JSON only: {"summary":"2-3 sentences on what changed and why it matters",
-"highlights":["short bullet", "..."], "risk":"low|medium|high",
-"message":"type(scope): subject\n\n- what changed\n- why"}
-Base "risk" on the findings: any critical or high finding means at least medium.`
+func FilePrompt() string { return prompts.Get("review-file") }
 
 // Service reviews commits one at a time, file by file.
 type Service struct {
@@ -245,7 +216,7 @@ func (s *Service) run(sha string) {
 	case problem != "":
 		r.Summary = problem + ". Only the static checks ran."
 	default:
-		out, err := s.summaryLLM.ChatJSON(commitPrompt, commitContext(a, r.Files))
+		out, err := s.summaryLLM.ChatJSON(prompts.Get("review-commit"), commitContext(a, r.Files))
 		if err != nil {
 			r.Summary = "Per-file reviews finished, but the commit summary failed: " + err.Error()
 			break
@@ -487,11 +458,12 @@ func (s *Service) modelPass(a Analysis, f gitx.FileChange, fr FileReview, in fil
 	guidelines := kb.Select(f.NewPath, in.src, in.added, 10)
 	prompt := s.fileContext(a, f, in, fr.Findings, guidelines, build)
 
-	key := s.cache.key(filePrompt, s.llm.Model, prompt)
+	system := prompts.Get("review-file") // part of the cache key, so editing the prompt re-reviews
+	key := s.cache.key(system, s.llm.Model, prompt)
 	out, hit := s.cache.get(key)
 	if !hit {
 		var err error
-		out, err = s.llm.ChatJSON(filePrompt, prompt)
+		out, err = s.llm.ChatJSON(system, prompt)
 		if err != nil {
 			fr.Error = "LLM review failed: " + err.Error()
 			return fr
@@ -668,14 +640,14 @@ func (s *Service) fileContext(a Analysis, f gitx.FileChange, in fileInput, known
 	}
 
 	if len(guidelines) > 0 {
-		add("## Review guidelines for this change (check each one)", knowledge.Format(guidelines), 3, 1500)
+		add("## Knowledge: bug patterns that resemble this code (reference, not a checklist)", knowledge.Format(guidelines), 3, 1500)
 	}
 	if len(known) > 0 {
 		var b strings.Builder
 		for _, x := range known {
 			fmt.Fprintf(&b, "- line %d: %s\n", x.Line, x.Title)
 		}
-		add("## Already reported by static checks (do NOT repeat these; look for other problems)", b.String(), 2, 400)
+		add("## Already found by static analysis (do not repeat these; look for other problems)", b.String(), 2, 400)
 	}
 	if s.Ignores != nil {
 		if ig := s.Ignores.ForPrompt(f.NewPath); len(ig) > 0 {

@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"codist/prompts"
 )
 
 // Ollama is a minimal client for /api/chat with JSON-mode output.
@@ -22,7 +24,21 @@ func NewOllama(url, model string, numCtx int, timeout time.Duration) *Ollama {
 	return &Ollama{URL: url, Model: model, NumCtx: numCtx, HTTP: &http.Client{Timeout: timeout}}
 }
 
+// ChatJSON asks for a JSON object. An answer that does not parse is sent back once with the
+// retry-invalid-json prompt; small models usually get it right the second time.
 func (o *Ollama) ChatJSON(system, user string) (map[string]any, error) {
+	out, err := o.chatJSON(system, user)
+	if bad, ok := err.(errInvalidJSON); ok {
+		return o.chatJSON(system, user+"\n\n"+prompts.Render("retry-invalid-json", map[string]any{"Error": bad.reason}))
+	}
+	return out, err
+}
+
+type errInvalidJSON struct{ reason, content string }
+
+func (e errInvalidJSON) Error() string { return "model did not return valid JSON: " + e.content }
+
+func (o *Ollama) chatJSON(system, user string) (map[string]any, error) {
 	body, _ := json.Marshal(map[string]any{
 		"model":      o.Model,
 		"stream":     false,
@@ -55,7 +71,7 @@ func (o *Ollama) ChatJSON(system, user string) (map[string]any, error) {
 		if len(content) > 300 {
 			content = content[:300] + "…"
 		}
-		return nil, fmt.Errorf("model did not return valid JSON: %s", content)
+		return nil, errInvalidJSON{reason: err.Error(), content: content}
 	}
 	return parsed, nil
 }
