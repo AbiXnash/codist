@@ -1,6 +1,9 @@
 package incident
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 const sampleLog = `2026-10-30 10:15:02.118  INFO 4242 --- [shop] [nio-8081-exec-3] c.d.shop.customer.CustomerController  : POST /api/customers
 2026-10-30 10:15:02.131 ERROR 4242 --- [shop] [nio-8081-exec-3] o.a.c.c.C.[.[.[/].[dispatcherServlet]    : Servlet.service() for servlet [dispatcherServlet] threw exception
@@ -55,5 +58,58 @@ func TestNamedFields(t *testing.T) {
 	f := namedFields([]ErrorEvent{{Message: `Cannot invoke "com.demo.CustomerRepository.findByEmail(String)" because "this.customers" is null`}})
 	if !f["customers"] || len(f) != 1 {
 		t.Fatalf("fields: %v", f)
+	}
+}
+
+// Spring Boot 3 logs: the stack trace follows the ERROR line, frames are module-qualified, and the
+// servlet's ERROR line repeats the exception text.
+func TestParseSpringBootJava21Logs(t *testing.T) {
+	log := `2026-10-30T23:46:32.790+05:30 ERROR 58870 --- [order-app] [scheduling-1] o.s.s.s.TaskUtils$LoggingErrorHandler    : Unexpected error occurred in scheduled task
+
+java.lang.NullPointerException: Cannot invoke "java.math.BigDecimal.multiply(java.math.BigDecimal)" because "unit" is null
+	at com.demo.orders.order.PricingService.price(PricingService.java:27) ~[!/:0.0.1-SNAPSHOT]
+	at com.demo.orders.order.PricingJob.refresh(PricingJob.java:21) ~[!/:0.0.1-SNAPSHOT]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+	at org.springframework.scheduling.support.ScheduledMethodRunnable.runInternal(ScheduledMethodRunnable.java:130) ~[spring-context-6.2.19.jar!/:6.2.19]
+	at java.base/java.lang.Thread.run(Thread.java:1583) ~[na:na]
+
+2026-10-30T23:46:49.742+05:30 ERROR 58870 --- [order-app] [http-nio-8081-exec-2] o.a.c.c.C.[.[.[/].[dispatcherServlet]    : Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception [Request processing failed: java.lang.NullPointerException: Cannot invoke "com.demo.orders.quote.QuoteData.price()" because the return value of "com.demo.orders.quote.QuoteResponse.data()" is null] with root cause
+
+java.lang.NullPointerException: Cannot invoke "com.demo.orders.quote.QuoteData.price()" because the return value of "com.demo.orders.quote.QuoteResponse.data()" is null
+	at com.demo.orders.order.PricingService.price(PricingService.java:26) ~[!/:0.0.1-SNAPSHOT]
+	at com.demo.orders.order.OrderController.price(OrderController.java:28) ~[!/:0.0.1-SNAPSHOT]
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[na:na]
+	at app//org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:61) ~[tomcat-embed-core-10.1.jar!/:na]
+`
+	ev := Parse(log)
+	if len(ev) != 2 {
+		t.Fatalf("want 2 events, got %d: %+v", len(ev), ev)
+	}
+	for _, e := range ev {
+		if e.Exception != "java.lang.NullPointerException" || len(e.Frames) != 5 && len(e.Frames) != 4 || e.Frames[0].Class != "com.demo.orders.order.PricingService" {
+			t.Fatalf("event not parsed whole: %+v", e)
+		}
+	}
+	if ev[0].Logger == "" || ev[0].FirstTime == "" {
+		t.Fatalf("the ERROR line's logger and time belong to the event: %+v", ev[0])
+	}
+	if ev[1].Frames[3].Class != "org.apache.tomcat.util.threads.TaskThread$WrappingRunnable" {
+		t.Fatalf("app// prefix not stripped: %+v", ev[1].Frames[3])
+	}
+}
+
+func TestNullPatternSpansDifferentValues(t *testing.T) {
+	at := []Frame{{Class: "com.demo.orders.order.PricingService", Method: "price", Line: 26}}
+	ev := []ErrorEvent{
+		{Exception: "java.lang.NullPointerException", Message: `Cannot invoke "com.demo.orders.quote.QuoteData.price()" because the return value of "com.demo.orders.quote.QuoteResponse.data()" is null`, Frames: at, Count: 7},
+		{Exception: "java.lang.NullPointerException", Message: `Cannot invoke "String.trim()" because the return value of "com.demo.orders.quote.QuoteResponse.message()" is null`, Frames: at, Count: 1},
+		{Exception: "java.lang.NullPointerException", Message: `Cannot invoke "java.math.BigDecimal.multiply(java.math.BigDecimal)" because "unit" is null`, Frames: at, Count: 1},
+	}
+	p := NullPattern(ev)
+	if !strings.Contains(p, "9 NullPointerExceptions in PricingService.price on 3 different null values") || !strings.Contains(p, "QuoteResponse.data() (×7)") || !strings.Contains(p, "local variable unit") {
+		t.Fatalf("pattern: %q", p)
+	}
+	if NullPattern(ev[:1]) != "" {
+		t.Fatal("one null value is not a pattern")
 	}
 }

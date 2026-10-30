@@ -5,6 +5,7 @@ package incident
 
 import (
 	"bufio"
+	"fmt"
 	"regexp"
 	"sort"
 	"strconv"
@@ -31,10 +32,14 @@ type ErrorEvent struct {
 	FirstTime string   `json:"firstTime,omitempty"`
 	LastTime  string   `json:"lastTime,omitempty"`
 	Signature string   `json:"signature"`
+
+	header bool // made from a log line that named the exception; the stack trace that follows replaces it
 }
 
 var (
-	frameLine     = regexp.MustCompile(`^\s*at\s+([\w$.]+)\.([\w$<>]+)\(([^:)]*)(?::(\d+))?\)`)
+	// Java 9+ may prefix a frame with a class loader and module: "at app//com.x.A.m(A.java:1)",
+	// "at java.base/java.lang.Thread.run(Thread.java:1583)".
+	frameLine     = regexp.MustCompile(`^\s*at\s+(?:[\w.$-]*/)*([\w$.]+)\.([\w$<>]+)\(([^:)]*)(?::(\d+))?\)`)
 	exceptionLine = regexp.MustCompile(`((?:[a-zA-Z_$][\w$]*\.)+[A-Z][\w$]*(?:Exception|Error|Throwable|Failure))(?::\s?(.*))?$`)
 	causedByLine  = regexp.MustCompile(`^\s*Caused by:\s*((?:[a-zA-Z_$][\w$]*\.)*[A-Z][\w$]*)(?::\s?(.*))?$`)
 	timestamp     = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)`)
@@ -96,7 +101,7 @@ func Parse(raw string) []ErrorEvent {
 			}
 			// Some formats put the exception on the same line as the level.
 			if m := exceptionLine.FindStringSubmatch(line); m != nil && !strings.Contains(pendingMsg, m[1]+" ") {
-				cur = &ErrorEvent{Exception: m[1], Message: strings.TrimSpace(m[2]), Logger: pendingLogger, Level: pendingLevel, Count: 1, FirstTime: curTime}
+				cur = &ErrorEvent{Exception: m[1], Message: strings.TrimSpace(m[2]), Logger: pendingLogger, Level: pendingLevel, Count: 1, FirstTime: curTime, header: true}
 				continue
 			}
 			if pendingLevel != "WARN" || pendingLogger != "" {
@@ -108,8 +113,10 @@ func Parse(raw string) []ErrorEvent {
 			continue
 		}
 		if m := exceptionLine.FindStringSubmatch(strings.TrimSpace(line)); m != nil && !strings.HasPrefix(strings.TrimSpace(line), "at ") {
-			if cur != nil && cur.Exception == "" && len(cur.Frames) == 0 {
-				cur.Exception, cur.Message = m[1], firstNonEmpty(strings.TrimSpace(m[2]), cur.Message)
+			// The stack trace belongs to the log line just before it ("ERROR ... Unexpected error occurred
+			// in scheduled task", or Spring's servlet line that repeats the exception text).
+			if cur != nil && len(cur.Frames) == 0 && (cur.Exception == "" || cur.header) {
+				cur.Exception, cur.Message, cur.header = m[1], firstNonEmpty(strings.TrimSpace(m[2]), cur.Message), false
 				continue
 			}
 			flush()
@@ -162,6 +169,10 @@ func signature(e *ErrorEvent) string {
 	for i, f := range e.Frames {
 		if i == 3 {
 			break
+		}
+		if i == 0 { // a different failing line is a different failure point, even in the same method
+			parts = append(parts, fmt.Sprintf("%s.%s:%d", f.Class, f.Method, f.Line))
+			continue
 		}
 		parts = append(parts, f.Class+"."+f.Method)
 	}
