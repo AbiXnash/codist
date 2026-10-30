@@ -83,7 +83,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		"head": s.Repo.Head(), "model": s.LLM.Model, "llmProblem": s.LLM.Problem(),
 		"graphSource": g.Source, "graphBuiltAt": g.BuiltAt,
 		"canFix": s.Fixer.Enabled(), "rules": len(s.Reviews.Knowledge().Rules), "user": s.Repo.UserName(),
-		"operation": s.Repo.Operation(), "conflicts": s.Repo.Conflicts(),
+		"operation": s.Repo.Operation(), "conflicts": s.Repo.Conflicts(), "analysers": s.analysers(),
 		"models": map[string]string{"review": s.LLM.Model, "summary": firstNonEmpty(s.Cfg.SummaryModel, s.LLM.Model),
 			"fix": firstNonEmpty(s.Cfg.FixModel, s.LLM.Model), "ask": firstNonEmpty(s.Cfg.AskModel, s.LLM.Model)},
 	})
@@ -444,4 +444,11 @@ func writeError(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+func (s *Server) analysers() []string {
+	if s.Reviews.Tools == nil {
+		return []string{}
+	}
+	return s.Reviews.Tools.Active()
 }

@@ -31,6 +31,7 @@ type Config struct {
 
 	AutoReview   bool
 	MaxFiles     int
+	Tools        string // static analysers: auto (PMD + SpotBugs when Maven is available), off, or a list
 	MaxFileLines int
 
 	Addr   string
@@ -61,6 +62,7 @@ func Load() Config {
 
 		AutoReview:   envBool("CODIST_AUTO_REVIEW", true),
 		MaxFiles:     envInt("CODIST_MAX_FILES", 8),
+		Tools:        env("CODIST_TOOLS", "auto"),
 		MaxFileLines: 600,
 
 		Addr:   env("CODIST_ADDR", ":"+env("PORT", "8080")),

@@ -67,6 +67,12 @@
 
     {#if r?.status === 'failed' && r.error}<p class="error mono">{r.error}</p>{/if}
     {#if r?.status === 'done' && r.summary}<p class="summary">{r.summary}</p>{/if}
+    {#if r?.analysers?.length || r?.analysisProblems?.length}
+      <p class="checked faint" title={(r.analysisProblems ?? []).join('\n')}>
+        Checked by Codist rules, the knowledge base{#each r.analysers ?? [] as t}, {t === 'pmd' ? 'PMD' : 'SpotBugs'}{/each} and the model
+        {#if r.analysisProblems?.length}<span class="warnc"> · {r.analysisProblems.length} analyser problem{r.analysisProblems.length > 1 ? 's' : ''}</span>{/if}
+      </p>
+    {/if}
 
     {#if d.analysis.changed.length || d.analysis.impacted.length}
       <section class="types">
@@ -160,6 +166,8 @@
 {/if}
 
 <style>
+  .checked { margin: 0 0 8px; font-size: 11.5px; }
+  .checked .warnc { color: var(--warn); }
   .review { padding: 16px; }
   h1 { margin: 0 0 4px; font-size: 15px; font-weight: 600; line-height: 1.35; }
   .meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--text-3); }
