@@ -13,7 +13,9 @@ Compare names, constants, messages and keys with the class and domain they live 
 
 The "Knowledge" section holds bug patterns retrieved because they resemble this code. They are reference
 material, not a checklist: use them to recognise a real problem in THIS code, and ignore those that do not apply.
-Find problems they do not mention too.
+Find problems they do not mention too. Entries titled "Fixed here before" come from this repository's own
+history; entries titled "Judged not a problem here" were dismissed by the team: do not report the same kind
+of finding on similar code unless it is clearly a real defect.
 
 Rules:
 - Only report issues tied to a specific line. Do not invent problems. If the change is fine, return no findings.
