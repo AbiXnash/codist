@@ -64,6 +64,19 @@ your edit already fixes show as "fixed locally".
 Some findings are heads-ups rather than defects, such as "shared constant changed": they have **Mark as checked**
 instead of Fix, because a fix could only undo your change.
 
+### The graph
+
+- **Controls** (top right of the graph): find by class, package or `@Annotation` (highlight or show only
+  matches); show or hide roles, link kinds, tests and packages; layouts **Natural**, **Layers**
+  (controllers on top, then services, repositories, entities), **Hubs** and **Grid**; size by links, code
+  size or open issues; labels; package boxes; PNG export.
+- **Right-click a class**: blast radius (what depends on it, by distance), show only its neighbours,
+  dependencies or dependents, path from or to it, hide it, open its code.
+- **Analysis**: dependency **cycles**, **layer violations** (upward dependencies, controllers using
+  repositories directly), **blast radius**, **path** between two classes, and **hotspots** (most depended
+  on, fragile, largest). Hover a class for fan-in, fan-out, instability and size.
+- **What does it all mean?** (the ? button) explains every shape, letter, ring, line and colour.
+
 ## Keyboard
 
 | Key | Action |
@@ -111,7 +124,53 @@ on the working tree as it is now: each place is found again by its code, and pla
 Generic messages ("chore: added logs", "update", "fix") and `chore`/`docs`/`style` commits that change production
 code are flagged, with a suggested Conventional Commits message that describes what the diff actually does.
 
+## Prompts
+
+Every instruction Codist gives a model is a Markdown file in `server/prompts/` (per-file review, commit
+summary, fixes, Ask, regression tests, incident RCA, rules, runbooks, and the feedback sent when an
+answer is wrong). They are built in; to change one, `codist export-prompts` copies them to
+`~/.codist/prompts/`, where edits apply immediately. A team can commit its own in `.codist/prompts/`,
+which win over personal ones. `GET /api/prompts` shows which version is in effect.
+
+## Knowledge: bugbase and retrieval (RAG)
+
+`server/internal/knowledge/bugbase/*.md` describes about 110 real-world Java, Spring, JPA, concurrency,
+security, performance and testing defects: what the pattern is, how it shows up in code, why it breaks in
+production, bad and better code, and the equivalent Sonar, SpotBugs or PMD rule. They are knowledge, not
+"check for X" instructions: for each file the most similar entries are retrieved (BM25 over the code's
+identifiers, annotations and calls, changed lines weighted higher) and given to the model as reference;
+the model reasons from them and finds problems they do not mention. YAML rules join the same index.
+Add your own entries in `~/.codist/bugbase/` or `.codist/bugbase/` (same format; same id overrides).
+
+## Static analysers
+
+For Maven projects Codist also runs **PMD 7** (a curated rule set: defects, not style) and **SpotBugs**
+(bytecode: unwritten fields, null paths, leaks, concurrency) on each reviewed commit, in an export of the
+commit, so your working tree is never touched. Their findings on changed lines join Codist's own (one
+problem is not listed twice) before the model runs, so it sees them as evidence. `CODIST_TOOLS=off`
+disables them; Maven downloads the plugins on first use.
+
+## Fix with a suggestion
+
+Every open issue has **Suggest how to fix it**: describe the fix you want ("constructor injection, keep the
+field name") and the fix follows it. The suggestion must be about that issue: naming another class of the
+project is refused at once, and a model check refuses other requests (features, other bugs, chat) with the
+reason, before any fix is generated.
+
+## Teams, merges and reverts
+
+- Merge commits are reviewed only for what they add themselves (lines that differ from every parent, where
+  conflict resolutions live); merged-in changes are reviewed and credited in their own commits.
+- An issue whose code comes back after it was fixed (a revert, a bad merge) is marked **reopened**, with who
+  fixed it and who brought it back.
+- During a merge, rebase, cherry-pick or revert, fixes are paused and a banner lists conflicted files;
+  leftover conflict markers are critical findings.
+- A pull reviews up to 30 new commits at once.
+
 ## Incidents: root cause analysis from logs
+
+Try it on `~/dev/rca-demo` (a Spring Boot app calling an unreliable quote service; its log fills with real
+NullPointerExceptions). See that folder's README.
 
 Open **Incidents** in the top bar, paste the logs from an incident (or drop a log file) and click **Find root cause**.
 The logs are analysed on this machine and never sent anywhere.
