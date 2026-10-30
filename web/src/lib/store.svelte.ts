@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { AskMessage, CommitItem, Detail, FindingWithPath, FixProposal, Graph, IgnoreScope, Incident, Issue, IssueList, IncidentRow, Mode, OpenFile, Severity, Status, Tab } from './types';
+import type { Working, AskMessage, CommitItem, Detail, FindingWithPath, FixProposal, Graph, IgnoreScope, Incident, Issue, IssueList, IncidentRow, Mode, OpenFile, Severity, Status, Tab } from './types';
 
 export interface Toast {
   id: number;
@@ -86,7 +86,20 @@ class AppState {
   // History rail: whose commits to list.
   history = $state<'mine' | 'everyone'>(prefStr('history', ['mine', 'everyone'] as const, 'mine'));
   // Issues hub: what to show. The graph highlights the same set.
-  scope = $state<'all' | 'commit' | 'mine'>('all');
+  scope = $state<'all' | 'commit' | 'mine' | 'working'>('all');
+  /** Instant checks on your uncommitted changes. */
+  working = $state.raw<Working | null>(null);
+  /** The uncommitted findings in the tracker's shape, so the hub lists them like any issue. */
+  workingIssues: Issue[] = $derived(
+    (this.working?.files ?? []).flatMap((fr) =>
+      fr.findings.map((f) => ({
+        id: `working:${fr.path}:${f.line}:${f.ref ?? f.title}`, state: f.ignored ? 'ignored' : 'open', severity: f.severity, category: f.category,
+        title: f.title, detail: f.detail, suggestion: f.suggestion, ref: f.ref, source: f.source as Issue['source'], path: fr.path, line: f.line,
+        snippet: f.snippet ?? '', firstSeen: 'working', firstTime: Date.now(), firstBy: this.status?.user ?? '', firstMsg: 'Uncommitted changes',
+        lastSeen: 'working', commits: [], group: f.group, groupRoot: f.groupRoot, reviewLine: f.line, ignoreId: f.ignoreId,
+      }) as Issue),
+    ),
+  );
   issueState = $state<'open' | 'resolved' | 'ignored'>('open');
   level = $state<Severity | null>(null);
   hubQuery = $state('');
@@ -112,11 +125,11 @@ class AppState {
 
   /** Issues in the hub's scope and state, before the level filter: one entry per root cause, root first. */
   scoped: Issue[][] = $derived.by(() => {
-    const all = this.issueList?.issues ?? [];
+    const all = this.scope === 'working' ? this.workingIssues : this.issueList?.issues ?? [];
     const sha = this.selectedSha;
     const q = this.hubQuery.trim().toLowerCase();
     const inScope = (i: Issue) =>
-      this.scope === 'all' ? true
+      this.scope === 'all' || this.scope === 'working' ? true
       : this.scope === 'mine' ? this.isMe(i.firstBy) || this.isMe(i.fixedBy)
       : !!sha && (i.firstSeen === sha || i.fixedIn === sha);
     const list = all.filter((i) => i.state === this.issueState && inScope(i) && (!q || `${i.title} ${i.path} ${i.ref ?? ''}`.toLowerCase().includes(q)));
@@ -133,7 +146,7 @@ class AppState {
   hub: Issue[][] = $derived(this.level ? this.scoped.filter((g) => g[0].severity === this.level) : this.scoped);
   /** The picked issue with the other places of the same root cause, root first. */
   pickedIssue: Issue[] | null = $derived.by(() => {
-    const all = this.issueList?.issues ?? [];
+    const all = this.picked?.startsWith('working:') ? this.workingIssues : this.issueList?.issues ?? [];
     const root = all.find((i) => i.id === this.picked);
     if (!root) return null;
     const g = root.state === 'open' && root.group ? all.filter((i) => i.state === 'open' && i.group === root.group) : [root];
@@ -213,6 +226,24 @@ export async function loadIssues() {
   }
 }
 
+export async function loadWorking() {
+  try {
+    app.working = await api.working();
+    if (app.scope === 'working' && !app.working.changes.length) app.scope = 'all';
+  } catch {
+    /* remote mirror or not indexed yet */
+  }
+}
+
+/** Shows the uncommitted changes in the hub and on the graph. */
+export function showWorking() {
+  app.scope = 'working';
+  app.issueState = 'open';
+  app.picked = null;
+  app.tab = 'issues';
+  app.showPanel = true;
+}
+
 export async function selectCommit(sha: string, focus = false) {
   app.selectedSha = sha;
   if (focus) {
@@ -228,7 +259,7 @@ export function pickIssue(id: string | null) {
   app.picked = id;
   app.tab = 'issues';
   app.showPanel = true;
-  const is = app.issueList?.issues.find((i) => i.id === id);
+  const is = [...(app.issueList?.issues ?? []), ...app.workingIssues].find((i) => i.id === id);
   const node = is && nodeFor(is.path, is.line);
   if (node) window.dispatchEvent(new CustomEvent('codist:center', { detail: node }));
 }
@@ -342,8 +373,10 @@ export async function applyFix(message: string) {
   try {
     const { commit } = await api.applyFix(f.proposal.id, message);
     app.fix = null;
-    toast(`Committed ${commit.slice(0, 7)} · reviewing the fix`, 'good', 5000);
+    if (commit) toast(`Committed ${commit.slice(0, 7)} · reviewing the fix`, 'good', 5000);
+    else toast('Applied to your working tree · commit it with your changes', 'good', 5000);
     void loadIssues();
+    void loadWorking();
   } catch (e) {
     app.fix = { ...f, busy: null, error: (e as Error).message };
   }
@@ -425,6 +458,7 @@ export function connect() {
   es.addEventListener('graph', async () => {
     await loadGraph();
     void loadIssues(); // edits can resolve issues
+    void loadWorking(); // and raise new ones on the lines you changed
     const f = app.file;
     if (f && !f.sha) {
       app.file = null;
@@ -434,13 +468,13 @@ export function connect() {
 
   es.addEventListener('commits', async (e) => {
     const d = JSON.parse((e as MessageEvent).data) as { head: string; new: string[] };
-    await Promise.all([loadStatus(), loadCommits()]);
+    await Promise.all([loadStatus(), loadCommits(), loadWorking()]);
     toast(`${d.new.length} new commit${d.new.length > 1 ? 's' : ''} on ${app.status?.tracking} · reviewing`, 'info', 5000);
     if (app.follow) await selectCommit(d.head);
   });
 
   es.addEventListener('ignores', async () => {
-    await Promise.all([refreshDetail(), loadCommits(), loadIssues()]);
+    await Promise.all([refreshDetail(), loadCommits(), loadIssues(), loadWorking()]);
   });
 
   // The release screen reloads its checklist when anyone ticks an item.
@@ -475,7 +509,7 @@ export function connect() {
 
 export async function boot() {
   await loadStatus();
-  await Promise.all([loadGraph(), loadCommits(), loadIssues(), loadIncidents()]);
+  await Promise.all([loadGraph(), loadCommits(), loadIssues(), loadIncidents(), loadWorking()]);
   if (app.commits.length) await selectCommit(app.commits[0].commit.sha);
   connect();
   setInterval(() => void loadStatus(), 30_000);

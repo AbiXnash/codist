@@ -481,3 +481,78 @@ func TestDuplicateConstants(t *testing.T) {
 		t.Fatalf("distinct values flagged: %v", d)
 	}
 }
+
+func TestWorkingChangesReviewAndConstructorInjection(t *testing.T) {
+	dir, data := t.TempDir(), t.TempDir()
+	git := func(args ...string) string {
+		out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=a@b", "-c", "user.name=Dev"}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %s", args, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	p := "src/main/java/shop/customer/CustomerService.java"
+	os.MkdirAll(filepath.Join(dir, filepath.Dir(p)), 0o755)
+	before := "package shop.customer;\n\nimport org.springframework.stereotype.Service;\n\n@Service\npublic class CustomerService {\n    private CustomerRepository customers;\n\n    public void x() { customers.findAll(); }\n}\n"
+	os.WriteFile(filepath.Join(dir, p), []byte(before), 0o644)
+	git("init", "-q", "-b", "main")
+	git("add", "-A")
+	git("commit", "-qm", "one")
+	// Uncommitted: the developer adds field injection.
+	edited := "package shop.customer;\n\nimport org.springframework.beans.factory.annotation.Autowired;\nimport org.springframework.stereotype.Service;\n\n@Service\npublic class CustomerService {\n    @Autowired private CustomerRepository customers;\n\n    public void x() { customers.findAll(); }\n}\n"
+	os.WriteFile(filepath.Join(dir, p), []byte(edited), 0o644)
+
+	repo, err := gitx.Open(config.Config{RepoPath: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kb, _ := knowledge.Load()
+	rules := func() (javaidx.Context, *knowledge.Base, bool) {
+		g := javaidx.Index(repo.JavaFilesWorking(), "wt")
+		return javaidx.ProjectContext(&g), kb, true
+	}
+	ig := NewIgnores(data, "r", dir)
+	w := WorkingReview(repo, rules, ig)
+	var fi *Finding
+	for _, fr := range w.Files {
+		for k, f := range fr.Findings {
+			if f.Ref == "field-injection" {
+				fi = &fr.Findings[k]
+			}
+		}
+	}
+	if fi == nil || fi.Line != 8 {
+		t.Fatalf("the uncommitted @Autowired line should be flagged: %+v", w.Files)
+	}
+
+	store, _ := NewStore(data, "r")
+	x := &Fixer{repo: repo, store: store, Ignores: ig, Rules: rules, proposals: map[string]*Proposal{}, prefetched: map[string]*Proposal{}}
+	prop, err := x.Propose(WorkingSHA, p, fi.Line, fi.Title)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := prop.edits[0].proposed
+	for _, want := range []string{"    private final CustomerRepository customers;", "    public CustomerService(CustomerRepository customers) {", "        this.customers = customers;"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "Autowired") || !prop.Working {
+		t.Fatalf("annotation and import should go, proposal should be a working-tree fix:\n%s", got)
+	}
+	if !javaidx.Valid([]byte(got)) {
+		t.Fatalf("fix does not parse:\n%s", got)
+	}
+	if sha, err := x.Apply(prop.ID, ""); err != nil || sha != "" {
+		t.Fatalf("a working-tree fix is applied, not committed: %q %v", sha, err)
+	}
+	if git("rev-list", "--count", "HEAD") != "1" {
+		t.Fatal("nothing should have been committed")
+	}
+}
+
+func TestHeadsUpIsNotFixable(t *testing.T) {
+	if _, ok := notFixable["shared-constant-changed"]; !ok {
+		t.Fatal("shared-constant-changed must not offer a fix: fixing it reverts the change")
+	}
+}

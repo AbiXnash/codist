@@ -9,6 +9,15 @@ export interface FixProposal {
   patch: string;
   message: string;
   branch: string;
+  /** Fixes uncommitted changes: applied to the working tree, not committed. */
+  working?: boolean;
+}
+
+/** Instant rule checks on the uncommitted changes in the working tree. */
+export interface Working {
+  files: FileReview[];
+  changes: { path: string; newPath?: string; changeType: string; addedLines: number[] }[];
+  findings: number;
 }
 
 export interface Status {

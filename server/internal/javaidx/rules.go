@@ -479,9 +479,15 @@ func (c *checker) writtenIn(methods []*sitter.Node, field string) bool {
 func (c *checker) fieldInjection(t *sitter.Node) {
 	for _, fd := range membersOfType(t, "field_declaration") {
 		if c.anyAnnotation(fd, []string{"Autowired", "Inject"}) {
+			suggestion := "Declare the field private final and inject it through the constructor."
+			typ, cls := c.f.text(fd.ChildByFieldName("type")), c.f.text(t.ChildByFieldName("name"))
+			if d := fd.ChildByFieldName("declarator"); d != nil && typ != "" && cls != "" {
+				name := c.f.text(d.ChildByFieldName("name"))
+				suggestion = fmt.Sprintf("private final %s %s;\n\npublic %s(%s %s) {\n    this.%s = %s;\n}", typ, name, cls, typ, name, name, name)
+			}
 			c.add(fd, fd, "low", "spring", "Field injection",
-				"Field injection hides dependencies, prevents final fields and makes unit testing harder.",
-				"Declare the field private final and inject it through the constructor.")
+				"Field injection hides dependencies, prevents final fields and makes unit testing harder. With constructor injection the field can be final, Spring fails fast when the bean is missing, and tests can pass a mock without reflection.",
+				suggestion)
 		}
 	}
 }

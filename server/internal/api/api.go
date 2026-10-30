@@ -58,6 +58,9 @@ func (s *Server) Handler() http.Handler {
 	s.extensionRoutes(mux)
 	mux.HandleFunc("POST /api/fix", s.proposeFix)
 	mux.HandleFunc("POST /api/fix/{id}/apply", s.applyFix)
+	mux.HandleFunc("GET /api/working", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, review.WorkingReview(s.Repo, s.Fixer.Rules, s.Reviews.Ignores))
+	})
 	mux.HandleFunc("DELETE /api/fix/{id}", func(w http.ResponseWriter, r *http.Request) {
 		s.Fixer.Discard(r.PathValue("id"))
 		w.WriteHeader(http.StatusNoContent)
@@ -198,12 +201,16 @@ func (s *Server) proposeFix(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
-	c, err := s.Repo.Commit(req.SHA)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
+	sha := review.WorkingSHA
+	if req.SHA != review.WorkingSHA {
+		c, err := s.Repo.Commit(req.SHA)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		sha = c.SHA
 	}
-	p, err := s.Fixer.Propose(c.SHA, req.Path, req.Line, req.Title)
+	p, err := s.Fixer.Propose(sha, req.Path, req.Line, req.Title)
 	if err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return
@@ -271,15 +278,25 @@ func (s *Server) addIgnore(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
-	c, err := s.Repo.Commit(req.SHA)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	rv, ok := s.Store.Get(c.SHA)
-	if !ok {
-		writeError(w, http.StatusNotFound, "commit has not been reviewed")
-		return
+	var c gitx.Commit
+	var rv review.Review
+	if req.SHA == review.WorkingSHA {
+		// Uncommitted changes: ignore the line or the rule (a commit-scoped ignore has no commit yet).
+		if req.Scope == "commit" {
+			req.Scope = "code"
+		}
+		rv = review.Review{Files: review.WorkingReview(s.Repo, s.Fixer.Rules, s.Reviews.Ignores).Files}
+	} else {
+		var err error
+		if c, err = s.Repo.Commit(req.SHA); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		var ok bool
+		if rv, ok = s.Store.Get(c.SHA); !ok {
+			writeError(w, http.StatusNotFound, "commit has not been reviewed")
+			return
+		}
 	}
 	var f review.Finding
 	found := false

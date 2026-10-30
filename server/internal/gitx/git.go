@@ -636,6 +636,36 @@ func (r *Repo) DiffRange(from, to string) ([]FileChange, error) {
 	return parseDiff(out), nil
 }
 
+// WorkingChanges is what the working tree changes against the last commit: tracked edits plus new,
+// untracked files (every line counts as added).
+func (r *Repo) WorkingChanges() ([]FileChange, error) {
+	out, err := r.git("diff", "-M", "--no-color", "-U3", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	files := parseDiff(out)
+	untracked, _ := r.git("ls-files", "--others", "--exclude-standard")
+	for _, p := range strings.Split(untracked, "\n") {
+		if p = strings.TrimSpace(p); p == "" {
+			continue
+		}
+		src, ok, _ := r.ReadWorking(p)
+		if !ok {
+			continue
+		}
+		n := strings.Count(src, "\n")
+		if !strings.HasSuffix(src, "\n") {
+			n++
+		}
+		lines := make([]int, n)
+		for i := range lines {
+			lines[i] = i + 1
+		}
+		files = append(files, FileChange{ChangeType: "ADD", NewPath: p, Path: p, AddedLines: lines})
+	}
+	return files, nil
+}
+
 // UserName is the git user.name configured for the repository (who signs off).
 func (r *Repo) UserName() string {
 	out, err := r.git("config", "user.name")
