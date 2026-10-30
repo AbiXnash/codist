@@ -4,6 +4,7 @@
   import type { FindingWithPath, IgnoreScope } from '../lib/types';
   import CodeBlock from './CodeBlock.svelte';
   import CommitRef from './CommitRef.svelte';
+  import FixSuggest from './FixSuggest.svelte';
   import { ago, NOT_FIXABLE } from '../lib/theme';
 
   // `members` are every place of the same issue (root first); a single finding is an issue of one.
@@ -112,12 +113,16 @@
         {/if}
         <span class="faint meta">{f.category}{ref ? ` · ${ref}` : ''}{f.onChangedLine ? '' : ' · outside changed lines'}</span>
       </div>
+      {#if f.state !== 'resolved' && !f.ignored && !NOT_FIXABLE.has(f.ref ?? '') && app.selectedSha && files.every((p) => p.endsWith('.java'))}
+        <div class="suggest-wrap"><FixSuggest finding={f} sha={app.selectedSha} /></div>
+      {/if}
     </div>
   {/if}
 </div>
 
 <style>
   .finding { border-bottom: 1px solid var(--border); }
+  .suggest-wrap { padding: 0 4px 10px; }
   .finding.ignored { opacity: 0.6; }
   .row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 4px; border: 0; background: none; text-align: left; }
   .row:hover { background: var(--hover); }

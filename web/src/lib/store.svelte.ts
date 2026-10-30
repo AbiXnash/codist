@@ -366,6 +366,21 @@ export async function proposeFix(finding: FindingWithPath, fromSha?: string) {
   }
 }
 
+/**
+ * Fixes an issue the way the developer suggested. Returns why the suggestion was refused (it must be
+ * about this issue), or null once the proposal is open in the fix dialog.
+ */
+export async function proposeGuidedFix(finding: FindingWithPath, sha: string, guidance: string): Promise<string | null> {
+  try {
+    const r = await api.proposeFix({ sha, path: finding.path, line: finding.line, title: finding.title, guidance });
+    if (r.blocked) return r.error ?? 'This suggestion is not about this issue.';
+    app.fix = { finding, sha, busy: null, proposal: r, error: null };
+  } catch (e) {
+    app.fix = { finding, sha, busy: null, proposal: null, error: (e as Error).message };
+  }
+  return null;
+}
+
 export async function applyFix(message: string) {
   const f = app.fix;
   if (!f?.proposal) return;

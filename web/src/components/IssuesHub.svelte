@@ -2,6 +2,7 @@
   import { app, ignoreFinding, loadIssues, loadWorking, openFile, pickIssue, proposeFix, selectCommit, showWorking, unignore } from '../lib/store.svelte';
   import { ago, INSTANT_REFS, NOT_FIXABLE, SEVERITIES } from '../lib/theme';
   import CommitRef from './CommitRef.svelte';
+  import FixSuggest from './FixSuggest.svelte';
   import type { FindingWithPath, Issue, Severity } from '../lib/types';
 
   const LEVELS: Severity[] = ['critical', 'high', 'medium', 'low'];
@@ -133,6 +134,9 @@
         {#if !isWorking(i)}<button class="btn secondary" onclick={() => openCommit(i.firstSeen)}>Open commit</button>{/if}
         {#if i.ref}<span class="faint ref mono">{i.ref}</span>{/if}
       </div>
+      {#if i.state === 'open' && !NOT_FIXABLE.has(i.ref ?? '') && g.every((m) => m.path.endsWith('.java'))}
+        <FixSuggest finding={asFinding(i)} sha={i.lastSeen} />
+      {/if}
     </div>
   {:else}
     <div class="top">
