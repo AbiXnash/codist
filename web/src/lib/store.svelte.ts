@@ -36,6 +36,23 @@ export function saveStr(key: string, value: string) {
   }
 }
 
+function prefList(key: string): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem('codist.' + key) ?? '[]');
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveList(key: string, v: string[]) {
+  try {
+    localStorage.setItem('codist.' + key, JSON.stringify(v));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 function pref(key: string, def: boolean): boolean {
   try {
     const v = localStorage.getItem('codist.' + key);
@@ -112,6 +129,24 @@ class AppState {
   focusChanges = $state(true);
   groupPackages = $state(false);
   showTests = $state(false);
+
+  // Graph controls. What is hidden and how it is laid out is remembered per browser.
+  hiddenRoles = $state<string[]>(prefList('hiddenRoles'));
+  hiddenPkgs = $state<string[]>(prefList('hiddenPkgs'));
+  hiddenNodes = $state<string[]>(prefList('hiddenNodes'));
+  hiddenEdges = $state<string[]>(prefList('hiddenEdges'));
+  graphQuery = $state('');
+  graphQueryMode = $state<'highlight' | 'only'>('highlight');
+  layoutMode = $state<'natural' | 'layers' | 'hubs' | 'grid'>(prefStr('layoutMode', ['natural', 'layers', 'hubs', 'grid'] as const, 'natural'));
+  sizeBy = $state<'links' | 'lines' | 'issues'>(prefStr('sizeBy', ['links', 'lines', 'issues'] as const, 'links'));
+  showLabels = $state(pref('labels', true));
+  /** Analysis drawn over the graph. */
+  overlay = $state<'none' | 'cycles' | 'layers' | 'blast' | 'path'>('none');
+  overlayNode = $state<string | null>(null); // blast radius of this type
+  pathFrom = $state<string | null>(null);
+  pathTo = $state<string | null>(null);
+  showGraphPanel = $state(pref('graphPanel', false));
+  showGuide = $state(false);
 
   // Layout: which areas are visible. Persisted per browser.
   showCommits = $state(pref('commits', true));
