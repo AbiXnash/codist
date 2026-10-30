@@ -44,6 +44,9 @@ type Review struct {
 	// Commit message review: what is wrong with it, and a message that describes the change.
 	MessageProblem   string `json:"messageProblem,omitempty"`
 	SuggestedMessage string `json:"suggestedMessage,omitempty"`
+	// Static analysers that ran on this commit (pmd, spotbugs), and why one could not.
+	Analysers        []string `json:"analysers,omitempty"`
+	AnalysisProblems []string `json:"analysisProblems,omitempty"`
 }
 
 type FileReview struct {

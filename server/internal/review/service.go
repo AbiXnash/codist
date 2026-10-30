@@ -18,6 +18,7 @@ import (
 	"codist/internal/graph"
 	"codist/internal/javaidx"
 	"codist/internal/knowledge"
+	"codist/internal/tools"
 	"codist/prompts"
 )
 
@@ -45,6 +46,7 @@ type Service struct {
 	pending map[string]bool
 
 	OnDone func(sha string) // called after a review finishes (used to prefetch fixes)
+	Tools  *tools.Runner    // PMD and SpotBugs; nil or none active to skip
 
 	kbMu    sync.Mutex
 	kb      *knowledge.Base
@@ -223,9 +225,26 @@ func (s *Service) run(sha string) {
 
 	kb := s.Knowledge()
 	build := s.Build(sha)
+	// PMD and SpotBugs run alongside: the first file's rule findings show at once, and the model
+	// waits for the analysers so it sees their findings as evidence.
+	analysis := make(chan tools.Result, 1)
+	if s.Tools != nil && len(s.Tools.Active()) > 0 && len(targets) > 0 {
+		go func() { analysis <- s.Tools.Analyze(sha) }()
+	} else {
+		analysis <- tools.Result{}
+	}
+	var res *tools.Result
 	for _, f := range targets {
 		slog.Info("reviewing", "file", f.Path, "sha", sha[:7])
 		fr, in, ok := s.rulePass(a, f, kb, build)
+		if res == nil {
+			got := <-analysis
+			res = &got
+			r.Analysers, r.AnalysisProblems = got.Ran, got.Problems
+		}
+		if ok {
+			fr.Findings = mergeAnalysis(fr.Findings, res.Findings, f.NewPath, in)
+		}
 		fr.Pending = ok && problem == ""
 		if ok && problem != "" {
 			fr.Error = problem

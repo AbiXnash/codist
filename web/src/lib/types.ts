@@ -211,6 +211,8 @@ export interface Review {
   error?: string;
   messageProblem?: string;
   suggestedMessage?: string;
+  analysers?: string[];
+  analysisProblems?: string[];
 }
 
 export interface Detail {

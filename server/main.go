@@ -19,6 +19,7 @@ import (
 	"codist/internal/javaidx"
 	"codist/internal/knowledge"
 	"codist/internal/review"
+	"codist/internal/tools"
 	"codist/internal/watch"
 	"codist/prompts"
 )
@@ -66,6 +67,7 @@ func main() {
 	analyzer := &review.Analyzer{Repo: repo, Graph: g}
 	reviews := review.NewService(cfg, repo, g, analyzer, llm, store, hub)
 	reviews.Ignores = review.NewIgnores(cfg.DataDir, repo.Name(), repo.Root)
+	reviews.Tools = tools.New(repo.Root, filepath.Join(cfg.DataDir, repo.Name()), cfg.Tools)
 	fixLLM, askLLM := llm, llm
 	if cfg.FixModel != "" {
 		fixLLM = review.NewOllama(cfg.OllamaURL, cfg.FixModel, cfg.NumCtx, cfg.LLMTimeout)
