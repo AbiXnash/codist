@@ -3,6 +3,7 @@ package review
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -39,6 +40,18 @@ type Ignores struct {
 	team  string // <repo>/.codist/ignore.yaml
 	mu    sync.Mutex
 	items []Ignore
+	edits int
+}
+
+// Version changes when an ignore is added or removed, here or in the team file.
+func (x *Ignores) Version() string {
+	x.mu.Lock()
+	n := x.edits
+	x.mu.Unlock()
+	if info, err := os.Stat(x.team); err == nil {
+		return fmt.Sprintf("%d/%d/%d", n, info.Size(), info.ModTime().UnixNano())
+	}
+	return fmt.Sprint(n)
 }
 
 func NewIgnores(dataDir, repoName, repoRoot string) *Ignores {
@@ -116,6 +129,7 @@ func (x *Ignores) Remove(id string) error {
 }
 
 func (x *Ignores) persist() error {
+	x.edits++
 	if err := os.MkdirAll(filepath.Dir(x.local), 0o755); err != nil {
 		return err
 	}

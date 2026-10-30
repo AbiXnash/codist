@@ -8,14 +8,19 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // Store keeps reviews as JSON files at <data-dir>/<repo>/reviews/<sha>.json, cached in memory.
 type Store struct {
-	dir   string
-	mu    sync.RWMutex
-	cache map[string]Review
+	dir     string
+	mu      sync.RWMutex
+	cache   map[string]Review
+	version atomic.Int64 // bumped on every save, so derived data knows when to recompute
 }
+
+// Version changes whenever a review is saved.
+func (s *Store) Version() int64 { return s.version.Load() }
 
 func NewStore(dataDir, repo string) (*Store, error) {
 	s := &Store{dir: filepath.Join(dataDir, repo, "reviews"), cache: map[string]Review{}}
@@ -56,6 +61,7 @@ func (s *Store) Save(r Review) {
 	s.mu.Lock()
 	s.cache[r.SHA] = r
 	s.mu.Unlock()
+	s.version.Add(1)
 	b, _ := json.MarshalIndent(r, "", "  ")
 	tmp := filepath.Join(s.dir, r.SHA+".json.tmp")
 	if err := os.WriteFile(tmp, b, 0o644); err == nil {

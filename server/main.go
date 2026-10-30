@@ -88,6 +88,7 @@ func main() {
 		return javaidx.ProjectContext(gr), reviews.Knowledge(), true
 	}
 	srv.Tracker.Rules = rules
+	srv.Tracker.Stamp = reviews.KnowledgeVersion
 	srv.Fixer.Rules = rules
 	srv.Fixer.Busy = reviews.Busy
 	srv.Fixer.Known = func() map[string]bool {
