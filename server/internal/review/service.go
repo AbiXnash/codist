@@ -467,6 +467,7 @@ func (s *Service) rulePass(a Analysis, f gitx.FileChange, kb *knowledge.Base, bu
 		}
 	}
 	fr.Findings = append(fr.Findings, s.constantChanges(a, f, in)...)
+	fr.Findings = append(fr.Findings, ConflictMarkers(in.lines, in.changed)...)
 	for i := range fr.Findings {
 		if fr.Findings[i].Snippet == "" {
 			fr.Findings[i].Snippet = lineAt(in.lines, fr.Findings[i].Line)

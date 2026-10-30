@@ -32,6 +32,9 @@ export interface Status {
   graphBuiltAt: number;
   canFix: boolean;
   user: string;
+  /** merge, rebase, cherry-pick or revert in progress in the working tree. */
+  operation?: string;
+  conflicts?: string[];
   rules: number;
   models: { review: string; summary: string; fix: string; ask: string };
 }
@@ -168,6 +171,11 @@ export interface Issue {
   fixedAt?: number;
   fixedMsg?: string;
   uncommitted?: boolean;
+  wasFixedIn?: string;
+  reopenedIn?: string;
+  reopenedBy?: string;
+  reopenedAt?: number;
+  reopenedMsg?: string;
   commits: string[];
   ignoreId?: string;
   group?: string;

@@ -57,6 +57,13 @@
 
 <div class="shell">
   <TopBar />
+  {#if app.status?.operation}
+    <div class="op" role="status">
+      <b>{app.status.operation[0].toUpperCase() + app.status.operation.slice(1)} in progress</b>
+      {#if app.status.conflicts?.length}· {app.status.conflicts.length} file{app.status.conflicts.length === 1 ? '' : 's'} with conflicts: <span class="mono">{app.status.conflicts.map((p) => p.slice(p.lastIndexOf('/') + 1)).join(', ')}</span>{/if}
+      · fixes are paused until it is finished or aborted.
+    </div>
+  {/if}
   {#if app.mode === 'incidents'}
     <IncidentsView />
   {:else if app.mode === 'release'}
@@ -84,6 +91,8 @@
 
 <style>
   .shell { height: 100%; display: flex; flex-direction: column; }
+  .op { padding: 7px 16px; font-size: 12.5px; color: var(--text); background: color-mix(in srgb, var(--warn) 14%, var(--surface)); border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); }
+  .op .mono { font-size: 11.5px; }
   .layout {
     flex: 1;
     min-height: 0;

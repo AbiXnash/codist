@@ -235,15 +235,102 @@ func (r *Repo) Commit(sha string) (Commit, error) {
 func (r *Repo) Diff(c Commit) ([]FileChange, error) {
 	var out string
 	var err error
-	if len(c.Parents) == 0 {
+	switch len(c.Parents) {
+	case 0:
 		out, err = r.git("diff-tree", "-p", "--root", "--no-commit-id", "-M", "--no-color", "-U3", c.SHA)
-	} else {
+	case 1:
 		out, err = r.git("diff", "-M", "--no-color", "-U3", c.Parents[0], c.SHA)
+	default:
+		return r.mergeDiff(c)
 	}
 	if err != nil {
 		return nil, err
 	}
 	return parseDiff(out), nil
+}
+
+// mergeDiff is what a merge commit itself adds: lines that differ from EVERY parent, which is where
+// conflict resolutions (and "evil merge" edits) live. Changes that merged in cleanly were made, and
+// are reviewed, in the commits of the branch they came from.
+func (r *Repo) mergeDiff(c Commit) ([]FileChange, error) {
+	var per [][]FileChange
+	for _, p := range c.Parents {
+		out, err := r.git("diff", "-M", "--no-color", "-U3", p, c.SHA)
+		if err != nil {
+			return nil, err
+		}
+		per = append(per, parseDiff(out))
+	}
+	var files []FileChange
+	for _, f := range per[0] {
+		lines := map[int]int{}
+		for _, l := range f.AddedLines {
+			lines[l] = 1
+		}
+		inAll := true
+		for _, other := range per[1:] {
+			var g *FileChange
+			for k := range other {
+				if other[k].NewPath == f.NewPath {
+					g = &other[k]
+				}
+			}
+			if g == nil {
+				inAll = false
+				break
+			}
+			for _, l := range g.AddedLines {
+				if lines[l] > 0 {
+					lines[l]++
+				}
+			}
+		}
+		if !inAll {
+			continue
+		}
+		var keep []int
+		for _, l := range f.AddedLines {
+			if lines[l] == len(per) {
+				keep = append(keep, l)
+			}
+		}
+		if len(keep) == 0 && !f.Deleted() {
+			continue
+		}
+		f.AddedLines = keep
+		files = append(files, f)
+	}
+	return files, nil
+}
+
+// Operation names a merge, rebase, cherry-pick or revert in progress in the working tree, or "".
+func (r *Repo) Operation() string {
+	for _, op := range []struct{ path, name string }{
+		{"MERGE_HEAD", "merge"}, {"rebase-merge", "rebase"}, {"rebase-apply", "rebase"},
+		{"CHERRY_PICK_HEAD", "cherry-pick"}, {"REVERT_HEAD", "revert"},
+	} {
+		p, err := r.git("rev-parse", "--git-path", op.path)
+		if err != nil {
+			continue
+		}
+		p = strings.TrimSpace(p)
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(r.Root, p)
+		}
+		if _, err := os.Stat(p); err == nil {
+			return op.name
+		}
+	}
+	return ""
+}
+
+// Conflicts lists files with unresolved merge conflicts.
+func (r *Repo) Conflicts() []string {
+	out, err := r.git("diff", "--name-only", "--diff-filter=U")
+	if err != nil {
+		return nil
+	}
+	return strings.Fields(out)
 }
 
 var hunkHeader = regexp.MustCompile(`^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@`)

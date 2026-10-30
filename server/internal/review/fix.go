@@ -116,6 +116,9 @@ func (x *Fixer) ready() error {
 	if b := x.repo.CurrentBranch(); b != x.repo.Branch {
 		return fmt.Errorf("the working tree is on %q but Codist follows %q; switch back to commit fixes", b, x.repo.Branch)
 	}
+	if op := x.repo.Operation(); op != "" {
+		return fmt.Errorf("a %s is in progress; finish or abort it first (Codist does not change files or commit in the middle of one)", op)
+	}
 	return nil
 }
 
@@ -631,6 +634,9 @@ func (x *Fixer) Apply(id, message string) (string, error) {
 	}
 	if b := x.repo.CurrentBranch(); b != p.Branch {
 		return "", fmt.Errorf("the working tree is on %q, not %q", b, p.Branch)
+	}
+	if op := x.repo.Operation(); op != "" {
+		return "", fmt.Errorf("a %s started after the fix was generated; finish or abort it first", op)
 	}
 	for _, e := range p.edits {
 		if e.created {

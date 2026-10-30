@@ -625,3 +625,84 @@ func TestGuidedFixOnlyAcceptsSuggestionsAboutTheIssue(t *testing.T) {
 		t.Fatalf("the guided fix should use the suggestion:\n%s", prop.edits[0].proposed)
 	}
 }
+
+func TestTeamHistoryRevertMergeAndConflicts(t *testing.T) {
+	dir, data := t.TempDir(), t.TempDir()
+	run := func(who string, args ...string) (string, error) {
+		out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=" + who + "@x", "-c", "user.name=" + who}, args...)...).CombinedOutput()
+		return strings.TrimSpace(string(out)), err
+	}
+	git := func(who string, args ...string) string {
+		out, err := run(who, args...)
+		if err != nil {
+			t.Fatalf("git %v: %s", args, out)
+		}
+		return out
+	}
+	write := func(p, s string) {
+		os.MkdirAll(filepath.Dir(filepath.Join(dir, p)), 0o755)
+		os.WriteFile(filepath.Join(dir, p), []byte(s), 0o644)
+	}
+	a := "src/main/java/shop/A.java"
+	bug := "class A {\n    void x() { System.out.println(\"hi\"); }\n}\n"
+	write(a, bug)
+	write("src/main/java/shop/B.java", "class B {\n    int v() { return 1; }\n    int w() { return 2; }\n}\n")
+	git("Ann", "init", "-q", "-b", "main")
+	git("Ann", "add", "-A")
+	git("Ann", "commit", "-qm", "start")
+	c1 := git("Ann", "rev-parse", "HEAD")
+	write(a, "class A {\n    void x() { log.info(\"hi\"); }\n}\n")
+	git("Bob", "commit", "-qam", "use the logger")
+	c2 := git("Bob", "rev-parse", "HEAD")
+	git("Ann", "revert", "--no-edit", "HEAD")
+	c3 := git("Ann", "rev-parse", "HEAD")
+
+	repo, _ := gitx.Open(config.Config{RepoPath: dir})
+	store, _ := NewStore(data, "r")
+	store.Save(Review{SHA: c1, Status: StatusDone, Files: []FileReview{{Path: a, Findings: []Finding{
+		{Line: 2, Severity: "low", Title: "Use a logger instead of System.out.println", Ref: "console-output", Source: "llm",
+			Snippet: `void x() { System.out.println("hi"); }`}}}}})
+	ig := NewIgnores(data, "r", dir)
+	tr := NewTracker(repo, store, ig)
+	is := tr.Issues()
+	if len(is) != 1 || is[0].State != "open" || is[0].WasFixedIn != c2 || is[0].ReopenedIn != c3 || is[0].ReopenedBy != "Ann" {
+		t.Fatalf("the revert should reopen the issue Bob fixed: %+v", is)
+	}
+
+	// A merge: the feature branch changes v(), main changes w() (clean) and both change the same line of v() (conflict).
+	git("Ann", "checkout", "-qb", "feature")
+	write("src/main/java/shop/B.java", "class B {\n    int v() { return 10; }\n    int w() { return 2; }\n}\n")
+	git("Ann", "commit", "-qam", "feature v")
+	git("Ann", "checkout", "-q", "main")
+	write("src/main/java/shop/B.java", "class B {\n    int v() { return 20; }\n    int w() { return 3; }\n}\n")
+	git("Bob", "commit", "-qam", "main v and w")
+	if _, err := run("Bob", "merge", "feature"); err == nil {
+		t.Fatal("expected a conflict")
+	}
+	if op := repo.Operation(); op != "merge" {
+		t.Fatalf("operation = %q", op)
+	}
+	if c := repo.Conflicts(); len(c) != 1 || c[0] != "src/main/java/shop/B.java" {
+		t.Fatalf("conflicts = %v", c)
+	}
+	x := &Fixer{repo: repo, store: store, Ignores: ig}
+	if err := x.ready(); err == nil || !strings.Contains(err.Error(), "merge is in progress") {
+		t.Fatalf("fixes must be refused during a merge: %v", err)
+	}
+	src, _, _ := repo.ReadWorking("src/main/java/shop/B.java")
+	if m := ConflictMarkers(strings.Split(src, "\n"), nil); len(m) != 1 || m[0].Severity != "critical" {
+		t.Fatalf("conflict markers not found: %+v", m)
+	}
+	// Resolve it with an extra edit no parent had.
+	write("src/main/java/shop/B.java", "class B {\n    int v() { return 10 + 20; }\n    int w() { return 3; }\n}\n")
+	git("Bob", "add", "-A")
+	git("Bob", "commit", "-qm", "merge feature")
+	merge, _ := repo.Commit(git("Bob", "rev-parse", "HEAD"))
+	files, err := repo.Diff(merge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || len(files[0].AddedLines) != 1 || files[0].AddedLines[0] != 2 {
+		t.Fatalf("a merge should be reviewed only for its conflict resolution (line 2 of B): %+v", files)
+	}
+}
