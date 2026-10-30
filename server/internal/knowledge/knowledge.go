@@ -1,6 +1,7 @@
-// Package knowledge holds Codist's review guidelines: senior-level rules with bad and good
-// examples, written as YAML. For each changed file the relevant rules are picked by their
-// triggers and given to the model as a checklist.
+// Package knowledge holds what Codist knows about Java and Spring defects: the bugbase (Markdown
+// entries explaining real-world bug patterns) and YAML rules (the same kind of knowledge, some with
+// deterministic detect patterns). For each changed file the most similar entries are retrieved
+// (see retrieve.go) and given to the model as reference material.
 package knowledge
 
 import (
@@ -77,7 +78,9 @@ func (b *Base) Detect(path string, lines []string, only map[int]bool) []Hit {
 }
 
 type Base struct {
-	Rules []Rule
+	Rules   []Rule
+	Entries []Entry // the bugbase: Markdown knowledge, built-in plus *.md in the knowledge dirs
+	ix      *index
 }
 
 // Load reads the built-in rules, then every *.yaml / *.yml in dirs (missing dirs are skipped).
@@ -138,6 +141,8 @@ func Load(dirs ...string) (*Base, error) {
 	for _, id := range order {
 		base.Rules = append(base.Rules, byID[id])
 	}
+	base.Entries = loadBugbase(dirs)
+	base.buildIndex()
 	return base, nil
 }
 
