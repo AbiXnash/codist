@@ -1,12 +1,18 @@
 package review
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"codist/internal/config"
 	"codist/internal/gitx"
@@ -554,5 +560,68 @@ func TestWorkingChangesReviewAndConstructorInjection(t *testing.T) {
 func TestHeadsUpIsNotFixable(t *testing.T) {
 	if _, ok := notFixable["shared-constant-changed"]; !ok {
 		t.Fatal("shared-constant-changed must not offer a fix: fixing it reverts the change")
+	}
+}
+
+func TestGuidedFixOnlyAcceptsSuggestionsAboutTheIssue(t *testing.T) {
+	dir, data := t.TempDir(), t.TempDir()
+	git := func(args ...string) {
+		if out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=a@b", "-c", "user.name=Dev"}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %s", args, out)
+		}
+	}
+	p := "src/main/java/shop/customer/CustomerService.java"
+	os.MkdirAll(filepath.Join(dir, filepath.Dir(p)), 0o755)
+	src := "package shop.customer;\n\nclass CustomerService {\n    void x() { System.out.println(\"hi\"); }\n}\n"
+	os.WriteFile(filepath.Join(dir, p), []byte(src), 0o644)
+	git("init", "-q", "-b", "main")
+	git("add", "-A")
+	git("commit", "-qm", "one")
+
+	// A stand-in for Ollama: the relevance check says "unrelated" for anything about orders.
+	var asked []string
+	llm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		asked = append(asked, string(b))
+		answer := `{"related":true,"reason":"about logging"}`
+		if strings.Contains(string(b), "discount") {
+			answer = `{"related":false,"reason":"it asks for a new discount feature, not this logging fix"}`
+		}
+		if strings.Contains(string(b), "fenced code block") { // the fix itself
+			answer = "```java\npackage shop.customer;\n\nclass CustomerService {\n    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CustomerService.class);\n    void x() { log.debug(\"hi\"); }\n}\n```"
+		}
+		json.NewEncoder(w).Encode(map[string]any{"message": map[string]string{"content": answer}})
+	}))
+	defer llm.Close()
+
+	repo, _ := gitx.Open(config.Config{RepoPath: dir})
+	store, _ := NewStore(data, "r")
+	head := repo.Head()
+	store.Save(Review{SHA: head, Status: StatusDone, Files: []FileReview{{Path: p, Findings: []Finding{
+		{Line: 4, EndLine: 4, Severity: "low", Title: "Use a logger instead of System.out.println", Ref: "console-output", Source: "rule",
+			Snippet: `void x() { System.out.println("hi"); }`}}}}})
+	x := NewFixer(repo, NewOllama(llm.URL, "m", 2048, 10*time.Second), nil, store)
+	x.Known = func() map[string]bool {
+		return map[string]bool{"shop.customer.CustomerService": true, "shop.order.OrderService": true}
+	}
+
+	// Names another class of the project: blocked without asking the model.
+	_, err := x.ProposeGuided(head, p, 4, "Use a logger instead of System.out.println", "also fix the null check in OrderService")
+	var off ErrOffTopic
+	if !errors.As(err, &off) || !strings.Contains(off.Reason, "OrderService") || len(asked) != 0 {
+		t.Fatalf("a suggestion about another class must be refused before the model runs: %v (asked %d)", err, len(asked))
+	}
+	// Off topic by intent: the model check refuses it.
+	_, err = x.ProposeGuided(head, p, 4, "Use a logger instead of System.out.println", "add a discount code to checkout")
+	if !errors.As(err, &off) || !strings.Contains(off.Reason, "discount") {
+		t.Fatalf("an unrelated suggestion must be refused: %v", err)
+	}
+	// On topic: the fix follows it, and the suggestion reaches the fix model.
+	prop, err := x.ProposeGuided(head, p, 4, "Use a logger instead of System.out.println", "log it at debug level")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(prop.edits[0].proposed, `log.debug("hi")`) || !strings.Contains(asked[len(asked)-1], "log it at debug level") {
+		t.Fatalf("the guided fix should use the suggestion:\n%s", prop.edits[0].proposed)
 	}
 }

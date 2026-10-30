@@ -26,8 +26,8 @@ export const api = {
   working: () => request<Working>('/working'),
   issues: (state: string) => request<IssueList>(`/issues?state=${state}`),
   review: (sha: string) => request<{ sha: string; queued: boolean }>(`/commits/${sha}/review`, { method: 'POST' }),
-  proposeFix: (body: { sha: string; path: string; line: number; title: string }) =>
-    request<FixProposal>('/fix', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  proposeFix: (body: { sha: string; path: string; line: number; title: string; guidance?: string }) =>
+    request<FixProposal & { blocked?: boolean; error?: string }>('/fix', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   applyFix: (id: string, message: string) =>
     request<{ commit: string }>(`/fix/${id}/apply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message }) }),
   discardFix: (id: string) => fetch(`/api/fix/${id}`, { method: 'DELETE' }),

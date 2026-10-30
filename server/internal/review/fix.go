@@ -148,11 +148,99 @@ func (x *Fixer) Propose(sha, path string, line int, title string) (*Proposal, er
 
 // fixPlan is everything needed to produce a fix for one issue.
 type fixPlan struct {
-	sha     string
-	target  Finding
-	members []placed
-	current map[string]string // working-tree content of each file
+	sha      string
+	target   Finding
+	members  []placed
+	current  map[string]string // working-tree content of each file
+	guidance string            // the developer's suggestion, already checked to be about this issue
 }
+
+// ErrOffTopic is returned when a suggestion for a fix is not about the issue being fixed.
+type ErrOffTopic struct{ Reason string }
+
+func (e ErrOffTopic) Error() string { return e.Reason }
+
+// ProposeGuided fixes an issue the way the developer suggested. The suggestion must be about this
+// issue: one naming other classes, or that the model judges unrelated, is refused before any fix
+// is generated.
+func (x *Fixer) ProposeGuided(sha, path string, line int, title, guidance string) (*Proposal, error) {
+	guidance = strings.TrimSpace(guidance)
+	if guidance == "" {
+		return x.Propose(sha, path, line, title)
+	}
+	if err := x.ready(); err != nil {
+		return nil, err
+	}
+	if len(guidance) > 1500 {
+		return nil, ErrOffTopic{"Keep the suggestion short (a few sentences) and about this issue."}
+	}
+	plan, err := x.plan(sha, path, line, title)
+	if err != nil {
+		return nil, err
+	}
+	if why, ok := notFixable[plan.target.Ref]; ok {
+		return nil, errors.New(why)
+	}
+	if reason := x.offTopic(plan, guidance); reason != "" {
+		return nil, ErrOffTopic{reason}
+	}
+	plan.guidance = guidance
+	p, err := x.build(plan)
+	if err == nil && isWorking(sha) {
+		p.Working = true
+	}
+	return p, err
+}
+
+var typeMention = regexp.MustCompile(`\b([A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+)(?:\.java)?\b`)
+
+// offTopic explains why a suggestion is not about the plan's issue, or returns "".
+func (x *Fixer) offTopic(p *fixPlan, guidance string) string {
+	// Classes of the project named in the suggestion must be part of this issue.
+	inIssue := strings.ToLower(p.target.Title + " " + p.target.Detail + " " + p.target.Suggestion)
+	for _, m := range p.members {
+		inIssue += " " + strings.ToLower(m.path+" "+m.f.Title+" "+m.f.Detail+" "+current(p, m.path))
+	}
+	known := map[string]bool{}
+	if x.Known != nil {
+		for fq := range x.Known() {
+			known[fq[strings.LastIndex(fq, ".")+1:]] = true
+		}
+	}
+	for _, m := range typeMention.FindAllStringSubmatch(guidance, -1) {
+		if known[m[1]] && !strings.Contains(inIssue, strings.ToLower(m[1])) {
+			return fmt.Sprintf("Your suggestion mentions %s, which is not part of this issue. Suggest how to fix %q only; fix other issues from their own card.", m[1], p.target.Title)
+		}
+	}
+	// Then the model judges the intent.
+	var places strings.Builder
+	for _, m := range p.members {
+		fmt.Fprintf(&places, "- %s:%d %s\n", m.path, m.f.Line, strings.TrimSpace(m.f.Snippet))
+	}
+	user := fmt.Sprintf("## Finding being fixed\n%s (%s, %s)\n%s\n\n## Where\n%s\n## The developer's suggestion\n%s\n",
+		p.target.Title, p.target.Severity, p.target.Category, p.target.Detail, places.String(), guidance)
+	out, err := x.llm.ChatJSON(prompts.Get("fix-guidance-check"), user)
+	if err != nil {
+		return "Could not check the suggestion (" + err.Error() + "); try again or use Fix without a suggestion."
+	}
+	related := false
+	switch v := out["related"].(type) {
+	case bool:
+		related = v
+	case string:
+		related = strings.EqualFold(v, "true")
+	}
+	if !related {
+		reason := strings.TrimSpace(str(out["reason"]))
+		if reason == "" {
+			reason = "it is not about this issue"
+		}
+		return fmt.Sprintf("This suggestion was not used: %s Suggest how to fix %q only.", strings.TrimSuffix(reason, ".")+".", p.target.Title)
+	}
+	return ""
+}
+
+func current(p *fixPlan, path string) string { return p.current[path] }
 
 func (x *Fixer) plan(sha, path string, line int, title string) (*fixPlan, error) {
 	rv, ok := x.store.Get(sha)
@@ -271,11 +359,11 @@ func (x *Fixer) build(p *fixPlan) (*Proposal, error) {
 		byFile[m.path] = append(byFile[m.path], m.f)
 	}
 
-	// Rules with a mechanical fix skip the model entirely.
-	if edits, msg, ok := x.autofixWrongConstant(members); ok {
+	// Rules with a mechanical fix skip the model entirely, unless the developer asked for a specific fix.
+	if edits, msg, ok := x.autofixWrongConstant(members); ok && p.guidance == "" {
 		return x.store_(p.sha, target, msg, edits)
 	}
-	if edits, ok := x.autofixMechanical(members, current); ok {
+	if edits, ok := x.autofixMechanical(members, current); ok && p.guidance == "" {
 		msg := commitMessage(target, files[0], p.sha)
 		if len(members) > 1 {
 			msg = strings.Replace(msg, "\n\n", fmt.Sprintf("\n\nFixes %d places in %d file(s).\n", len(members), len(files)), 1)
@@ -305,6 +393,9 @@ func (x *Fixer) build(p *fixPlan) (*Proposal, error) {
 			if f.Suggestion != "" {
 				user.WriteString("Suggested fix:\n" + f.Suggestion + "\n")
 			}
+		}
+		if p.guidance != "" {
+			user.WriteString("\n" + prompts.Render("fix-guidance", map[string]any{"Guidance": p.guidance}) + "\n")
 		}
 		if done.Len() > 0 {
 			user.WriteString("\n## Changes already made to other files for this issue (stay consistent, e.g. use new names)\n```diff\n" + done.String() + "```\n")
