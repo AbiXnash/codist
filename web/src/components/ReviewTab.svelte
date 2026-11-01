@@ -73,7 +73,7 @@
     <header>
       <h1>{c.message}</h1>
       <div class="meta">
-        <span class="mono">{c.shortSha}</span><CopyButton text={c.sha} title="Copy the full commit id" />{#if app.featureOn('fixAllBranches') && !app.status?.viewing}<button class="link" title="Bring this commit's fix to the other branches that still have the bug" onclick={() => offerBranchFix(c.sha, c.message)}>Apply to other branches</button>{/if}
+        <span class="mono">{c.shortSha}</span><CopyButton text={c.sha} title="Copy the full commit id" />{#if !app.status?.viewing}<button class="link" title="Bring this commit's fix to the other branches that still have the bug" onclick={() => offerBranchFix(c.sha, c.message)}>Apply to other branches</button>{/if}
         <span>{c.author}</span>
         <span title={new Date(c.time).toLocaleString()}>{ago(c.time)}</span>
         <span>{d.analysis.files.length} file{d.analysis.files.length === 1 ? '' : 's'}</span>

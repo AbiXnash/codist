@@ -399,8 +399,6 @@ func (s *Server) guard(next http.Handler) http.Handler {
 				blocked = "features.fix"
 			case path == "/ask" && off(f.Panels, "ask"):
 				blocked = "panels.ask"
-			case strings.HasSuffix(path, "/branch-fix") && off(f.Features, "fixAllBranches"):
-				blocked = "features.fixAllBranches"
 			case strings.HasSuffix(path, "/reword") && off(f.Features, "reword"):
 				blocked = "features.reword"
 			case strings.HasPrefix(path, "/working/") && off(f.Features, "localPlan"):

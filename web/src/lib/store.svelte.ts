@@ -588,7 +588,6 @@ export async function applyFix(message: string) {
  * asked for directly, it says so.
  */
 export async function offerBranchFix(commit: string, title: string, quiet = false) {
-  if (!app.featureOn('fixAllBranches')) return;
   try {
     const targets = await api.branchFixes(commit);
     if (quiet && !targets.some((t) => t.status === 'ready' || t.status === 'conflict' || t.status === 'skipped')) return;

@@ -32,7 +32,7 @@ func Defaults() Flags {
 	return Flags{
 		Menus:    on("review", "repo", "branches", "mine", "team", "release", "incidents", "activity", "memory"),
 		Panels:   on("issues", "commit", "code", "ask"),
-		Features: on("explorer", "branchGraph", "branchSwitcher", "fix", "fixAllBranches", "reword", "localPlan", "issueWorkflow"),
+		Features: on("explorer", "branchGraph", "branchSwitcher", "fix", "reword", "localPlan", "issueWorkflow"),
 		Sources:  []string{},
 	}
 }
