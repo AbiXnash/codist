@@ -15,4 +15,5 @@ Rules:
 - Each piece of advice must be one concrete thing they could do on their next change.
 
 Respond with JSON only, in exactly this shape:
-{"summary":"two or three sentences","strengths":["..."],"improve":["..."],"advice":["..."]}
+{"summary":"two or three sentences","strengths":["one sentence"],"improve":["one sentence"],"advice":["one sentence"]}
+Every list item is a plain sentence, never an object. Give at least one piece of advice.
