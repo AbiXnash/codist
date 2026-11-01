@@ -58,3 +58,47 @@ public class Bad {
 		t.Fatal("result not cached")
 	}
 }
+
+// Runs the real language server when it is installed.
+func TestJdtlsReportsCompilerProblems(t *testing.T) {
+	if testing.Short() {
+		t.Skip("slow")
+	}
+	if _, err := exec.LookPath("jdtls"); err != nil {
+		t.Skip("jdtls not installed")
+	}
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "src/main/java/x"), 0o755)
+	os.WriteFile(filepath.Join(dir, "pom.xml"), []byte(`<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
+<groupId>t</groupId><artifactId>t</artifactId><version>1</version>
+<properties><maven.compiler.release>17</maven.compiler.release></properties></project>`), 0o644)
+	os.WriteFile(filepath.Join(dir, "src/main/java/x/Bad.java"), []byte("package x;\nimport java.util.List;\npublic class Bad {\n    public int n() { String s = 1; return missing(); }\n    private void unused() { int dead = 2; }\n}\n"), 0o644)
+	r := &Runner{jdtlsBin: mustLook(t, "jdtls")}
+	fs, err := r.jdtls(t.TempDir(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	errs, warns := 0, 0
+	for _, f := range fs {
+		t.Logf("%s:%d %s %s: %s", f.Path, f.Line, f.Severity, f.Rule, f.Message)
+		if f.Path != "src/main/java/x/Bad.java" {
+			t.Fatalf("path not mapped: %+v", f)
+		}
+		if f.Severity == "high" {
+			errs++
+		} else {
+			warns++
+		}
+	}
+	if errs < 2 || warns < 1 {
+		t.Fatalf("expected the type error, the missing method and an unused warning; got %+v", fs)
+	}
+}
+
+func mustLook(t *testing.T, name string) string {
+	p, err := exec.LookPath(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}

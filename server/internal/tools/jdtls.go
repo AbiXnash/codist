@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -28,6 +29,7 @@ func (r *Runner) jdtls(work, src string) ([]Finding, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, r.jdtlsBin, "-data", filepath.Join(work, "jdtls-workspace"))
 	cmd.Dir = src
+	cmd.Env = jdtlsEnv()
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -45,14 +47,18 @@ func (r *Runner) jdtls(work, src string) ([]Finding, error) {
 	}()
 
 	c := &lspClient{in: stdin, diagnostics: map[string][]lspDiagnostic{}, activity: make(chan struct{}, 1), ready: make(chan struct{})}
-	go c.read(bufio.NewReader(stdout))
+	exited := make(chan struct{})
+	go func() {
+		c.read(bufio.NewReader(stdout))
+		close(exited)
+	}()
 
 	root := "file://" + (&url.URL{Path: src}).EscapedPath()
 	if err := c.send(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": map[string]any{
 		"processId": os.Getpid(), "rootUri": root,
 		"capabilities": map[string]any{"textDocument": map[string]any{"publishDiagnostics": map[string]any{}}},
 		"initializationOptions": map[string]any{"settings": map[string]any{"java": map[string]any{
-			"import": map[string]any{"maven": map[string]any{"enabled": true}, "gradle": map[string]any{"enabled": true}},
+			"import":    map[string]any{"maven": map[string]any{"enabled": true}, "gradle": map[string]any{"enabled": true}},
 			"autobuild": map[string]any{"enabled": true},
 		}}, "extendedClientCapabilities": map[string]any{"progressReportProvider": false, "classFileContentsSupport": false}},
 	}}); err != nil {
@@ -65,6 +71,8 @@ func (r *Runner) jdtls(work, src string) ([]Finding, error) {
 	// The server is done when it reports ready and then stays quiet.
 	select {
 	case <-c.ready:
+	case <-exited:
+		return nil, errors.New("the language server exited at startup; it needs a newer JDK than JAVA_HOME (set CODIST_JDTLS_JAVA_HOME)")
 	case <-ctx.Done():
 		return nil, fmt.Errorf("the language server did not get ready in %s", jdtlsTimeout)
 	}
@@ -83,11 +91,28 @@ wait:
 			quiet.Reset(jdtlsQuiet)
 		case <-quiet.C:
 			break wait
+		case <-exited:
+			break wait
 		case <-ctx.Done():
 			break wait
 		}
 	}
 	return c.findings(src), nil
+}
+
+// jdtlsEnv picks the JDK to run the server on. Current releases need a newer Java than many projects
+// build with, and JAVA_HOME usually points at the project's, so a package manager's JDK is preferred.
+func jdtlsEnv() []string {
+	env := os.Environ()
+	for _, home := range []string{os.Getenv("CODIST_JDTLS_JAVA_HOME"), "/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home", "/usr/local/opt/openjdk/libexec/openjdk.jdk/Contents/Home"} {
+		if home == "" {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(home, "bin", "java")); err == nil {
+			return append(env, "JAVA_HOME="+home)
+		}
+	}
+	return env
 }
 
 const (

@@ -36,7 +36,7 @@ func mergeAnalysis(own []Finding, found []tools.Finding, path string, in fileInp
 		if have[ref] && hasFinding(out, t.Line, ref) {
 			continue
 		}
-		name := map[string]string{"pmd": "PMD", "spotbugs": "SpotBugs"}[t.Tool]
+		name := map[string]string{"pmd": "PMD", "spotbugs": "SpotBugs", "jdtls": "compiler"}[t.Tool]
 		detail := t.Message
 		if t.URL != "" {
 			detail += " (" + name + " " + t.Rule + ": " + t.URL + ")"

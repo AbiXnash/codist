@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -59,11 +60,12 @@ type Result struct {
 
 // Runner analyses commits of one repository.
 type Runner struct {
-	Root    string // the repository
-	DataDir string // <data-dir>/<repo>
-	Enabled map[string]bool
-	mvn     string
-	mu      sync.Mutex
+	Root     string // the repository
+	DataDir  string // <data-dir>/<repo>
+	Enabled  map[string]bool
+	mvn      string
+	jdtlsBin string
+	mu       sync.Mutex
 }
 
 // New enables the requested tools ("auto" = every tool Maven can run here, "off" = none).
@@ -73,18 +75,25 @@ func New(root, dataDir, which string) *Runner {
 	if which == "off" || which == "none" {
 		return r
 	}
+	if bin, err := exec.LookPath("jdtls"); err == nil {
+		r.jdtlsBin = bin
+	}
 	mvn, err := exec.LookPath("mvn")
 	if err != nil {
-		slog.Info("static analysers off: Maven (mvn) not found")
-		return r
+		slog.Info("PMD and SpotBugs off: Maven (mvn) not found")
+	} else {
+		r.mvn = mvn
 	}
-	r.mvn = mvn
 	for _, t := range strings.Split(which, ",") {
-		switch t = strings.TrimSpace(t); t {
-		case "", "auto":
-			r.Enabled["pmd"], r.Enabled["spotbugs"] = true, true
-		case "pmd", "spotbugs":
-			r.Enabled[t] = true
+		t = strings.TrimSpace(t)
+		if (t == "" || t == "auto" || t == "pmd") && r.mvn != "" {
+			r.Enabled["pmd"] = true
+		}
+		if (t == "" || t == "auto" || t == "spotbugs") && r.mvn != "" {
+			r.Enabled["spotbugs"] = true
+		}
+		if (t == "" || t == "auto" || t == "jdtls") && r.jdtlsBin != "" {
+			r.Enabled["jdtls"] = true
 		}
 	}
 	return r
@@ -93,7 +102,7 @@ func New(root, dataDir, which string) *Runner {
 // Active lists the enabled tools.
 func (r *Runner) Active() []string {
 	var out []string
-	for _, t := range []string{"pmd", "spotbugs"} {
+	for _, t := range []string{"pmd", "spotbugs", "jdtls"} {
 		if r.Enabled[t] {
 			out = append(out, t)
 		}
@@ -126,22 +135,47 @@ func (r *Runner) Analyze(sha string) Result {
 		res.Problems = append(res.Problems, "not a Maven project (no pom.xml at the root); analysers skipped")
 		return r.save(cache, res, start)
 	}
+	// The analysers read their own copies and share nothing, so they run at once. SpotBugs and jdtls
+	// both build, so each gets its own copy of the sources.
+	type outcome struct {
+		name     string
+		findings []Finding
+		err      error
+	}
+	jobs := map[string]func() ([]Finding, error){}
 	if r.Enabled["pmd"] {
-		if fs, err := r.pmd(work, src); err != nil {
-			res.Problems = append(res.Problems, "pmd: "+err.Error())
-		} else {
-			res.Findings = append(res.Findings, fs...)
-			res.Ran = append(res.Ran, "pmd")
-		}
+		jobs["pmd"] = func() ([]Finding, error) { return r.pmd(work, src) }
 	}
 	if r.Enabled["spotbugs"] {
-		if fs, err := r.spotbugs(src); err != nil {
-			res.Problems = append(res.Problems, "spotbugs: "+err.Error())
-		} else {
-			res.Findings = append(res.Findings, fs...)
-			res.Ran = append(res.Ran, "spotbugs")
+		jobs["spotbugs"] = func() ([]Finding, error) { return r.spotbugs(src) }
+	}
+	if r.Enabled["jdtls"] {
+		jobs["jdtls"] = func() ([]Finding, error) {
+			copyDir := filepath.Join(work, "jdtls-src")
+			if err := r.export(sha, copyDir); err != nil {
+				return nil, err
+			}
+			fs, err := r.jdtls(work, copyDir)
+			return fs, err
 		}
 	}
+	results := make(chan outcome, len(jobs))
+	for name, job := range jobs {
+		go func(name string, job func() ([]Finding, error)) {
+			fs, err := job()
+			results <- outcome{name, fs, err}
+		}(name, job)
+	}
+	for range jobs {
+		o := <-results
+		if o.err != nil {
+			res.Problems = append(res.Problems, o.name+": "+o.err.Error())
+			continue
+		}
+		res.Findings = append(res.Findings, o.findings...)
+		res.Ran = append(res.Ran, o.name)
+	}
+	sort.Strings(res.Ran)
 	for _, p := range res.Problems {
 		slog.Warn("static analysis", "sha", sha[:7], "problem", p)
 	}
