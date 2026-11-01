@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -38,8 +39,9 @@ public class Bad {
 	sha, _ := exec.Command("git", "-C", dir, "rev-parse", "HEAD").Output()
 	r := New(dir, data, "auto")
 	res := r.Analyze(string(sha[:40]))
-	if len(res.Ran) != 2 {
-		t.Fatalf("both analysers should run: ran %v, problems %v", res.Ran, res.Problems)
+	ran := strings.Join(res.Ran, ",")
+	if !strings.Contains(ran, "pmd") || !strings.Contains(ran, "spotbugs") || len(res.Problems) > 0 {
+		t.Fatalf("the analysers should run: ran %v, problems %v", res.Ran, res.Problems)
 	}
 	rules := map[string]bool{}
 	for _, f := range res.Findings {
