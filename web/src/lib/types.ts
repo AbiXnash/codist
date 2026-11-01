@@ -27,6 +27,8 @@ export interface Status {
   repo: string;
   path: string;
   branch: string;
+  viewing?: boolean;
+  checkedOut?: string;
   tracking: string;
   head: string;
   model: string;
@@ -185,6 +187,8 @@ export interface Issue {
   fixedMsg?: string;
   uncommitted?: boolean;
   manual?: boolean;
+  stage?: string;
+  assignee?: string;
   wasFixedIn?: string;
   reopenedIn?: string;
   reopenedBy?: string;
@@ -247,7 +251,7 @@ export interface OpenFile {
 
 export type FindingWithPath = Finding & { path: string };
 
-export type Tab = 'commits' | 'issues' | 'review' | 'code' | 'diff' | 'type' | 'ask';
+export type Tab = 'issues' | 'review' | 'code' | 'diff' | 'type' | 'ask';
 
 export type IgnoreScope = 'commit' | 'code' | 'rule';
 
@@ -258,7 +262,7 @@ export interface AskMessage {
   error?: boolean;
 }
 
-export type Mode = 'review' | 'repo' | 'mine' | 'team' | 'release' | 'incidents' | 'activity' | 'memory';
+export type Mode = 'review' | 'repo' | 'branches' | 'mine' | 'team' | 'release' | 'incidents' | 'activity' | 'memory';
 
 export interface Frame { class: string; method: string; file: string; line: number }
 
@@ -364,3 +368,42 @@ export interface DependencyReport { tool: string; java: string; springBoot: stri
 export interface CheckItem { id: string; text: string; done: boolean; by?: string; at?: number; custom?: boolean; current: boolean }
 
 export interface SignOff { to: string; items: CheckItem[]; done: number; total: number }
+
+export interface RepoReport {
+  name: string; head: string; branch: string; files: number; javaFiles: number; testFiles: number; lines: number; types: number; methods: number; commits: number;
+  contributors: { name: string; commits: number }[];
+  languages: Record<string, number>; roles: Record<string, number>;
+  services: { name: string; port?: string; kind: string; files: number; lines: number; types: number; tests: number; endpoints: number; calls: string[]; calledBy: string[]; usesLibs: string[]; deps: string[]; open: Partial<Record<Severity, number>>; commits: number }[];
+  endpoints: { service: string; route: string; handler: string; class: string; node: string; callers: number }[];
+  calls: { from: string; to: string; client: string; node: string; routes: string[] }[];
+  hotspots: { path: string; commits: number; open: number; lines: number }[];
+  costly: { class: string; node: string; method: string; file: string; line: number; cost: MethodCost }[];
+  largest: { Name: string; Node: string; File: string; Lines: number; Members: number }[];
+  constants: { class: string; name: string; value: string; file: string; line: number }[];
+  issues: Record<string, number>; urgency: Record<string, number>; severity: Record<string, number>;
+}
+
+export interface BranchReport {
+  base: string; tookMs: number; local: string[];
+  branches: { name: string; remote: boolean; sha: string; ahead: number; behind: number; authors: string[]; lastBy: string; lastAt: number; lastMsg: string; files: string[]; conflicts: string[]; merged: boolean }[];
+  alerts: { severity: 'conflict' | 'overlap'; title: string; detail: string; a: string; b: string; people: string[]; files: string[] }[];
+}
+
+export interface Activity {
+  id: string; at: number; kind: string; title: string; status: 'running' | 'done' | 'failed' | 'cancelled'; model?: string; sha?: string; path?: string; incident?: string;
+  knowledge?: string[]; note?: string; error?: string; tookMs: number; promptTokens?: number; replyTokens?: number; system?: string; user?: string; response?: string;
+}
+
+export interface MemoryItem { id: string; at: number; by: string; kind: string; text: string; title?: string; ref?: string; path?: string; snippet?: string; team: boolean }
+
+export interface MemoryReport {
+  items: MemoryItem[];
+  lessons: { id: string; title: string; severity: string; body: string; source: string }[];
+  rules: { id: string; title: string; source: string }[];
+  ignores: { id: string; scope: string; title?: string; key?: string; reason?: string; team?: boolean; path?: string; snippet?: string }[];
+  builtinEntries: number; builtinRules: number;
+}
+
+export interface PlannedCommit { message: string; why: string; files: { path: string; change: string; added: number; removed: number; issues: number }[] }
+
+export interface BranchRef { name: string; remote: boolean; sha: string; message: string; by: string; at: number; checkedOut: boolean }

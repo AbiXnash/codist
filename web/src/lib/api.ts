@@ -1,11 +1,11 @@
-import type { FixRef, Working, CommitItem, DependencyReport, Detail, FixProposal, Graph, Incident, IncidentRow, IssueList, RcaReport, ReleaseReport, SignOff, Status } from './types';
+import type { Activity, BranchRef, BranchReport, MemoryItem, MemoryReport, PlannedCommit, RepoReport, FixRef, Working, CommitItem, DependencyReport, Detail, FixProposal, Graph, Incident, IncidentRow, IssueList, RcaReport, ReleaseReport, SignOff, Status } from './types';
 
 const json = (method: string, body?: unknown): RequestInit => ({
   method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body),
 });
 
 // Requests that wait for the model: Cancel aborts them, and the server stops the model too.
-const AI_PATH = /^\/(fix|edit|tests|incidents\/[^/]+\/(fix|test|rule|runbook))$/;
+const AI_PATH = /^\/(fix|edit|tests|working\/message|commits\/[^/]+\/message|incidents\/[^/]+\/(fix|test|rule|runbook))$/;
 let aiAbort: AbortController | null = null;
 
 export function cancelAI() {
@@ -33,6 +33,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   status: () => request<Status>('/status'),
+  setStage: (ids: string[], stage: string, assignee: string) => fetch('/api/issues/stage', json('POST', { ids, stage, assignee })),
+  refs: () => request<BranchRef[]>('/refs'),
+  follow: (name: string) => request<{ branch: string }>('/refs/follow', json('POST', { name })),
+  repo: () => request<RepoReport>('/repo'),
+  branches: () => request<BranchReport>('/branches'),
+  activity: () => request<Activity[]>('/activity'),
+  activityItem: (id: string) => request<Activity>(`/activity/${id}`),
+  memory: () => request<MemoryReport>('/memory'),
+  addMemory: (item: Partial<MemoryItem>) => request<MemoryItem>('/memory', json('POST', item)),
+  removeMemory: (id: string) => fetch(`/api/memory/${id}`, { method: 'DELETE' }),
+  shareMemory: (id: string, team: boolean) => fetch(`/api/memory/${id}/share`, json('POST', { team })),
+  plan: () => request<PlannedCommit[]>('/working/plan'),
+  planMessage: (files: string[]) => request<{ message: string; why: string }>('/working/message', json('POST', { files })),
+  commitPaths: (files: string[], message: string) => request<{ commit: string }>('/working/commit', json('POST', { files, message })),
+  betterMessage: (sha: string) => request<{ message: string; why: string; pushed: boolean }>(`/commits/${sha}/message`, json('POST', {})),
+  reword: (sha: string, message: string) => request<{ commit: string; rewritten: number }>(`/commits/${sha}/reword`, json('POST', { message })),
+  resetSignOff: () => fetch('/api/release/signoff', { method: 'DELETE' }),
   markFixed: (id: string) => fetch(`/api/issues/${id}/resolve`, { method: 'POST' }),
   reopenIssue: (id: string) => fetch(`/api/issues/${id}/resolve`, { method: 'DELETE' }),
   graph: () => request<Graph>('/graph'),

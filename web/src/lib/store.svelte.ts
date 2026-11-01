@@ -85,7 +85,9 @@ class AppState {
 
   selectedSha = $state<string | null>(null);
   selectedNode = $state<string | null>(null);
-  tab = $state<Tab>('commits');
+  tab = $state<Tab>('issues');
+  /** The left dock: commits or the graph explorer. */
+  left = $state<'commits' | 'explorer'>('commits');
   search = $state('');
   live = $state(false);
   toasts = $state<Toast[]>([]);
@@ -127,6 +129,7 @@ class AppState {
   kind = $state<string | null>(null);
   urgency = $state<string | null>(null);
   change = $state<string | null>(null);
+  stage = $state<string | null>(null);
   hubQuery = $state('');
   /** The issue open in the hub's detail view (id of its root). */
   picked = $state<string | null>(null);
@@ -148,7 +151,7 @@ class AppState {
   hiddenEdges = $state<string[]>([]);
   graphQuery = $state('');
   graphQueryMode = $state<'highlight' | 'only'>('highlight');
-  layoutMode = $state<'natural' | 'tree' | 'layers' | 'services' | 'hubs' | 'grid'>(prefStr('layoutMode', ['natural', 'tree', 'layers', 'services', 'hubs', 'grid'] as const, 'natural'));
+  layoutMode = $state<'natural' | 'layers' | 'services' | 'hubs'>(prefStr('layoutMode', ['natural', 'layers', 'services', 'hubs'] as const, 'natural'));
   sizeBy = $state<'links' | 'lines' | 'issues'>(prefStr('sizeBy', ['links', 'lines', 'issues'] as const, 'links'));
   showLabels = $state(pref('labels', true));
   /** Analysis drawn over the graph. */
@@ -190,7 +193,8 @@ class AppState {
   scoped: Issue[][] = $derived(this.groupsIn(this.issueState));
   /** What the hub lists and the graph highlights. */
   hub: Issue[][] = $derived(this.scoped.filter((g) => (!this.level || g[0].severity === this.level) && (!this.kind || g[0].kind === this.kind) &&
-    (!this.urgency || g[0].urgency === this.urgency) && (!this.change || g[0].change === this.change)));
+    (!this.urgency || g[0].urgency === this.urgency) && (!this.change || g[0].change === this.change) &&
+    (!this.stage || (this.stage === 'unassigned' ? !g[0].assignee : this.stage === 'mine' ? this.isMe(g[0].assignee) : g[0].stage === this.stage))));
 
   /** The types and links that pass the graph filters. */
   graphView = $derived.by(() => {
@@ -300,6 +304,71 @@ export async function loadIssues() {
   } catch {
     /* tracker unavailable until the first review */
   }
+}
+
+/**
+ * Moves an issue through its workflow, and does what the move means:
+ * start assigns it to you, fix opens the fix, won't fix ignores it and remembers why, and so on.
+ */
+export async function issueAction(group: Issue[], action: 'start' | 'review' | 'stop' | 'fixed' | 'wontfix' | 'reopen', reason = '') {
+  const ids = group.map((i) => i.id);
+  const lead = group[0];
+  try {
+    switch (action) {
+      case 'start':
+        await api.setStage(ids, 'in-progress', app.status?.user ?? '');
+        toast(`In progress, assigned to ${app.status?.user || 'you'}`, 'good', 2000);
+        break;
+      case 'review':
+        await api.setStage(ids, 'in-review', lead.assignee || (app.status?.user ?? ''));
+        break;
+      case 'stop':
+        await api.setStage(ids, '', '');
+        break;
+      case 'fixed':
+        for (const id of ids) await api.markFixed(id);
+        await api.setStage(ids, '', '');
+        toast(group.length > 1 ? `Closed ${group.length} places` : 'Closed as fixed', 'good', 2000);
+        app.picked = null;
+        break;
+      case 'wontfix':
+        for (const i of group) {
+          await api.ignore({ scope: 'code', sha: i.lastSeen, path: i.path, line: i.reviewLine, title: i.title, team: false });
+        }
+        await api.setStage(ids, '', '');
+        // The reason teaches later reviews, so the same suggestion is not made again.
+        if (reason.trim()) await api.addMemory({ text: reason.trim(), kind: 'rejected-fix', title: lead.title, ref: lead.ref, path: lead.path, snippet: lead.snippet });
+        toast(reason.trim() ? 'Closed as won\'t fix; Codist will remember why' : 'Closed as won\'t fix', 'good', 2500);
+        app.picked = null;
+        break;
+      case 'reopen':
+        for (const i of group) {
+          if (i.manual) await api.reopenIssue(i.id);
+          if (i.ignoreId) await api.unignore(i.ignoreId);
+        }
+        break;
+    }
+    await Promise.all([loadIssues(), loadCommits(), refreshDetail(), loadWorking()]);
+  } catch (e) {
+    toast((e as Error).message, 'bad');
+  }
+}
+
+/** Follows another branch. Nothing is checked out; the screens simply show that branch. */
+export async function followBranch(name: string) {
+  try {
+    await api.follow(name);
+    await reloadBranch();
+    toast(app.status?.viewing ? `Viewing ${name}. Read-only: it is not checked out.` : `Back on ${name}`, 'info', 3500);
+  } catch (e) {
+    toast((e as Error).message, 'bad');
+  }
+}
+async function reloadBranch() {
+  app.scope = 'all';
+  app.picked = null;
+  await Promise.all([loadStatus(), loadGraph(), loadCommits(), loadIssues(), loadWorking()]);
+  if (app.status?.head) await selectCommit(app.status.head);
 }
 
 export async function loadWorking() {
@@ -542,6 +611,7 @@ export function selectNode(id: string | null) {
     if (app.tab === 'type') app.tab = 'issues';
     return;
   }
+  app.left = 'explorer'; // the inspector lives there
   const node = app.graph?.nodes.find((n) => n.id === id);
   if (!node) return;
   app.tab = 'type';
@@ -568,13 +638,17 @@ export function connect() {
   es.addEventListener('commits', async (e) => {
     const d = JSON.parse((e as MessageEvent).data) as { head: string; new: string[] };
     await Promise.all([loadStatus(), loadCommits(), loadWorking()]);
-    toast(`${d.new.length} new commit${d.new.length > 1 ? 's' : ''} on ${app.status?.tracking} · reviewing`, 'info', 5000);
+    if (d.new.length) toast(`${d.new.length} new commit${d.new.length > 1 ? 's' : ''} on ${app.status?.tracking} · reviewing`, 'info', 5000);
     if (app.follow && app.shownCommits.some((c) => c.commit.sha === d.head)) await selectCommit(d.head);
   });
+
+  es.addEventListener('branch', () => void reloadBranch());
 
   es.addEventListener('ignores', async () => {
     await Promise.all([refreshDetail(), loadCommits(), loadIssues(), loadWorking()]);
   });
+
+  es.addEventListener('activity', (e) => window.dispatchEvent(new CustomEvent('codist:activity', { detail: JSON.parse((e as MessageEvent).data) })));
 
   // The release screen reloads its checklist when anyone ticks an item.
   es.addEventListener('signoff', (e) => window.dispatchEvent(new CustomEvent('codist:signoff', { detail: JSON.parse((e as MessageEvent).data) })));

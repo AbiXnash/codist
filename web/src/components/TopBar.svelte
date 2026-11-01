@@ -1,7 +1,17 @@
 <script lang="ts">
   import { app, selectNode, setTheme } from '../lib/store.svelte';
   import Glyph from './Glyph.svelte';
+  import BranchPicker from './BranchPicker.svelte';
+  import CopyButton from './CopyButton.svelte';
+  import type { Mode } from '../lib/types';
 
+  // Tools grouped by what you are doing: the code, the people, shipping, and the AI itself.
+  const NAV = [
+    { title: 'Code', items: [['review', 'Review'], ['repo', 'Repo'], ['branches', 'Branches']] },
+    { title: 'People', items: [['mine', 'Mine'], ['team', 'Team']] },
+    { title: 'Ship', items: [['release', 'Release'], ['incidents', 'Incidents']] },
+    { title: 'AI', items: [['activity', 'Activity'], ['memory', 'Memory']] },
+  ];
   let input: HTMLInputElement;
   let focused = $state(false);
   let active = $state(0);
@@ -50,17 +60,21 @@
     Codist
   </div>
 
-  <nav class="modes" aria-label="Mode">
-    <button class:on={app.mode === 'review'} onclick={() => (app.mode = 'review')}>Review</button>
-    <button class:on={app.mode === 'incidents'} onclick={() => (app.mode = 'incidents')}>Incidents{#if app.incidents.some((i) => i.status === 'analysing')}<span class="spinner tiny"></span>{/if}</button>
-    <button class:on={app.mode === 'release'} onclick={() => (app.mode = 'release')}>Release</button>
+  <nav class="groups" aria-label="Screens">
+    {#each NAV as g}
+      <div class="group" title={g.title}>
+        {#each g.items as [m, label]}
+          <button class:on={app.mode === m} onclick={() => (app.mode = m as Mode)}>{label}{#if m === 'incidents' && app.incidents.some((i) => i.status === 'analysing')}<span class="spinner tiny"></span>{/if}</button>
+        {/each}
+      </div>
+    {/each}
   </nav>
 
   <span class="sep">/</span>
   <span class="repo" title={app.status?.path}>{app.status?.repo ?? '…'}</span>
   {#if app.status}
-    <span class="branch mono">{app.status.tracking}</span>
-    {#if app.status.head}<span class="sha mono">{app.status.head.slice(0, 7)}</span>{/if}
+    <BranchPicker />
+    {#if app.status.head}<span class="sha mono">{app.status.head.slice(0, 7)}</span><CopyButton text={app.status.head} title="Copy the full commit id" />{/if}
   {/if}
 
   <div class="search">
@@ -129,10 +143,11 @@
     flex-shrink: 0;
     white-space: nowrap;
   }
-  .modes { display: flex; gap: 2px; padding: 2px; margin-left: 4px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
-  .modes button { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border: 0; border-radius: var(--r); background: none; color: var(--text-3); font-size: 12.5px; font-weight: 500; }
-  .modes button:hover { color: var(--text); }
-  .modes button.on { color: var(--text); background: var(--surface-3); box-shadow: 0 0 0 1px var(--border-strong); }
+  .groups { display: flex; gap: 6px; margin-left: 4px; }
+  .group { display: flex; gap: 1px; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
+  .group button { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border: 0; border-radius: var(--r); background: none; color: var(--text-3); font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .group button:hover { color: var(--text); }
+  .group button.on { color: var(--text); background: var(--surface-3); box-shadow: 0 0 0 1px var(--border-strong); }
   .tiny { width: 9px; height: 9px; }
   .brand { display: flex; align-items: center; gap: 7px; font-weight: 600; letter-spacing: -0.01em; }
   .sep { color: var(--text-3); }

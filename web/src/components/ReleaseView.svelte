@@ -7,10 +7,8 @@
 
   let report = $state.raw<ReleaseReport | null>(null);
   let markdown = $state('');
-  let refs = $state.raw<{ ref: string; label: string }[]>([]);
   let deps = $state.raw<DependencyReport | null>(null);
   let signoff = $state.raw<SignOff | null>(null);
-  let to = $state('');
   let showAll = $state(false);
   let loading = $state(false);
   let newItem = $state('');
@@ -18,12 +16,10 @@
   async function load() {
     loading = true;
     try {
-      const d = await api.release(to || undefined);
+      const d = await api.release();
       report = d.report;
       signoff = d.signoff;
       markdown = d.markdown;
-      refs = d.refs;
-      if (!to) to = d.report.to;
     } catch (e) {
       toast((e as Error).message, 'bad');
     } finally {
@@ -35,16 +31,23 @@
     api.dependencies().then((d) => (deps = d), () => {});
     // Someone ticked an item (here or in another tab): reload the shared sign-off.
     const onSign = (e: Event) => {
-      if ((e as CustomEvent<{ to: string }>).detail.to === report?.to) void load();
+      if ((e as CustomEvent<{ to: string }>).detail.to === REPO) void load();
     };
     window.addEventListener('codist:signoff', onSign);
     return () => window.removeEventListener('codist:signoff', onSign);
   });
 
+  // There is one sign-off, for the repository as it is now.
+  const REPO = 'repo';
+  async function resetSignOff() {
+    if (!confirm('Start the next release? This clears every tick and the items you added.')) return;
+    await api.resetSignOff();
+    await load();
+  }
   async function tick(text: string, done: boolean, custom = false) {
     if (!report) return;
     try {
-      await api.signOff(report.to, text, done, custom);
+      await api.signOff(REPO, text, done, custom);
       await load();
     } catch (e) {
       toast((e as Error).message, 'bad');
@@ -58,7 +61,7 @@
   }
   async function removeItem(id: string) {
     if (!report) return;
-    await api.removeSignOff(report.to, id);
+    await api.removeSignOff(REPO, id);
     await load();
   }
 
@@ -81,14 +84,11 @@
   <div class="inner">
     <header>
       <div>
-        <h1>Release risk report</h1>
-        <p class="muted">The whole codebase at the release commit: every file checked, every open issue, and what to verify before sign-off.</p>
+        <h1>{app.status?.repo ?? 'Repository'}: release readiness</h1>
+        <p class="muted">The whole repository as it is on {app.status?.tracking}{report ? ` at ${report.to.slice(0, 7)}` : ''}: every file checked, every open issue, and what to verify before sign-off. It does not depend on which commits are in the release.</p>
       </div>
       <div class="pick">
-        <label class="label" for="rel-to">Release</label>
-        <select id="rel-to" value={to} onchange={(e) => { to = e.currentTarget.value; showAll = false; void load(); }}>
-          {#each refs as r}<option value={r.ref}>{r.label}</option>{/each}
-        </select>
+        <button class="btn secondary sm" title="Clear the checklist and start over" onclick={resetSignOff}>Start next release</button>
         <button class="btn secondary sm" onclick={copy} disabled={!markdown}>Copy as Markdown</button>
       </div>
     </header>
@@ -112,10 +112,10 @@
       <div class="grid">
         <section>
           <div class="so-head">
-            <h2>Sign-off for <span class="mono">{report.to.slice(0, 7)}</span></h2>
+            <h2>Sign-off</h2>
             {#if signoff}<span class="progress" class:complete={signoff.total > 0 && signoff.done === signoff.total}>{signoff.done} / {signoff.total} signed off</span>{/if}
           </div>
-          <p class="faint small hint">One checklist per release commit, built from the code as it is and shared with everyone.</p>
+          <p class="faint small hint">One checklist for the repository, built from the code as it is and shared with everyone.</p>
           {#each signoff?.items ?? [] as it (it.id)}
             <div class="check" class:stale={!it.current}>
               <input id="so-{it.id}" type="checkbox" checked={it.done} disabled={!it.current} onchange={(e) => tick(it.text, e.currentTarget.checked, it.custom)} />

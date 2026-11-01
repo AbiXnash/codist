@@ -114,7 +114,7 @@
 {/snippet}
 
 <aside class="explorer" aria-label="Explorer">
-  <header><b>Explorer</b><span class="faint">{visible.nodes.length} of {all.length} classes · {visible.edges.length} links</span></header>
+  <header><span class="faint">{visible.nodes.length} of {all.length} classes · {visible.edges.length} links</span></header>
 
   {#if sel}
     <section>
@@ -188,7 +188,7 @@
     {#if open.view}
       <div class="label">Shape</div>
       <div class="grid3">
-        {#each [['natural', 'Graph', 'Force-directed: related classes pull together. Drag anything.'], ['tree', 'Tree', 'Dependencies as a tree, from entry points down'], ['layers', 'Layers', 'Controllers, then services, repositories, entities'], ['services', 'Services', 'One node per service, with their calls'], ['hubs', 'Hubs', 'Most connected in the middle'], ['grid', 'Grid', 'Tidy, by role']] as [v, t, d]}
+        {#each [['natural', 'Graph', 'Force-directed: related classes pull together. Drag anything.'], ['layers', 'Layers', 'Controllers, then services, repositories, entities'], ['services', 'Services', 'One node per service, with their calls'], ['hubs', 'Hubs', 'Most connected in the middle']] as [v, t, d]}
           <button class:on={app.layoutMode === v} title={d} onclick={() => setLayout(v as typeof app.layoutMode)}>{t}</button>
         {/each}
       </div>
@@ -198,6 +198,9 @@
         <button class:on={app.groupBy === 'package'} onclick={() => setGroup('package')}>Package</button>
         <button class:on={app.groupBy === 'service'} onclick={() => setGroup('service')}>Service</button>
       </div>
+      {#if app.groupBy === 'service' && new Set(app.graphView.nodes.map((n) => n.module ?? '')).size <= 1}
+        <p class="hint">This branch has one service, so the boxes are its top-level packages.</p>
+      {/if}
       <div class="label">Size by</div>
       <div class="seg wide">
         <button class:on={app.sizeBy === 'links'} onclick={() => setSize('links')}>Links</button>
@@ -335,8 +338,8 @@
 </aside>
 
 <style>
-  .explorer { display: flex; flex-direction: column; min-height: 0; overflow: auto; border-right: 1px solid var(--border); background: var(--surface); font-size: 12.5px; }
-  header { position: sticky; top: 0; z-index: 1; display: grid; gap: 1px; padding: 10px 12px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .explorer { display: flex; flex-direction: column; min-height: 0; flex: 1; overflow: auto; background: var(--surface); font-size: 12.5px; }
+  header { position: sticky; top: 0; z-index: 1; display: grid; gap: 1px; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); }
   header .faint { font-size: 11px; }
   section { padding: 8px 12px 10px; border-bottom: 1px solid var(--border); display: grid; gap: 7px; min-width: 0; }
   .sh { display: inline-flex; align-items: center; gap: 5px; justify-self: start; border: 0; background: none; padding: 0; font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
@@ -356,7 +359,7 @@
   .seg.wide button { flex: 1; padding: 0 3px; }
   .seg button { height: 24px; padding: 0 8px; border: 0; border-radius: var(--r); background: none; font-size: 11.5px; color: var(--text-3); white-space: nowrap; }
   .seg button.on, .grid3 button.on { color: var(--text); background: var(--surface-3); box-shadow: 0 0 0 1px var(--border-strong); }
-  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
+  .grid3 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
   .grid3 button { height: 24px; border: 0; border-radius: var(--r); background: none; font-size: 11.5px; color: var(--text-3); }
   .chips { display: flex; flex-wrap: wrap; gap: 4px; }
   .chip-t { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); font-size: 11.5px; color: var(--text); }
@@ -398,4 +401,5 @@
   .ic.k { color: var(--good); } .ic.m { color: var(--accent-text); }
   .cost { flex-shrink: 0; font: 500 10px var(--mono); color: var(--text-3); }
   .cost.hot { color: var(--bad); font-weight: 600; }
+  .hint { margin: 2px 0 4px; font-size: 11px; color: var(--text-3); }
 </style>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import WorkingPlan from './WorkingPlan.svelte';
   import { app, pickIssue, saveStr, selectCommit, showWorking } from '../lib/store.svelte';
   import { ago, SEVERITIES, SEVERITY_COLOR } from '../lib/theme';
   import Toggle from './Toggle.svelte';
@@ -97,6 +98,7 @@
           <span class="meta"><span>{app.working.changes.length} file{app.working.changes.length === 1 ? '' : 's'} changed</span><span class="time">now</span></span>
           <span class="badges">{#if n}<span class="pill warn">{n} suggestion{n === 1 ? '' : 's'}</span>{:else}<span class="pill good">clean so far</span>{/if}</span>
         </button>
+        {#if app.scope === 'working'}<WorkingPlan />{/if}
       </li>
     {/if}
     {#each shown as c, idx (c.commit.sha)}
@@ -152,7 +154,7 @@
               {#if !r.introduced.length && !r.fixed.length}<div class="faint none">{c.status === 'done' ? 'No issues tied to this commit.' : 'This commit has not been reviewed yet.'}</div>{/if}
               <div class="acts">
                 <button class="lnk" onclick={() => (app.tab = 'review')}>Review</button>
-                <button class="lnk" onclick={() => (app.tab = 'diff')}>Diff</button>
+                <button class="lnk" onclick={() => (app.tab = 'diff')}>Changes</button>
               </div>
             </div>
           {/if}

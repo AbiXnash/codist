@@ -1,12 +1,13 @@
 <script lang="ts">
   import { fly } from 'svelte/transition';
   import { app } from '../lib/store.svelte';
+  import CopyButton from './CopyButton.svelte';
 </script>
 
 <div class="toasts" aria-live="polite">
   {#each app.toasts as t (t.id)}
     <div class="toast {t.tone}" in:fly={{ y: 8, duration: 160 }} out:fly={{ y: 4, duration: 120 }}>
-      <span class="dot"></span>{t.text}
+      <span class="dot"></span>{t.text}{#if t.tone === 'bad'}<span class="cp"><CopyButton text={t.text} title="Copy this error" /></span>{/if}
     </div>
   {/each}
 </div>
@@ -28,4 +29,5 @@
   .good .dot { background: var(--good); }
   .warn .dot { background: var(--warn); }
   .bad .dot { background: var(--bad); }
+  .cp { margin-left: 6px; pointer-events: auto; }
 </style>

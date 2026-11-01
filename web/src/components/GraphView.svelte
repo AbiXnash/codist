@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
+  import { arrange, clusterLayout, type Cluster } from '../lib/clusterLayout';
   import cytoscape, { type Core, type ElementDefinition, type StylesheetJson } from 'cytoscape';
   import fcose from 'cytoscape-fcose';
   import { app, isTestNode as isTest, nodeFor, nodeMatches, openFile, saveList, selectNode, toast } from '../lib/store.svelte';
@@ -51,30 +52,47 @@
     return Math.min(46, 14 + 7 * Math.sqrt(degree));
   }
 
-  /** The Services view: one node per service, linked by its Feign calls and shared libraries. */
+  /**
+   * Which box a class belongs to: its service, or in a single-module repository (where every class has
+   * the same service) its top-level package, so the box still says something.
+   */
+  function areaNamer(nodes: GraphNode[]): (n: GraphNode) => string {
+    if (new Set(nodes.map((n) => n.module ?? '')).size > 1) return (n) => n.module || app.status?.repo || 'app';
+    const prefix = commonPrefix([...new Set(nodes.map((n) => n.pkg))]);
+    return (n) => {
+      const rest = n.pkg.slice(prefix ? prefix.length + 1 : 0);
+      return rest.split('.')[0] || prefix.split('.').pop() || 'app';
+    };
+  }
+
+  /** The Services view: one box per service, linked by its Feign calls and shared libraries. */
   function serviceElements(): ElementDefinition[] {
     const { nodes, edges } = visible;
     const count = new Map<string, number>();
     const has = new Map<string, boolean>();
-    const mod = new Map(nodes.map((n) => [n.id, n.module || app.status?.repo || 'app']));
+    const area = areaNamer(nodes);
+    const mod = new Map(nodes.map((n) => [n.id, area(n)]));
     for (const n of nodes) {
       const k = mod.get(n.id)!;
       count.set(k, (count.get(k) ?? 0) + 1);
       if (n.stereotype === 'controller') has.set(k, true);
     }
-    const out: ElementDefinition[] = [...count].map(([k, c]) => ({ group: 'nodes' as const, data: { id: 'svc:' + k, name: k, label: `${k} (${c})`, isService: true, kind: 'class', size: 34 + 3 * Math.sqrt(c) * 3, stereotype: has.get(k) ? 'controller' : 'other', shape: has.get(k) ? 'round-rectangle' : 'barrel' } }));
-    const links = new Map<string, { kind: string; via: string[] }>();
+    const out: ElementDefinition[] = [...count].map(([k, c]) => ({ group: 'nodes' as const, data: { id: 'svc:' + k, name: k, label: `${k} (${c})`, isService: true, boxW: Math.max(110, (k.length + 6) * 7.4 + 22), kind: 'class', size: 34 + 3 * Math.sqrt(c) * 3, stereotype: has.get(k) ? 'controller' : 'other', shape: has.get(k) ? 'round-rectangle' : 'barrel' } }));
+    const links = new Map<string, { kind: string; via: string[]; calls: number }>();
     for (const e of edges) {
       const a = mod.get(e.source)!, b = mod.get(e.target)!;
       if (a === b) continue;
       const key = `svc:${a}>svc:${b}`;
       const cur = links.get(key);
-      if (!cur) links.set(key, { kind: e.kind === 'feign' ? 'feign' : 'uses', via: e.via ?? [] });
-      else if (e.kind === 'feign') links.set(key, { kind: 'feign', via: [...cur.via, ...(e.via ?? [])] });
+      if (!cur) links.set(key, { kind: e.kind === 'feign' ? 'feign' : 'uses', via: e.via ?? [], calls: 1 });
+      else {
+        cur.calls++;
+        if (e.kind === 'feign') { cur.kind = 'feign'; cur.via.push(...(e.via ?? [])); }
+      }
     }
     for (const [key, l] of links) {
       const [source, target] = key.split('>');
-      out.push({ group: 'edges', data: { id: key, source, target, kind: l.kind, via: l.via.join(', ') } });
+      out.push({ group: 'edges', data: { id: key, source, target, kind: l.kind, via: l.via.join(', '), calls: l.calls, edgeLabel: l.kind === 'feign' ? `${l.calls} call${l.calls === 1 ? '' : 's'}` : '' } });
     }
     return out;
   }
@@ -90,15 +108,17 @@
     const pkgs = [...new Set(nodes.map((n) => n.pkg))];
     const prefix = commonPrefix(pkgs);
     const out: ElementDefinition[] = [];
-    const groupId = (n: GraphNode) => (app.groupBy === 'service' ? `pkg:${n.module ?? ''}` : `pkg:${n.module ?? ''}|${n.pkg}`);
+    const area = areaNamer(nodes);
+    const groupId = (n: GraphNode) => (app.groupBy === 'service' ? `pkg:${area(n)}` : `pkg:${n.module ?? ''}|${n.pkg}`);
     if (app.groupBy !== 'none') {
       const multiModule = new Set(nodes.map((n) => n.module ?? '')).size > 1;
       for (const n of nodes) {
         const id = groupId(n);
         if (out.some((e) => e.data.id === id)) continue;
         const name = n.pkg === prefix ? n.pkg.split('.').pop() || '(default)' : n.pkg.slice(prefix ? prefix.length + 1 : 0);
-        const label = app.groupBy === 'service' ? n.module || app.status?.repo || 'app' : multiModule && n.module ? `${n.module} · ${name}` : name;
-        out.push({ group: 'nodes', data: { id, label, isPkg: true } });
+        const label = app.groupBy === 'service' ? area(n) : multiModule && n.module ? `${n.module} · ${name}` : name;
+        const inside = nodes.filter((m) => groupId(m) === id).length;
+        out.push({ group: 'nodes', data: { id, label: `${label} · ${inside}`, isPkg: true, box: app.groupBy } });
       }
     }
     for (const n of nodes) {
@@ -110,7 +130,11 @@
         },
       });
     }
-    for (const e of edges) out.push({ group: 'edges', data: { id: `${e.source}>${e.target}`, source: e.source, target: e.target, kind: e.kind, via: e.via?.join(', ') } });
+    const owner = new Map(nodes.map((n) => [n.id, groupId(n)]));
+    for (const e of edges) {
+      const cross = app.groupBy !== 'none' && owner.get(e.source) !== owner.get(e.target);
+      out.push({ group: 'edges', data: { id: `${e.source}>${e.target}`, source: e.source, target: e.target, kind: e.kind, via: e.via?.join(', '), ...(cross ? { cross: true } : {}) } });
+    }
     // Expanded classes show their constants, fields and methods around them.
     for (const n of nodes) {
       if (!app.expanded.includes(n.id)) continue;
@@ -144,7 +168,7 @@
     return [
       { selector: 'node', style: {
         label: app.showLabels ? 'data(label)' : '', color: label, 'font-family': 'Inter Variable, sans-serif', 'font-size': 11, 'font-weight': 500,
-        'text-valign': 'bottom', 'text-margin-y': 5, 'text-outline-color': bg, 'text-outline-width': 2.5, 'min-zoomed-font-size': 7,
+        'text-valign': 'bottom', 'text-margin-y': 5, 'text-outline-color': bg, 'text-outline-width': 2.5, 'min-zoomed-font-size': 5,
         'transition-property': 'opacity, border-width, border-color, underlay-opacity', 'transition-duration': 180,
       } },
       { selector: 'node[size]', style: {
@@ -159,12 +183,22 @@
         label: 'data(label)', 'text-valign': 'top', 'text-halign': 'center', 'text-margin-y': -4, color: cssVar('--text-3'), 'font-size': 10,
         'font-family': 'JetBrains Mono Variable, monospace', padding: '14px',
       } as any },
+      { selector: 'node[box = "service"]', style: {
+        'background-color': cssVar('--accent'), 'background-opacity': 0.05, 'border-width': 1.5, 'border-style': 'solid', 'border-color': cssVar('--border-strong'),
+        color: cssVar('--text'), 'font-size': 20, 'font-weight': 600, 'text-margin-y': -6, padding: '16px', 'min-zoomed-font-size': 0,
+      } as any },
+      { selector: 'node[isService]', style: {
+        shape: 'round-rectangle', width: 'data(boxW)', height: 46, 'background-color': cssVar('--surface-2'), 'border-width': 1.5, 'border-color': cssVar('--border-strong'),
+        'background-image': 'none', 'text-valign': 'center', 'text-halign': 'center', 'text-margin-y': 0, color: cssVar('--text'), 'font-size': 12, 'font-weight': 600, label: 'data(label)', 'min-zoomed-font-size': 0,
+      } as any },
       { selector: 'edge', style: {
         width: 1, 'line-color': edge, 'curve-style': 'unbundled-bezier', 'control-point-distances': [16], 'control-point-weights': [0.5],
         'target-arrow-shape': 'triangle', 'target-arrow-color': edge, 'arrow-scale': 0.6, 'transition-property': 'opacity, line-color, width', 'transition-duration': 180,
       } as any },
       { selector: 'edge[kind = "injects"]', style: { width: 1.8 } },
       { selector: 'edge[kind = "feign"]', style: { width: 3, 'line-color': '#06b6d4', 'target-arrow-color': '#06b6d4', 'arrow-scale': 1, 'line-style': 'solid' } as any },
+      { selector: 'edge[cross][kind != "feign"]', style: { 'line-style': 'dashed', opacity: 0.55 } as any },
+      { selector: 'edge[edgeLabel]', style: { label: 'data(edgeLabel)', 'min-zoomed-font-size': 0, 'font-size': 10.5, color: cssVar('--text-2'), 'text-background-color': cssVar('--canvas'), 'text-background-opacity': 1, 'text-background-padding': '2px', 'text-rotation': 'autorotate' } as any },
       { selector: 'edge[kind = "member"]', style: { width: 0.8, 'line-style': 'dotted', 'target-arrow-shape': 'none' } as any },
       { selector: 'node[member]', style: { width: 12, height: 12, shape: 'ellipse', 'background-color': cssVar('--surface-3'), 'border-width': 1, 'border-color': cssVar('--node-border'), 'font-size': 9, 'text-margin-y': 3 } as any },
       { selector: 'node[member = "constant"]', style: { shape: 'diamond', 'border-color': '#22c55e' } as any },
@@ -202,11 +236,59 @@
 
   const fcoseLayout = {
     name: 'fcose', quality: 'proof', nodeDimensionsIncludeLabels: true, packComponents: true, uniformNodeDimensions: false,
-    nodeRepulsion: () => 7000,
-    idealEdgeLength: (e: cytoscape.EdgeSingular) => 55 + 6 * Math.sqrt(e.source().degree(false) + e.target().degree(false)),
-    edgeElasticity: () => 0.35, nestingFactor: 0.4, gravity: 0.22, gravityRange: 3.2, gravityCompound: 1.4, numIter: 4000,
-    tile: true, tilingPaddingVertical: 20, tilingPaddingHorizontal: 20, padding: 40,
+    nodeRepulsion: () => 2000,
+    idealEdgeLength: (e: cytoscape.EdgeSingular) => 30 + 3 * Math.sqrt(e.source().degree(false) + e.target().degree(false)),
+    edgeElasticity: () => 0.35, nestingFactor: 0.4, gravity: 0.4, gravityRange: 2.4, gravityCompound: 1.4, numIter: 4000,
+    tile: true, tilingPaddingVertical: 12, tilingPaddingHorizontal: 12, padding: 40,
   };
+
+  const presetFrom = (pos: Map<string, { x: number; y: number }>) => ({ name: 'preset', positions: (n: cytoscape.NodeSingular) => pos.get(n.id()) ?? n.position() });
+
+  // Distance is the relation: more calls, closer. Using a service's classes is a weaker tie than calling it.
+  const gapFor = (kind: string, calls: number) => (kind === 'feign' ? Math.max(24, 70 - 20 * (calls - 1)) : 130);
+
+  /** Each service or package as its own box, the boxes apart, with distance showing how related they are. */
+  function boxedPositions() {
+    const boxes = cy!.nodes('[?isPkg]');
+    const clusters: Cluster[] = [];
+    const between = new Map<string, { a: string; b: string; kind: string; calls: number }>();
+    boxes.forEach((box) => {
+      const kids = box.children().filter((n) => !n.data('member'));
+      clusters.push({
+        id: box.id(),
+        items: kids.map((n) => {
+          // Room for the class name and, when expanded, the members ringed around it.
+          const members = app.expanded.includes(n.id()) ? cy!.nodes(`[owner = "${n.id()}"]`).length : 0;
+          const ring = members ? 70 + members * 7 : 0;
+          return { id: n.id(), w: Math.max((n.data('size') ?? 24) + ring, String(n.data('label')).length * 5.6), h: (n.data('size') ?? 24) + 16 + ring };
+        }),
+        links: kids.connectedEdges().filter((e) => !e.data('cross') && e.data('kind') !== 'member').map((e) => ({ a: e.data('source'), b: e.data('target'), len: 40 })),
+      });
+    });
+    cy!.edges('[?cross]').forEach((e) => {
+      const a: string = e.source().parent().first().id(), b: string = e.target().parent().first().id();
+      const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+      const cur = between.get(key) ?? { a, b, kind: 'uses', calls: 0 };
+      if (e.data('kind') === 'feign') { cur.kind = 'feign'; cur.calls++; }
+      between.set(key, cur);
+    });
+    const { positions } = clusterLayout(clusters, [...between.values()].map((l) => ({ a: l.a, b: l.b, len: gapFor(l.kind, l.calls) })));
+    cy!.nodes('[member]').forEach((n) => {
+      const owner = positions.get(n.data('owner'));
+      if (!owner) return;
+      const sibs = cy!.nodes(`[owner = "${n.data('owner')}"]`);
+      const t = (sibs.map((m) => m.id()).indexOf(n.id()) / sibs.length) * Math.PI * 2;
+      const r = 50 + sibs.length * 3.5;
+      positions.set(n.id(), { x: owner.x + r * Math.cos(t), y: owner.y + r * Math.sin(t) });
+    });
+    return positions;
+  }
+
+  function serviceOverviewPositions() {
+    const items = cy!.nodes().map((n) => ({ id: n.id(), w: n.data('boxW') ?? 120, h: 46 }));
+    const links = cy!.edges().map((e) => ({ a: e.source().id(), b: e.target().id(), len: gapFor(e.data('kind'), e.data('calls') ?? 1) }));
+    return arrange(items, links, 70);
+  }
 
   function layout(incremental: boolean, extra: Record<string, unknown> = {}) {
     if (!cy || cy.nodes().empty()) return;
@@ -218,23 +300,14 @@
         opts = { name: 'preset', positions: (n: cytoscape.NodeSingular) => pos.get(n.id()) ?? { x: 0, y: 0 } };
         break;
       }
-      case 'tree': {
-        // Entry points on top: what nothing depends on, and controllers.
-        const roots = cy.nodes().filter((n) => !n.data('member') && !n.data('isPkg') && (n.data('stereotype') === 'controller' || n.incomers('edge').empty()));
-        opts = { name: 'breadthfirst', directed: true, roots, spacingFactor: 1.05, avoidOverlap: true, nodeDimensionsIncludeLabels: true, grid: true };
-        break;
-      }
       case 'services':
-        opts = { ...fcoseLayout, randomize: true, nodeRepulsion: () => 30000, idealEdgeLength: () => 170 };
+        opts = presetFrom(serviceOverviewPositions());
         break;
       case 'hubs':
         opts = { name: 'concentric', concentric: (n: cytoscape.NodeSingular) => n.degree(false), levelWidth: () => 2, minNodeSpacing: 34 };
         break;
-      case 'grid':
-        opts = { name: 'grid', avoidOverlap: true, condense: true, sort: (a: cytoscape.NodeSingular, b: cytoscape.NodeSingular) => String(a.data('stereotype')).localeCompare(String(b.data('stereotype'))) };
-        break;
       default:
-        opts = { ...fcoseLayout, randomize: !incremental };
+        opts = app.groupBy !== 'none' ? presetFrom(boxedPositions()) : { ...fcoseLayout, randomize: !incremental };
     }
     cy.layout({ ...opts, ...anim, ...extra } as unknown as cytoscape.LayoutOptions).run();
   }
@@ -461,7 +534,7 @@
   }
 
   onMount(() => {
-    cy = cytoscape({ container, minZoom: 0.15, maxZoom: 3, boxSelectionEnabled: false, style: styles() });
+    cy = cytoscape({ container, minZoom: 0.2, maxZoom: 2.5, wheelSensitivity: 0.3, boxSelectionEnabled: false, style: styles() });
     cy.on('tap', 'node', (e) => {
       if (e.target.data('isPkg')) return;
       if (e.target.data('member')) {
@@ -633,6 +706,7 @@
   {#if app.showLegend}
     <div class="legend">
       {#each legend as s}<span><Glyph stereotype={s.key} />{s.label}</span>{/each}
+      {#if app.groupBy !== 'none' || app.layoutMode === 'services'}<span class="sep"></span><span>Closer boxes are more related · <i class="fl"></i>service call · dashed: uses</span>{/if}
       <span class="sep"></span>
       <span><i class="ring" style:border-color={STATE_COLOR.changed}></i>Changed</span>
       <span><i class="ring" style:border-color={STATE_COLOR.added}></i>Added</span>
@@ -690,6 +764,7 @@
 
   .legend { position: absolute; left: 10px; bottom: 10px; max-width: calc(100% - 20px); display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: color-mix(in srgb, var(--surface) 90%, transparent); font-size: 11.5px; color: var(--text-2); z-index: 2; }
   .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend i.fl { display: inline-block; width: 14px; height: 3px; background: #06b6d4; vertical-align: middle; }
   .legend i.ring { background: transparent; border: 2px solid; width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
   .legend i.dashed { border-style: dashed; }
   .legend .sep { width: 1px; height: 12px; background: var(--border-strong); }

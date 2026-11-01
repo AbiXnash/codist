@@ -2,6 +2,7 @@
   import { tick } from 'svelte';
   import { app, askQuestion, askTarget, requestEdit } from '../lib/store.svelte';
   import CodeBlock from './CodeBlock.svelte';
+  import CopyButton from './CopyButton.svelte';
 
   let input = $state('');
   let log = $state<HTMLDivElement>();
@@ -61,6 +62,7 @@
           {#each parts(m.text) as p}
             {#if p.code}<CodeBlock code={p.text} lang={p.lang} />{:else}<p>{p.text.trim()}</p>{/if}
           {/each}
+          <CopyButton text={m.text} label="Copy answer" />
           {#if !m.error && m.path}
             <button class="btn secondary sm" onclick={() => requestEdit(app.ask[i - 1]?.text ?? '')} title="Apply what was asked as a reviewed commit">Make this change</button>
           {/if}

@@ -1,13 +1,20 @@
 <script lang="ts">
-  import { app, applyFix, closeFix } from '../lib/store.svelte';
+  import { app, applyFix, closeFix, toast } from '../lib/store.svelte';
+  import { api } from '../lib/api';
+  import CopyButton from './CopyButton.svelte';
 
   let message = $state('');
+  let view = $state<'split' | 'unified'>('split');
+  let rejecting = $state(false);
+  let reason = $state('');
   let lastId = '';
   $effect(() => {
     const p = app.fix?.proposal;
     if (p && p.id !== lastId) {
       lastId = p.id;
       message = p.message;
+      rejecting = false;
+      reason = '';
     }
   });
 
@@ -22,6 +29,51 @@
     add: lines.filter((l) => l.startsWith('+')).length,
     del: lines.filter((l) => l.startsWith('-')).length,
   });
+
+  // Old on the left, new on the right, with removed and added lines paired up.
+  type Cell = { text: string; kind: '' | 'add' | 'del' | 'hunk' | 'fileh' | 'none' };
+  const rows = $derived.by(() => {
+    const out: [Cell, Cell][] = [];
+    let dels: string[] = [], adds: string[] = [];
+    const flush = () => {
+      for (let i = 0; i < Math.max(dels.length, adds.length); i++) {
+        out.push([
+          i < dels.length ? { text: dels[i], kind: 'del' } : { text: '', kind: 'none' },
+          i < adds.length ? { text: adds[i], kind: 'add' } : { text: '', kind: 'none' },
+        ]);
+      }
+      dels = [];
+      adds = [];
+    };
+    for (const l of lines) {
+      if (l.startsWith('-')) dels.push(l.slice(1));
+      else if (l.startsWith('+')) adds.push(l.slice(1));
+      else {
+        flush();
+        if (l.startsWith('file ') || l.startsWith('@@')) {
+          const c: Cell = { text: l, kind: l.startsWith('file ') ? 'fileh' : 'hunk' };
+          out.push([c, c]);
+        } else if (!l.startsWith('\\')) out.push([{ text: l.slice(1), kind: '' }, { text: l.slice(1), kind: '' }]);
+      }
+    }
+    flush();
+    return out;
+  });
+
+  // Saying why teaches later reviews and fixes; it is never required.
+  async function reject() {
+    const f = app.fix;
+    if (!f) return;
+    const text = reason.trim();
+    closeFix();
+    if (!text) return;
+    try {
+      await api.addMemory({ kind: 'rejected-fix', text, title: f.finding.title, ref: f.finding.ref, path: f.finding.path, snippet: f.finding.snippet });
+      toast('Codist will remember that. See Memory.', 'good', 3000);
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+    }
+  }
 
   function cls(l: string) {
     return l.startsWith('file ') ? 'fileh' : l.startsWith('@@') ? 'hunk' : l.startsWith('+') ? 'add' : l.startsWith('-') ? 'del' : '';
@@ -58,27 +110,66 @@
       {#if f.busy === 'generating'}
         <div class="state"><span class="spinner"></span>Generating a fix with {app.status?.model ?? 'the model'}… this takes 20–60 s.</div>
       {:else if f.proposal}
+        {#if f.finding.detail || f.finding.suggestion}
+          <section class="why">
+            <span class="label">Why this change</span>
+            {#if f.finding.detail}<p>{f.finding.detail}</p>{/if}
+            {#if f.finding.suggestion}<p class="rec"><b>Recommendation:</b> {f.finding.suggestion}</p>{/if}
+          </section>
+        {/if}
         <div class="diff-head">
-          <span class="label">Changes</span>
+          <span class="label">Old and new</span>
           <span class="mono plus">+{stats.add}</span><span class="mono minus">−{stats.del}</span>
-          <span class="faint">{#if f.proposal.working}Check the diff before applying.{:else}Check the diff before committing. Only {f.proposal.paths.length > 1 ? 'these files are' : 'this file is'} committed.{/if}</span>
+          <span class="grow"></span>
+          <div class="seg">
+            <button class:on={view === 'split'} onclick={() => (view = 'split')}>Side by side</button>
+            <button class:on={view === 'unified'} onclick={() => (view = 'unified')}>Unified</button>
+          </div>
+          <CopyButton text={f.proposal.patch} title="Copy the patch" label="Patch" />
         </div>
-        <pre class="diff">{#each lines as l}<span class={cls(l)}>{l || ' '}</span>{/each}</pre>
+        {#if view === 'split'}
+          <div class="split-head"><span>Current</span><span>Proposed</span></div>
+          <div class="split-diff">
+            {#each rows as [o, n]}
+              {#if o.kind === 'fileh' || o.kind === 'hunk'}
+                <div class="wide {o.kind}">{o.text}</div>
+              {:else}
+                <div class="cell {o.kind}">{o.text || ' '}</div>
+                <div class="cell {n.kind}">{n.text || ' '}</div>
+              {/if}
+            {/each}
+          </div>
+        {:else}
+          <pre class="diff">{#each lines as l}<span class={cls(l)}>{l || ' '}</span>{/each}</pre>
+        {/if}
 
         {#if f.proposal?.working}
           <p class="faint small">This fixes your uncommitted changes, so it is applied to the working tree and not committed. Commit it together with your changes.</p>
         {:else}
-          <label class="label" for="fix-msg">Commit message</label>
+          <div class="lab"><label class="label" for="fix-msg">Commit message</label><CopyButton text={message} title="Copy the message" /></div>
           <textarea id="fix-msg" class="mono" rows="5" bind:value={message} spellcheck="false"></textarea>
         {/if}
       {/if}
-      {#if f.error}<p class="error">{f.error}</p>{/if}
+      {#if f.error}<div class="err"><p class="error">{f.error}</p><CopyButton text={f.error} title="Copy the error" /></div>{/if}
+      {#if rejecting}
+        <div class="reject">
+          <label class="label" for="fix-why">Why not? Optional</label>
+          <textarea id="fix-why" rows="2" bind:value={reason} placeholder="e.g. we keep field injection in legacy controllers. Codist remembers this in later reviews and fixes."></textarea>
+        </div>
+      {/if}
     </div>
 
     <footer>
       <span class="faint hint">{f.proposal ? `⌘↵ to ${f.proposal.working ? 'apply' : 'commit'} · Esc to discard` : f.busy === 'generating' ? 'Esc to cancel' : ''}</span>
-      <button class="btn secondary" disabled={f.busy === 'applying'} onclick={closeFix}>{f.busy === 'generating' ? 'Cancel' : f.proposal ? 'Discard' : 'Close'}</button>
-      {#if f.proposal}
+      {#if f.proposal && rejecting}
+        <button class="btn secondary" onclick={() => (rejecting = false)}>Back</button>
+        <button class="btn" onclick={reject}>{reason.trim() ? 'Reject and remember' : 'Reject'}</button>
+      {:else if f.proposal}
+        <button class="btn secondary" disabled={f.busy === 'applying'} onclick={() => (rejecting = true)}>Reject…</button>
+      {:else}
+        <button class="btn secondary" disabled={f.busy === 'applying'} onclick={closeFix}>{f.busy === 'generating' ? 'Cancel' : 'Close'}</button>
+      {/if}
+      {#if f.proposal && !rejecting}
         <button class="btn" disabled={!!f.busy || (!f.proposal?.working && !message.trim())} onclick={() => applyFix(message)}>
           {#if f.busy === 'applying'}<span class="spinner"></span>Applying…{:else if f.proposal?.working}Apply to working tree{:else}Apply & commit{/if}
         </button>
@@ -95,7 +186,7 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: min(860px, calc(100vw - 32px));
+    width: min(1120px, calc(100vw - 32px));
     max-height: calc(100vh - 64px);
     display: flex;
     flex-direction: column;
@@ -109,6 +200,25 @@
   .sub { margin-top: 2px; font-size: 11.5px; color: var(--text-3); }
   .body { padding: 14px 16px; overflow: auto; min-height: 0; }
   .state { display: flex; align-items: center; gap: 10px; padding: 24px 0; color: var(--text-2); }
+  .why { margin-bottom: 12px; padding: 9px 12px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--r); background: var(--surface-2); }
+  .why p { margin: 4px 0 0; color: var(--text-2); }
+  .why .rec b { color: var(--text); font-weight: 600; }
+  .grow { flex: 1; }
+  .seg { display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface-2); }
+  .seg button { height: 20px; padding: 0 8px; border: 0; border-radius: 3px; background: none; font-size: 11px; color: var(--text-3); }
+  .seg button.on { color: var(--text); background: var(--surface-3); }
+  .split-head { display: grid; grid-template-columns: 1fr 1fr; font-size: 11px; font-weight: 600; color: var(--text-2); padding: 0 12px 3px; }
+  .split-diff { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin: 0 0 14px; max-height: 46vh; overflow: auto; border: 1px solid var(--border); border-radius: var(--r); background: var(--code-bg); font: 12px/1.55 var(--mono); }
+  .cell { padding: 0 10px; white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+  .cell + .cell { border-left: 1px solid var(--border); }
+  .cell.none { background: var(--surface-2); }
+  .wide { grid-column: 1 / -1; padding: 0 10px; }
+  .wide.fileh { padding-top: 3px; }
+  .lab { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .lab label { margin: 0; }
+  .err { display: flex; align-items: flex-start; gap: 6px; }
+  .err .error { flex: 1; }
+  .reject { margin-top: 12px; }
   .diff-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
   .plus { color: var(--added); font-size: 12px; }
   .minus { color: var(--bad); font-size: 12px; }

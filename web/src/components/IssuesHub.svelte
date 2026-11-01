@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { api } from '../lib/api';
-  import { app, ignoreFinding, loadCommits, loadIssues, refreshDetail, toast, openFile, pickIssue, proposeFix, selectCommit, showWorking, unignore } from '../lib/store.svelte';
+  import { app, issueAction, openFile, pickIssue, proposeFix, selectCommit, showWorking } from '../lib/store.svelte';
   import { ago, INSTANT_REFS, NOT_FIXABLE, SEVERITIES } from '../lib/theme';
   import CommitRef from './CommitRef.svelte';
+  import CopyButton from './CopyButton.svelte';
   import FixSuggest from './FixSuggest.svelte';
   import type { FindingWithPath, FixRef, Issue, Severity } from '../lib/types';
 
+  let closing = $state(false);
+  let reason = $state('');
   const LEVELS: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
   const states = [
     { id: 'open', label: 'Open' },
@@ -48,21 +50,6 @@
     app.issueState = s;
     app.picked = null;
   }
-  async function ignore(g: Issue[]) {
-    for (const i of g) await ignoreFinding(asFinding(i), 'code', false, i.lastSeen);
-    app.picked = null;
-  }
-  async function markFixed(g: Issue[]) {
-    for (const i of g) await api.markFixed(i.id);
-    app.picked = null;
-    toast(g.length > 1 ? `Marked ${g.length} places as fixed` : 'Marked as fixed', 'good', 2500);
-    await Promise.all([loadIssues(), loadCommits(), refreshDetail()]);
-  }
-  async function reopen(i: Issue) {
-    await api.reopenIssue(i.id);
-    app.picked = null;
-    await Promise.all([loadIssues(), loadCommits(), refreshDetail()]);
-  }
   const others = (g: Issue[]): FixRef[] => g.slice(1).map((m) => ({ sha: m.lastSeen, path: m.path, line: m.reviewLine, title: m.title }));
   const isWorking = (i: Issue) => i.firstSeen === 'working';
   const changedFiles = $derived(app.working?.changes.length ?? 0);
@@ -82,10 +69,11 @@
         All issues
       </button>
       <div class="dhead">
-        <span class="sev {i.severity}">{i.severity}</span>
+        <span class="sev {i.severity}" class:fx={i.state === 'resolved'}>{i.severity}</span>
         {#if i.kind}<span class="tg k">{i.kind}</span>{/if}
         {#if i.urgency}<span class="tg u {i.urgency === 'Hotfix' ? 'hot' : ''}">{i.urgency}</span>{/if}
         {#if i.change}<span class="tg">{i.change} change</span>{/if}
+        <CopyButton title="Copy this issue" text={() => [`[${i.severity}] ${i.title}`, ...g.map((m) => `${m.path}${m.line ? ':' + m.line : ''}`), i.detail, i.suggestion ? `Recommendation: ${i.suggestion}` : ''].filter(Boolean).join('\n')} />
         {#if i.state === 'resolved'}<span class="tag good">✓ fixed</span>{:else if i.state === 'ignored'}<span class="tag">ignored</span>{/if}
         {#if i.reopenedIn}<span class="tag bad" title="It was fixed, then the code came back">reopened</span>{/if}
         {#if i.ref && INSTANT_REFS.has(i.ref) && i.state === 'open'}<span class="tag accent" title="Mechanical fix: no model needed">⚡ instant fix</span>{/if}
@@ -133,23 +121,42 @@
       </div>
       {/if}
 
+      <div class="flow" aria-label="Workflow">
+        {#each ['Open', 'In progress', 'In review', 'Closed'] as st, n}
+          {@const at = i.state !== 'open' ? 3 : i.stage === 'in-review' ? 2 : i.stage === 'in-progress' ? 1 : 0}
+          <span class="st" class:done={n < at} class:now={n === at}>{n === 3 && i.state === 'ignored' ? "Won't fix" : n === 3 && i.state === 'resolved' ? 'Fixed' : st}</span>
+        {/each}
+        {#if i.assignee}<span class="who">· {who(i.assignee)}</span>{/if}
+      </div>
+      {#if !isWorking(i)}
+        <div class="actions">
+          {#if i.state === 'open'}
+            {#if !i.stage}<button class="btn secondary" title="Assign it to yourself" onclick={() => issueAction(g, 'start')}>Start</button>{/if}
+            {#if i.stage === 'in-progress'}<button class="btn secondary" onclick={() => issueAction(g, 'review')}>Send to review</button>{/if}
+            {#if i.stage}<button class="btn secondary" onclick={() => issueAction(g, 'stop')}>Back to open</button>{/if}
+            <button class="btn secondary" title="You already fixed it: close it. It reopens if a later review reports it again." onclick={() => issueAction(g, 'fixed')}>Mark fixed</button>
+            <button class="btn secondary" onclick={() => { closing = !closing; }}>Won't fix…</button>
+          {:else if i.manual || i.ignoreId}
+            <button class="btn secondary" onclick={() => issueAction(g, 'reopen')}>Reopen</button>
+          {/if}
+        </div>
+        {#if closing && i.state === 'open'}
+          <div class="close">
+            <textarea rows="2" bind:value={reason} placeholder="Why not? Optional. Codist remembers this in later reviews."></textarea>
+            <button class="btn sm" onclick={() => { closing = false; void issueAction(g, 'wontfix', reason); reason = ''; }}>Close as won't fix</button>
+          </div>
+        {/if}
+      {/if}
+
       <div class="actions">
         {#if i.state === 'open'}
           {#if NOT_FIXABLE.has(i.ref ?? '')}
-            <button class="btn secondary" title="A heads-up, not a defect: confirm the readers still expect the new value" onclick={() => ignore(g)}>Mark as checked</button>
+            <button class="btn secondary" title="A heads-up, not a defect: confirm the readers still expect the new value" onclick={() => issueAction(g, 'wontfix')}>Mark as checked</button>
           {:else}
             {#if app.status?.canFix && g.every((m) => m.path.endsWith('.java'))}
               <button class="btn" onclick={() => proposeFix(asFinding(i), i.lastSeen, others(g))}>{i.ref && INSTANT_REFS.has(i.ref) ? '⚡ Fix' : 'Fix with AI'}{g.length > 1 ? ` all ${g.length} places` : ''}</button>
             {/if}
-            <button class="btn secondary" onclick={() => ignore(g)}>Ignore</button>
-          {/if}
-        {:else if i.state === 'ignored' && i.ignoreId}
-          <button class="btn secondary" onclick={() => unignore(i.ignoreId!).then(loadIssues)}>Stop ignoring</button>
-        {/if}
-        {#if i.state === 'open' && !isWorking(i)}
-          <button class="btn secondary" title="You already fixed it: close this issue. It reopens if a later review reports it again." onclick={() => markFixed(g)}>Mark as fixed</button>
-        {:else if i.manual}
-          <button class="btn secondary" onclick={() => reopen(i)}>Reopen</button>
+            {/if}
         {/if}
         <button class="btn secondary" onclick={() => openFile(i.path, null, i.line || null)}>Open code</button>
         {#if !isWorking(i)}<button class="btn secondary" onclick={() => openCommit(i.firstSeen)}>Open commit</button>{/if}
@@ -177,7 +184,7 @@
       <div class="levels">
         {#each LEVELS as l}
           {@const n = perLevel[l] ?? 0}
-          <button class="level {l}" class:on={app.level === l} class:off={app.level && app.level !== l} class:zero={!n}
+          <button class="level {l}" class:fx={app.issueState === 'resolved'} class:on={app.level === l} class:off={app.level && app.level !== l} class:zero={!n}
             onclick={() => (app.level = app.level === l ? null : l)} title="Show only {l}">
             <b>{n}</b><span>{l}</span>
           </button>
@@ -185,6 +192,9 @@
       </div>
 
       <div class="triage">
+        <select aria-label="Workflow" value={app.stage ?? ''} class:on={!!app.stage} onchange={(e) => (app.stage = e.currentTarget.value || null)}>
+          <option value="">Stage: all</option><option value="unassigned">Unassigned</option><option value="mine">Assigned to me</option><option value="in-progress">In progress</option><option value="in-review">In review</option>
+        </select>
         {#each [['kind', 'Type', kinds], ['urgency', 'Urgency', urgencies], ['change', 'Change', changes]] as [key, title, opts]}
           <select aria-label={title as string} value={app[key as 'kind'] ?? ''} class:on={!!app[key as 'kind']} onchange={(e) => (app[key as 'kind'] = e.currentTarget.value || null)}>
             <option value="">{title}: all</option>
@@ -208,20 +218,21 @@
         <section>
           <button class="shead" onclick={() => (collapsed[sec.level] = !collapsed[sec.level])} aria-expanded={!collapsed[sec.level]}>
             <svg class="chev" class:closed={collapsed[sec.level]} width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 6 4 4 4-4"/></svg>
-            <span class="sev {sec.level}">{sec.level}</span>
+            <span class="sev {sec.level}" class:fx={app.issueState === 'resolved'}>{sec.level}</span>
             <span class="faint">{sec.groups.length}</span>
           </button>
           {#if !collapsed[sec.level]}
             {#each sec.groups as g (g[0].id)}
               {@const i = g[0]}
-              <button class="issue" onclick={() => pickIssue(i.id)}>
-                <span class="bar {i.severity}"></span>
+              <button class="issue" class:fx={i.state === 'resolved'} onclick={() => pickIssue(i.id)}>
+                <span class="bar {i.severity}" class:fx={i.state === 'resolved'}></span>
                 <span class="body">
                   <span class="title">{i.title}</span>
                   <span class="tags">
                     {#if i.kind}<span class="tg k">{i.kind}</span>{/if}
                     {#if i.urgency}<span class="tg u {i.urgency === 'Hotfix' ? 'hot' : ''}">{i.urgency}</span>{/if}
                     {#if i.change === 'Major'}<span class="tg">Major</span>{/if}
+                    {#if i.stage}<span class="tg k">{i.stage === 'in-review' ? 'In review' : 'In progress'}{i.assignee ? ` · ${who(i.assignee)}` : ''}</span>{/if}
                   </span>
                   <span class="sub">
                     <span class="mono loc">{g.length > 1 ? `${g.length} places` : `${name(i.path)}${i.line ? ':' + i.line : ''}`}</span>
@@ -274,6 +285,18 @@
   .level::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c); }
   .level b { font-size: 20px; line-height: 1.15; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--c); }
   .level span { font-size: 11px; color: var(--text-3); text-transform: capitalize; }
+  /* Fixed: one green, strong to light by level. */
+  .level.level.fx, .bar.bar.fx { --c: var(--good); }
+  .level.level.fx b { color: var(--good); }
+  .level.fx::before { opacity: var(--tone); }
+  .bar.fx { opacity: var(--tone); }
+  .level.fx.critical, .bar.fx.critical { --tone: 1; }
+  .level.fx.high, .bar.fx.high { --tone: 0.75; }
+  .level.fx.medium, .bar.fx.medium { --tone: 0.5; }
+  .level.fx.low, .bar.fx.low { --tone: 0.3; }
+  .level.fx.info, .bar.fx.info { --tone: 0.16; }
+  .issue.fx .tg, .issue.fx .tg.hot { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); border-color: transparent; }
+  .issue.fx .sub { color: var(--good); }
   .level:hover { border-color: var(--border-strong); }
   .level.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 9%, var(--surface-2)); }
   .level.off { opacity: 0.45; }
@@ -284,7 +307,15 @@
   .level.info { --c: var(--sev-info); }
   :global(:root[data-theme='dark']) .level.low { --c: #94a3b8; }
 
-  .triage { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .triage { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; font-size: 11.5px; }
+  .flow .st { padding: 2px 9px; border-radius: 10px; color: var(--text-3); background: var(--surface-2); border: 1px solid var(--border); }
+  .flow .st.done { color: var(--good); }
+  .flow .st.now { color: var(--text); font-weight: 600; border-color: var(--accent); background: var(--accent-soft); }
+  .flow .who { margin-left: 4px; color: var(--text-2); }
+  .close { display: grid; gap: 6px; }
+  .close textarea { padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: var(--r); background: var(--surface-2); color: var(--text); font: inherit; font-size: 12.5px; resize: vertical; }
+  .close .btn { justify-self: start; }
   .triage select { min-width: 0; height: 26px; padding: 0 5px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface-2); color: var(--text-2); font: inherit; font-size: 11.5px; }
   .triage select.on { border-color: var(--accent); color: var(--text); }
   .tags { display: flex; flex-wrap: wrap; gap: 3px; }

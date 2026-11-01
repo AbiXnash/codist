@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CopyButton from './CopyButton.svelte';
   import { app, ignoreFinding, openFile, openProposal, proposeFix, unignore } from '../lib/store.svelte';
   import { api } from '../lib/api';
   import type { FindingWithPath, IgnoreScope } from '../lib/types';
@@ -42,6 +43,7 @@
     <svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M3 1.5 7 5 3 8.5Z"/></svg>
     <span class="sev {f.severity}">{f.severity}</span>
     <span class="title">{f.title}</span>
+    <CopyButton title="Copy this finding" text={() => [`[${f.severity}] ${f.title}`, `${f.path}${f.line ? ':' + f.line : ''}`, f.detail, f.suggestion ? `Recommendation: ${f.suggestion}` : ''].filter(Boolean).join('\n')} />
     {#if f.ignored}<span class="tag">ignored</span>
     {:else if f.state === 'resolved'}<span class="tag good" title={f.fixedIn ? `Fixed in ${f.fixedIn.slice(0, 7)} by ${f.fixedBy}` : 'Fixed in the working tree, not committed yet'}>✓ {f.uncommitted ? 'fixed locally' : 'fixed'}</span>
     {:else if carried}<span class="tag" title="First reported in {f.firstSeen}">since {f.firstSeen?.slice(0, 7)}</span>

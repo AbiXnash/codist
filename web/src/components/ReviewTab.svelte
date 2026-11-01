@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { app, openFile, requestReview, selectNode, toast } from '../lib/store.svelte';
+  import { app, loadCommits, openFile, requestReview, selectCommit, selectNode, toast } from '../lib/store.svelte';
   import { ago, SEVERITIES, shortName } from '../lib/theme';
   import FindingCard from './FindingCard.svelte';
   import CommitRef from './CommitRef.svelte';
+  import CopyButton from './CopyButton.svelte';
+  import { api } from '../lib/api';
 
   const d = $derived(app.detail);
   const r = $derived(d?.review ?? null);
@@ -14,8 +16,47 @@
   const ignoredCount = $derived(app.allFindings.length - app.findings.length);
   let showCarried = $state(false);
 
-  function copy(text: string) {
-    navigator.clipboard?.writeText(text).then(() => toast('Copied', 'good', 1500));
+  let draft = $state('');
+  let draftWhy = $state('');
+  let pushed = $state(false);
+  let msgBusy = $state(false);
+  let draftFor = '';
+  // The model's earlier suggestion, if the review made one; a new commit starts over.
+  $effect(() => {
+    const sha = app.detail?.analysis.commit.sha ?? '';
+    if (sha !== draftFor) {
+      draftFor = sha;
+      draft = app.detail?.review?.suggestedMessage ?? '';
+      draftWhy = '';
+      pushed = false;
+    }
+  });
+  async function suggest(sha: string) {
+    msgBusy = true;
+    try {
+      const m = await api.betterMessage(sha);
+      draft = m.message;
+      draftWhy = m.why;
+      pushed = m.pushed;
+    } catch (e) {
+      if ((e as Error).name !== 'AbortError') toast((e as Error).message, 'bad');
+    } finally {
+      msgBusy = false;
+    }
+  }
+  async function reword(sha: string) {
+    msgBusy = true;
+    try {
+      const res = await api.reword(sha, draft.trim());
+      toast(res.rewritten > 1 ? `Reworded; ${res.rewritten} commits got new ids` : 'Reworded', 'good', 3000);
+      draft = '';
+      await loadCommits();
+      await selectCommit(res.commit);
+    } catch (e) {
+      toast((e as Error).message, 'bad');
+    } finally {
+      msgBusy = false;
+    }
   }
 
   function focus(id: string) {
@@ -32,7 +73,7 @@
     <header>
       <h1>{c.message}</h1>
       <div class="meta">
-        <span class="mono">{c.shortSha}</span>
+        <span class="mono">{c.shortSha}</span><CopyButton text={c.sha} title="Copy the full commit id" />
         <span>{c.author}</span>
         <span title={new Date(c.time).toLocaleString()}>{ago(c.time)}</span>
         <span>{d.analysis.files.length} file{d.analysis.files.length === 1 ? '' : 's'}</span>
@@ -101,21 +142,22 @@
       </section>
     {/if}
 
-    {#if r?.messageProblem}
-      <section class="card msg">
-        <div class="card-head"><span class="label">Commit message</span></div>
-        <p class="problem">{r.messageProblem}</p>
-        {#if r.suggestedMessage}
-          <pre class="mono suggested">{r.suggestedMessage}</pre>
-          <div class="row-actions">
-            <button class="btn secondary sm" onclick={() => copy(r.suggestedMessage!)}>Copy message</button>
-            {#if c.sha === app.status?.head}
-              <button class="btn secondary sm" onclick={() => copy(`git commit --amend -m ${JSON.stringify(r.suggestedMessage)}`)} title="Only for commits you have not pushed yet">Copy amend command</button>
-            {/if}
-          </div>
-        {/if}
-      </section>
-    {/if}
+    <section class="card msg">
+      <div class="card-head"><span class="label">Commit message</span><span class="spacer"></span>
+        <CopyButton text={c.message} title="Copy this commit's message" />
+        <button class="btn secondary sm" disabled={msgBusy} onclick={() => suggest(c.sha)}>{#if msgBusy}<span class="spinner"></span>{/if}{draft ? 'Suggest again' : 'Suggest a better one'}</button>
+      </div>
+      {#if r?.messageProblem}<p class="problem">{r.messageProblem}</p>{/if}
+      {#if draft}
+        <textarea class="mono" rows="3" bind:value={draft} spellcheck="false"></textarea>
+        {#if draftWhy}<p class="faint">{draftWhy}</p>{/if}
+        <div class="row-actions">
+          <button class="btn sm" disabled={pushed || msgBusy || !draft.trim() || draft.trim() === c.message.trim()} title={pushed ? 'This commit is already pushed; rewriting it would change history for everyone' : 'Rewrites this commit and the ones after it, keeping their code and authors'} onclick={() => reword(c.sha)}>Reword commit</button>
+          <CopyButton text={draft} label="Copy" />
+          {#if pushed}<span class="faint">Already pushed, so it cannot be reworded here.</span>{/if}
+        </div>
+      {/if}
+    </section>
 
     {#if r}
       {@const pending = r.files.filter((f) => f.pending)}
@@ -214,4 +256,7 @@
   .path:hover { text-decoration: underline; }
   .link { padding: 0; border: 0; background: none; font-size: 12px; color: var(--accent-text); }
   .spinner.inline { display: inline-block; width: 10px; height: 10px; vertical-align: -1px; margin-right: 4px; }
+  .msg textarea { width: 100%; margin-top: 8px; padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: var(--r); background: var(--surface-2); color: var(--text); font-size: 12px; resize: vertical; }
+  .msg .row-actions { align-items: center; }
+  .card-head .spacer { flex: 1; }
 </style>

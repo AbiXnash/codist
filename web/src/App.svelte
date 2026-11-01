@@ -3,7 +3,12 @@
   import { app, boot, savePref, selectCommit } from './lib/store.svelte';
   import { preload } from './lib/highlight';
   import TopBar from './components/TopBar.svelte';
-  import GraphPanel from './components/GraphPanel.svelte';
+  import LeftDock from './components/LeftDock.svelte';
+  import RepoView from './components/RepoView.svelte';
+  import BranchesView from './components/BranchesView.svelte';
+  import PeopleView from './components/PeopleView.svelte';
+  import ActivityView from './components/ActivityView.svelte';
+  import MemoryView from './components/MemoryView.svelte';
   import GraphView from './components/GraphView.svelte';
   import Panel from './components/Panel.svelte';
   import Toasts from './components/Toasts.svelte';
@@ -47,7 +52,7 @@
       const next = list[Math.max(0, Math.min(list.length - 1, i + (e.key === 'j' ? 1 : -1)))];
       if (next) void selectCommit(next.commit.sha, true);
     } else if ('12345'.includes(e.key) && e.key.length === 1) {
-      app.tab = (['commits', 'issues', 'review', 'diff', 'code'] as const)[Number(e.key) - 1];
+      app.tab = (['issues', 'review', 'diff', 'code', 'ask'] as const)[Number(e.key) - 1];
       app.showPanel = true;
     }
   }
@@ -68,6 +73,18 @@
     <IncidentsView />
   {:else if app.mode === 'release'}
     <ReleaseView />
+  {:else if app.mode === 'repo'}
+    <RepoView />
+  {:else if app.mode === 'branches'}
+    <BranchesView />
+  {:else if app.mode === 'mine'}
+    <PeopleView mode="mine" />
+  {:else if app.mode === 'team'}
+    <PeopleView mode="team" />
+  {:else if app.mode === 'activity'}
+    <ActivityView />
+  {:else if app.mode === 'memory'}
+    <MemoryView />
   {:else}
   <main
     class="layout"
@@ -75,7 +92,7 @@
     class:no-side={!app.showCommits}
     class:no-panel={!app.showPanel}
   >
-    {#if app.showCommits}<GraphPanel />{/if}
+    {#if app.showCommits}<LeftDock />{/if}
     <GraphView />
     {#if app.showPanel}
       <!-- svelte-ignore a11y_no_static_element_interactions -->

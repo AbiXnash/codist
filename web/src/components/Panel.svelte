@@ -1,7 +1,6 @@
 <script lang="ts">
   import { app } from '../lib/store.svelte';
   import type { Tab } from '../lib/types';
-  import CommitsTab from './CommitsTab.svelte';
   import IssuesHub from './IssuesHub.svelte';
   import ReviewTab from './ReviewTab.svelte';
   import CodeTab from './CodeTab.svelte';
@@ -11,34 +10,41 @@
 
   const open = $derived((app.issueList?.issues ?? []).filter((i) => i.state === 'open' && (!i.group || i.groupRoot)).length);
   const hot = $derived((app.issueList?.openBySeverity.critical ?? 0) + (app.issueList?.openBySeverity.high ?? 0) > 0);
+  // Three places: what is wrong, the commit you picked, the code. Ask stands apart.
   const tabs = $derived<{ id: Tab; label: string; count?: number }[]>([
-    { id: 'commits', label: 'Commits', count: app.shownCommits.length },
     { id: 'issues', label: 'Issues', count: open },
-    { id: 'review', label: 'Review', count: app.issues.length },
-    { id: 'diff', label: 'Diff', count: app.detail?.analysis.files.length },
+    { id: 'review', label: 'Commit', count: app.issues.length },
     { id: 'code', label: 'Code' },
-    ...(app.selectedNode ? [{ id: 'type' as Tab, label: 'Type' }] : []),
-    { id: 'ask', label: 'Ask' },
+    ...(app.selectedNode ? [{ id: 'type' as Tab, label: 'Class' }] : []),
   ]);
+  const onCommit = $derived(app.tab === 'review' || app.tab === 'diff');
 </script>
 
 <section class="panel">
   <div class="tabs" role="tablist">
     {#each tabs as t, i (t.id)}
-      <button role="tab" aria-selected={app.tab === t.id} class:active={app.tab === t.id} onclick={() => (app.tab = t.id)} title="{t.label}  {i + 1}">
+      <button role="tab" aria-selected={app.tab === t.id} class:active={app.tab === t.id || (t.id === 'review' && onCommit)} onclick={() => (app.tab = t.id)} title="{t.label}  {i + 1}">
         {t.label}
         {#if t.count}<span class="count" class:hot={t.id === 'issues' && hot}>{t.count}</span>{/if}
       </button>
     {/each}
     <span class="spacer"></span>
+    <button class="ask" class:on={app.tab === 'ask'} title="Ask about the code, or describe a change" onclick={() => (app.tab = app.tab === 'ask' ? 'issues' : 'ask')}>Ask AI</button>
     <button class="icon-btn" title="Hide panel  ]" aria-label="Hide panel" onclick={() => (app.showPanel = false)}>
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m4 4 8 8M12 4l-8 8"/></svg>
     </button>
   </div>
 
+  {#if onCommit}
+    <div class="sub">
+      <div class="seg">
+        <button class:on={app.tab === 'review'} onclick={() => (app.tab = 'review')}>Review{#if app.issues.length} · {app.issues.length}{/if}</button>
+        <button class:on={app.tab === 'diff'} onclick={() => (app.tab = 'diff')}>Changes{#if app.detail?.analysis.files.length} · {app.detail.analysis.files.length}{/if}</button>
+      </div>
+    </div>
+  {/if}
   <div class="body">
-    {#if app.tab === 'commits'}<CommitsTab />
-    {:else if app.tab === 'issues'}<IssuesHub />
+    {#if app.tab === 'issues'}<IssuesHub />
     {:else if app.tab === 'review'}<ReviewTab />
     {:else if app.tab === 'code'}<CodeTab />
     {:else if app.tab === 'diff'}<DiffTab />
@@ -68,6 +74,13 @@
   .count { min-width: 18px; padding: 0 5px; border-radius: 9px; font-size: 11px; line-height: 17px; text-align: center; background: var(--surface-3); color: var(--text-2); }
   .count.hot { background: color-mix(in srgb, var(--sev-critical) 18%, transparent); color: var(--sev-critical); }
   .spacer { flex: 1; }
+  .tabs > button.ask { height: 26px; margin-right: 4px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--r); color: var(--text-2); font-size: 12px; }
+  .tabs > button.ask.on { color: var(--accent-text); border-color: var(--accent); background: var(--accent-soft); }
+  .tabs > button.ask.on::after { display: none; }
+  .sub { padding: 7px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .seg { display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
+  .seg button { height: 24px; padding: 0 12px; border: 0; border-radius: var(--r); background: none; font-size: 12px; color: var(--text-3); }
+  .seg button.on { color: var(--text); background: var(--surface-3); box-shadow: 0 0 0 1px var(--border-strong); }
   .body { flex: 1; min-height: 0; overflow: auto; }
   @media (max-width: 1000px) { .panel { min-height: 70vh; border-top: 1px solid var(--border); } }
 </style>
