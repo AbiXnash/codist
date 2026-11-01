@@ -53,6 +53,14 @@ func (c *checker) quality(test bool) {
 	for _, n := range findAll(f.root, "block") {
 		c.unreachable(n)
 	}
+	for _, n := range findAll(f.root, "binary_expression") {
+		c.referenceEquality(n)
+	}
+	if !test {
+		for _, n := range findAll(f.root, "variable_declarator") {
+			c.hardcodedSecret(n)
+		}
+	}
 	for _, m := range findAll(f.root, "method_declaration") {
 		c.unusedLocals(m)
 		if !test {
@@ -598,4 +606,93 @@ func (c *checker) betterLog(call *sitter.Node) {
 	if (level == "error" || level == "warn") && len(a) == 1 && a[0].Type() == "string_literal" && len(strings.Fields(f.text(a[0]))) <= 2 {
 		c.add(call, call, "low", "logging", "Better log: say what failed and for what", f.text(a[0])+" will not tell anyone which request or record failed at 3 am.", `log.`+level+`("charging order {} failed", orderId);`)
 	}
+}
+
+var (
+	secretName  = regexp.MustCompile(`(?i)(passw(or)?d|secret|api_?key|access_?key|private_?key|auth_?token|credential)`)
+	notAValue   = regexp.MustCompile(`(?i)(header|param|prop(erty)?|field|name|prefix|path|url|env|label)$`)
+	secretValue = regexp.MustCompile(`^(sk_(live|test)_|pk_live_|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20}|xox[bpars]-|-----BEGIN )`)
+	boxedType   = map[string]bool{"String": true, "Long": true, "Integer": true, "Short": true, "Byte": true, "Double": true, "Float": true, "Boolean": true, "Character": true, "BigDecimal": true, "BigInteger": true}
+)
+
+// hardcodedSecret reports a credential written into the code.
+func (c *checker) hardcodedSecret(n *sitter.Node) {
+	value := n.ChildByFieldName("value")
+	if value == nil || value.Type() != "string_literal" {
+		return
+	}
+	f := c.f
+	name := f.text(n.ChildByFieldName("name"))
+	literal := strings.Trim(f.text(value), `"`)
+	known := secretValue.MatchString(literal)
+	named := secretName.MatchString(name) && !notAValue.MatchString(name) && len(literal) >= 6 &&
+		!strings.ContainsAny(literal, " ${}") // a sentence or a placeholder is not a credential
+	if known || named {
+		c.add(n, n, "critical", "security", "Hard-coded secret: "+name,
+			name+" holds a credential in the source code. Anyone who can read the repository or the jar can use it, and it stays in git history even after it is removed.",
+			"Rotate it, then read it from the environment or a secret store.")
+	}
+}
+
+// referenceEquality reports == and != on objects, which compares identity and not value. It works
+// for small boxed numbers because of the cache, so it passes tests and fails in production.
+func (c *checker) referenceEquality(n *sitter.Node) {
+	f := c.f
+	op := f.text(n.ChildByFieldName("operator"))
+	if op != "==" && op != "!=" {
+		return
+	}
+	left, right := n.ChildByFieldName("left"), n.ChildByFieldName("right")
+	if left == nil || right == nil || left.Type() == "null_literal" || right.Type() == "null_literal" {
+		return
+	}
+	negate := ""
+	if op == "!=" {
+		negate = "!"
+	}
+	if left.Type() == "string_literal" || right.Type() == "string_literal" {
+		c.add(n, n, "high", "bug", "String compared with "+op,
+			f.text(n)+" compares references, not text, so equal strings from a database or a request do not match.",
+			"Use "+negate+"\"text\".equals(value), which is also safe when value is null.")
+		return
+	}
+	typeOf := func(side *sitter.Node) string {
+		if side.Type() != "method_invocation" {
+			return ""
+		}
+		return c.ctx.Returns[f.text(side.ChildByFieldName("name"))]
+	}
+	l, r := typeOf(left), typeOf(right)
+	if boxedType[l] && l == r {
+		c.add(n, n, "high", "bug", l+" compared with "+op,
+			f.text(n)+" compares two "+l+" objects by reference. Small numbers can appear to work because of the cache, then larger values stop matching.",
+			"Use Objects.equals(a, b).")
+	}
+}
+
+// DataOnly says a Java file holds no behaviour: fields, getters, setters and assignments. The rules
+// see everything that can go wrong in such a file, so it is not worth a model call.
+func DataOnly(src []byte) bool {
+	f, err := parse(src)
+	if err != nil || f.root.HasError() {
+		return false
+	}
+	if strings.Contains(string(src), "@Query") {
+		return false // SQL in an annotation is real logic
+	}
+	for _, typ := range []string{"method_declaration", "constructor_declaration", "compact_constructor_declaration"} {
+		for _, m := range findAll(f.root, typ) {
+			body := m.ChildByFieldName("body")
+			if body == nil {
+				continue // an interface method: no behaviour
+			}
+			for _, typ := range []string{"method_invocation", "object_creation_expression", "if_statement", "for_statement", "enhanced_for_statement",
+				"while_statement", "try_statement", "switch_expression", "throw_statement", "ternary_expression", "lambda_expression"} {
+				if len(findAll(body, typ)) > 0 {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }

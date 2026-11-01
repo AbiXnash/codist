@@ -518,8 +518,8 @@ func fixKey(sha, path string, line int, title string) string {
 // opens instantly. Mechanical fixes need no preparation. It runs one at a time and waits while
 // reviews are running, so it never slows a review down.
 func (x *Fixer) Prefetch(sha string) {
-	if !x.Enabled() || x.Busy == nil {
-		return
+	if !x.Enabled() || x.Busy == nil || x.repo.Viewing() {
+		return // on a branch that is not checked out, a fix could not be applied anyway
 	}
 	rv, ok := x.store.Get(sha)
 	if !ok || rv.Status != StatusDone {
@@ -529,6 +529,7 @@ func (x *Fixer) Prefetch(sha string) {
 		rv = x.Ignores.Decorate(rv)
 	}
 	rv = AssignGroups(rv)
+	prepared := 0
 	for _, fr := range rv.Files {
 		if !strings.HasSuffix(fr.Path, ".java") {
 			continue
@@ -537,6 +538,11 @@ func (x *Fixer) Prefetch(sha string) {
 			if f.Ignored || (f.Group != "" && !f.GroupRoot) || Instant(f) {
 				continue
 			}
+			// Each one costs a model call that nobody asked for, so keep them for what people will open first.
+			if (f.Severity != "critical" && f.Severity != "high") || prepared >= maxPrefetch {
+				continue
+			}
+			prepared++
 			select {
 			case x.prefetchQ <- fixKey(rv.SHA, fr.Path, f.Line, f.Title):
 			default: // queue full: skip, Fix will generate on demand
@@ -544,6 +550,9 @@ func (x *Fixer) Prefetch(sha string) {
 		}
 	}
 }
+
+// maxPrefetch is how many fixes one review prepares in the background.
+const maxPrefetch = 3
 
 func (x *Fixer) prefetchWorker() {
 	for key := range x.prefetchQ {

@@ -1,0 +1,8 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:library
+  jpa:
+    hibernate:
+      ddl-auto: update
+server:
+  port: 8090

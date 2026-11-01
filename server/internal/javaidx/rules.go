@@ -34,6 +34,7 @@ type Context struct {
 	Constants map[string]Constant // keyed by "Type.FIELD" (simple type name)
 	Domains   map[string]bool     // business areas: package segments such as customer, product, order
 	Beans     map[string]string   // simple type name -> stereotype, for project types
+	Returns   map[string]string   // method name -> return type, when every method of that name agrees
 	Unused    map[string]bool     // classes nothing else references and the framework does not call
 	// Feign clients' routes that the service they name does not serve, by simple class name.
 	FeignUnserved map[string][]string
@@ -41,7 +42,8 @@ type Context struct {
 
 // ProjectContext derives rule context from the graph.
 func ProjectContext(g *Graph) Context {
-	ctx := Context{Constants: map[string]Constant{}, Domains: map[string]bool{}, Beans: map[string]string{}}
+	ctx := Context{Constants: map[string]Constant{}, Domains: map[string]bool{}, Beans: map[string]string{}, Returns: map[string]string{}}
+	conflicting := map[string]bool{}
 	entities := map[string]bool{}
 	pkgs := map[string]bool{}
 	for _, n := range g.Nodes {
@@ -53,6 +55,16 @@ func ProjectContext(g *Graph) Context {
 		for _, m := range n.Members {
 			if m.Value != "" {
 				ctx.Constants[n.Name+"."+m.Name] = Constant{Owner: n.ID, Value: m.Value}
+			}
+			if m.Kind == "method" {
+				if ret := returnType(m.Signature, m.Name); ret != "" && !conflicting[m.Name] {
+					if had, ok := ctx.Returns[m.Name]; ok && had != ret {
+						conflicting[m.Name] = true
+						delete(ctx.Returns, m.Name)
+					} else {
+						ctx.Returns[m.Name] = ret
+					}
+				}
 			}
 		}
 	}
@@ -982,4 +994,17 @@ func (c *checker) logHelpers(t *sitter.Node) {
 		c.add(m, m, "low", "design", fmt.Sprintf("%s() is a log-only helper", name), detail,
 			"Remove "+name+"() and its calls; if the event matters, log it where it happens with context:\nlog.info(\"Customer {} created\", customer.getId());")
 	}
+}
+
+// returnType reads the type before the method name in a signature such as "public Long getId()".
+func returnType(signature, name string) string {
+	before, _, ok := strings.Cut(signature, name+"(")
+	if !ok {
+		return ""
+	}
+	fields := strings.Fields(before)
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[len(fields)-1]
 }

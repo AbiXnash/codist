@@ -514,6 +514,10 @@ func (s *Service) modelPass(a Analysis, f gitx.FileChange, fr FileReview, in fil
 		fr.Skipped = "only imports, comments or formatting changed"
 		return fr
 	}
+	if strings.HasSuffix(f.NewPath, ".java") && javaidx.DataOnly([]byte(in.src)) {
+		fr.Skipped = "only data: fields, getters and setters, which the rules cover"
+		return fr
+	}
 	known := kb.Retrieve(f.NewPath, in.src, in.added, 6) // RAG: the bug patterns most like this code
 	prompt := s.fileContext(a, f, in, fr.Findings, known, build)
 
