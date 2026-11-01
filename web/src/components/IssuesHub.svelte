@@ -20,6 +20,14 @@
     return m;
   });
   const stateCount = (s: Issue['state']) => app.groupsIn(s).length;
+  const tally = (f: (i: Issue) => string | undefined) => {
+    const c = new Map<string, number>();
+    for (const g of app.scoped) { const v = f(g[0]); if (v) c.set(v, (c.get(v) ?? 0) + 1); }
+    return [...c].sort((a, b) => b[1] - a[1]);
+  };
+  const kinds = $derived(tally((i) => i.kind));
+  const urgencies = $derived(tally((i) => i.urgency));
+  const changes = $derived(tally((i) => i.change));
   const sections = $derived(
     SEVERITIES.map((s) => ({ level: s, groups: app.hub.filter((g) => g[0].severity === s) })).filter((x) => x.groups.length),
   );
@@ -75,7 +83,9 @@
       </button>
       <div class="dhead">
         <span class="sev {i.severity}">{i.severity}</span>
-        <span class="cat">{i.category}</span>
+        {#if i.kind}<span class="tg k">{i.kind}</span>{/if}
+        {#if i.urgency}<span class="tg u {i.urgency === 'Hotfix' ? 'hot' : ''}">{i.urgency}</span>{/if}
+        {#if i.change}<span class="tg">{i.change} change</span>{/if}
         {#if i.state === 'resolved'}<span class="tag good">✓ fixed</span>{:else if i.state === 'ignored'}<span class="tag">ignored</span>{/if}
         {#if i.reopenedIn}<span class="tag bad" title="It was fixed, then the code came back">reopened</span>{/if}
         {#if i.ref && INSTANT_REFS.has(i.ref) && i.state === 'open'}<span class="tag accent" title="Mechanical fix: no model needed">⚡ instant fix</span>{/if}
@@ -174,6 +184,15 @@
         {/each}
       </div>
 
+      <div class="triage">
+        {#each [['kind', 'Type', kinds], ['urgency', 'Urgency', urgencies], ['change', 'Change', changes]] as [key, title, opts]}
+          <select aria-label={title as string} value={app[key as 'kind'] ?? ''} class:on={!!app[key as 'kind']} onchange={(e) => (app[key as 'kind'] = e.currentTarget.value || null)}>
+            <option value="">{title}: all</option>
+            {#each opts as [v, n]}<option value={v}>{v} ({n})</option>{/each}
+          </select>
+        {/each}
+      </div>
+
       <div class="row2">
         <div class="seg states">
           {#each states as s}
@@ -199,6 +218,11 @@
                 <span class="bar {i.severity}"></span>
                 <span class="body">
                   <span class="title">{i.title}</span>
+                  <span class="tags">
+                    {#if i.kind}<span class="tg k">{i.kind}</span>{/if}
+                    {#if i.urgency}<span class="tg u {i.urgency === 'Hotfix' ? 'hot' : ''}">{i.urgency}</span>{/if}
+                    {#if i.change === 'Major'}<span class="tg">Major</span>{/if}
+                  </span>
                   <span class="sub">
                     <span class="mono loc">{g.length > 1 ? `${g.length} places` : `${name(i.path)}${i.line ? ':' + i.line : ''}`}</span>
                     {#if i.state === 'resolved'}
@@ -260,6 +284,14 @@
   .level.info { --c: var(--sev-info); }
   :global(:root[data-theme='dark']) .level.low { --c: #94a3b8; }
 
+  .triage { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .triage select { min-width: 0; height: 26px; padding: 0 5px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface-2); color: var(--text-2); font: inherit; font-size: 11.5px; }
+  .triage select.on { border-color: var(--accent); color: var(--text); }
+  .tags { display: flex; flex-wrap: wrap; gap: 3px; }
+  .tg { font: 600 10px var(--font); padding: 0 6px; line-height: 16px; border-radius: 8px; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
+  .tg.k { color: var(--accent-text); background: var(--accent-soft); }
+  .tg.u { color: var(--text); }
+  .tg.u.hot { color: #fff; background: var(--sev-critical); }
   .row2 { display: flex; gap: 8px; flex-wrap: wrap; }
   .states { flex: 0 0 auto; }
   .q { flex: 1; min-width: 140px; height: 30px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); color: var(--text); font: inherit; font-size: 12.5px; }

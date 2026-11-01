@@ -42,7 +42,10 @@ export interface Status {
   models: { review: string; summary: string; fix: string; ask: string };
 }
 
+export interface MethodCost { complexity: number; loopDepth: number; dbCalls: number; remoteCalls: number; loopIo: number; params: number; lines: number; estimate: string }
+
 export interface Member {
+  cost?: MethodCost;
   name: string;
   kind: 'method' | 'constructor' | 'field';
   signature: string;
@@ -55,6 +58,7 @@ export interface GraphNode {
   id: string;
   fqn: string;
   module?: string;
+  feignTarget?: string;
   name: string;
   pkg: string;
   kind: string;
@@ -70,7 +74,8 @@ export interface GraphNode {
 export interface GraphEdge {
   source: string;
   target: string;
-  kind: 'extends' | 'implements' | 'injects' | 'uses';
+  kind: 'extends' | 'implements' | 'injects' | 'uses' | 'feign';
+  via?: string[];
 }
 
 export interface Graph {
@@ -154,6 +159,9 @@ export interface Finding {
 }
 
 export interface Issue {
+  kind?: string;
+  urgency?: string;
+  change?: string;
   id: string;
   state: 'open' | 'resolved' | 'ignored';
   severity: Severity;
@@ -239,7 +247,7 @@ export interface OpenFile {
 
 export type FindingWithPath = Finding & { path: string };
 
-export type Tab = 'issues' | 'review' | 'code' | 'diff' | 'type' | 'ask';
+export type Tab = 'commits' | 'issues' | 'review' | 'code' | 'diff' | 'type' | 'ask';
 
 export type IgnoreScope = 'commit' | 'code' | 'rule';
 
@@ -250,7 +258,7 @@ export interface AskMessage {
   error?: boolean;
 }
 
-export type Mode = 'review' | 'incidents' | 'release';
+export type Mode = 'review' | 'repo' | 'mine' | 'team' | 'release' | 'incidents' | 'activity' | 'memory';
 
 export interface Frame { class: string; method: string; file: string; line: number }
 

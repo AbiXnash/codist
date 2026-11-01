@@ -1,4 +1,5 @@
 import { api, cancelAI } from './api';
+import { cycles, layerViolations, metrics } from './graphAnalysis';
 import type { FixRef, Working, AskMessage, CommitItem, Detail, FindingWithPath, FixProposal, Graph, IgnoreScope, Incident, Issue, IssueList, IncidentRow, Mode, OpenFile, Severity, Status, Tab } from './types';
 
 export interface Toast {
@@ -84,7 +85,7 @@ class AppState {
 
   selectedSha = $state<string | null>(null);
   selectedNode = $state<string | null>(null);
-  tab = $state<Tab>('issues');
+  tab = $state<Tab>('commits');
   search = $state('');
   live = $state(false);
   toasts = $state<Toast[]>([]);
@@ -123,6 +124,9 @@ class AppState {
   );
   issueState = $state<'open' | 'resolved' | 'ignored'>('open');
   level = $state<Severity | null>(null);
+  kind = $state<string | null>(null);
+  urgency = $state<string | null>(null);
+  change = $state<string | null>(null);
   hubQuery = $state('');
   /** The issue open in the hub's detail view (id of its root). */
   picked = $state<string | null>(null);
@@ -131,17 +135,20 @@ class AppState {
 
   follow = $state(true);
   focusChanges = $state(true);
-  groupPackages = $state(false);
+  groupBy = $state<'none' | 'package' | 'service'>(prefStr('groupBy', ['none', 'package', 'service'] as const, 'none'));
   showTests = $state(false);
 
   // Graph controls. What is hidden and how it is laid out is remembered per browser.
   hiddenRoles = $state<string[]>([]);
   hiddenPkgs = $state<string[]>([]);
+  hiddenModules = $state<string[]>([]);
+  /** Classes whose methods and constants are drawn on the graph. */
+  expanded = $state<string[]>([]);
   hiddenNodes = $state<string[]>([]);
   hiddenEdges = $state<string[]>([]);
   graphQuery = $state('');
   graphQueryMode = $state<'highlight' | 'only'>('highlight');
-  layoutMode = $state<'natural' | 'layers' | 'hubs' | 'grid'>(prefStr('layoutMode', ['natural', 'layers', 'hubs', 'grid'] as const, 'natural'));
+  layoutMode = $state<'natural' | 'tree' | 'layers' | 'services' | 'hubs' | 'grid'>(prefStr('layoutMode', ['natural', 'tree', 'layers', 'services', 'hubs', 'grid'] as const, 'natural'));
   sizeBy = $state<'links' | 'lines' | 'issues'>(prefStr('sizeBy', ['links', 'lines', 'issues'] as const, 'links'));
   showLabels = $state(pref('labels', true));
   /** Analysis drawn over the graph. */
@@ -149,7 +156,6 @@ class AppState {
   overlayNode = $state<string | null>(null); // blast radius of this type
   pathFrom = $state<string | null>(null);
   pathTo = $state<string | null>(null);
-  showGraphPanel = $state(pref('graphPanel', false));
   showGuide = $state(false);
 
   // Layout: which areas are visible. Persisted per browser.
@@ -183,7 +189,28 @@ class AppState {
   };
   scoped: Issue[][] = $derived(this.groupsIn(this.issueState));
   /** What the hub lists and the graph highlights. */
-  hub: Issue[][] = $derived(this.level ? this.scoped.filter((g) => g[0].severity === this.level) : this.scoped);
+  hub: Issue[][] = $derived(this.scoped.filter((g) => (!this.level || g[0].severity === this.level) && (!this.kind || g[0].kind === this.kind) &&
+    (!this.urgency || g[0].urgency === this.urgency) && (!this.change || g[0].change === this.change)));
+
+  /** The types and links that pass the graph filters. */
+  graphView = $derived.by(() => {
+    const g = this.graph;
+    if (!g) return { nodes: [] as Graph['nodes'], edges: [] as Graph['edges'] };
+    const q = this.graphQuery.trim().toLowerCase();
+    const roles = new Set(this.hiddenRoles);
+    const pkgs = new Set(this.hiddenPkgs);
+    const mods = new Set(this.hiddenModules);
+    const hidden = new Set(this.hiddenNodes);
+    const nodes = g.nodes.filter((n) =>
+      (this.showTests || !isTestNode(n)) && !roles.has(n.stereotype) && !pkgs.has(n.pkg) && !mods.has(n.module ?? '') && !hidden.has(n.id) &&
+      (this.graphQueryMode !== 'only' || !q || nodeMatches(n, q)));
+    const ids = new Set(nodes.map((n) => n.id));
+    const kinds = new Set(this.hiddenEdges);
+    return { nodes, edges: g.edges.filter((e) => ids.has(e.source) && ids.has(e.target) && !kinds.has(e.kind)) };
+  });
+  graphMetrics = $derived(this.graph ? metrics(this.graph) : new Map());
+  graphCycles = $derived(cycles(this.graphView.nodes.map((n) => n.id), this.graphView.edges.filter((e) => e.kind === 'uses' || e.kind === 'injects')));
+  graphViolations = $derived(this.graph ? layerViolations({ ...this.graph, nodes: this.graphView.nodes, edges: this.graphView.edges }) : []);
   /** The picked issue with the other places of the same root cause, root first. */
   pickedIssue: Issue[] | null = $derived.by(() => {
     const all = this.picked?.startsWith('working:') ? this.workingIssues : this.issueList?.issues ?? [];
@@ -206,6 +233,15 @@ class AppState {
   carried: FindingWithPath[][] = $derived(
     groupIssues(this.findings.filter((f) => f.firstSeen && f.firstSeen !== this.selectedSha)),
   );
+}
+
+export const isTestNode = (n: Graph['nodes'][number]) => n.stereotype === 'test' || n.file.includes('src/test/');
+
+/** A search matches class names, packages, modules, annotations, methods, fields and constants. */
+export function nodeMatches(n: Graph['nodes'][number], q: string) {
+  return n.name.toLowerCase().includes(q) || n.pkg.toLowerCase().includes(q) || (n.module ?? '').toLowerCase().includes(q) ||
+    n.annotations.some((a) => a.toLowerCase().includes(q)) || n.members.some((m) => m.name.toLowerCase().includes(q)) ||
+    n.endpoints.some((e) => e.toLowerCase().includes(q));
 }
 
 const SEV_ORDER = ['critical', 'high', 'medium', 'low', 'info'];
@@ -281,6 +317,7 @@ export function showWorking() {
   app.issueState = 'open';
   app.picked = null;
   app.tab = 'issues';
+  app.mode = 'review';
   app.showPanel = true;
 }
 
@@ -289,7 +326,6 @@ export async function selectCommit(sha: string, focus = false) {
   if (focus) {
     app.scope = 'commit';
     app.picked = null;
-    if (app.tab !== 'review' && app.tab !== 'diff') app.tab = 'issues';
   }
   await refreshDetail();
 }
@@ -575,6 +611,7 @@ export async function boot() {
   listScope = app.status?.repo ?? '';
   app.hiddenRoles = prefList('hiddenRoles');
   app.hiddenPkgs = prefList('hiddenPkgs');
+  app.hiddenModules = prefList('hiddenModules');
   app.hiddenNodes = prefList('hiddenNodes');
   app.hiddenEdges = prefList('hiddenEdges');
   await Promise.all([loadGraph(), loadCommits(), loadIssues(), loadIncidents(), loadWorking()]);

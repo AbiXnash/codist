@@ -36,7 +36,7 @@ export const api = {
   markFixed: (id: string) => fetch(`/api/issues/${id}/resolve`, { method: 'POST' }),
   reopenIssue: (id: string) => fetch(`/api/issues/${id}/resolve`, { method: 'DELETE' }),
   graph: () => request<Graph>('/graph'),
-  commits: (limit = 80) => request<CommitItem[]>(`/commits?limit=${limit}`),
+  commits: (limit = 300) => request<CommitItem[]>(`/commits?limit=${limit}`),
   commit: (sha: string) => request<Detail>(`/commits/${sha}`),
   working: () => request<Working>('/working'),
   issues: (state: string) => request<IssueList>(`/issues?state=${state}`),

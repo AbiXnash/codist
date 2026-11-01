@@ -3,7 +3,7 @@
   import { app, boot, savePref, selectCommit } from './lib/store.svelte';
   import { preload } from './lib/highlight';
   import TopBar from './components/TopBar.svelte';
-  import HistoryRail from './components/HistoryRail.svelte';
+  import GraphPanel from './components/GraphPanel.svelte';
   import GraphView from './components/GraphView.svelte';
   import Panel from './components/Panel.svelte';
   import Toasts from './components/Toasts.svelte';
@@ -23,7 +23,6 @@
     savePref('commits', app.showCommits);
     savePref('panel', app.showPanel);
     savePref('legend', app.showLegend);
-    savePref('graphPanel', app.showGraphPanel);
     requestAnimationFrame(() => window.dispatchEvent(new Event('codist:resize')));
   });
 
@@ -48,7 +47,7 @@
       const next = list[Math.max(0, Math.min(list.length - 1, i + (e.key === 'j' ? 1 : -1)))];
       if (next) void selectCommit(next.commit.sha, true);
     } else if ('12345'.includes(e.key) && e.key.length === 1) {
-      app.tab = (['issues', 'review', 'diff', 'code', 'ask'] as const)[Number(e.key) - 1];
+      app.tab = (['commits', 'issues', 'review', 'diff', 'code'] as const)[Number(e.key) - 1];
       app.showPanel = true;
     }
   }
@@ -76,7 +75,7 @@
     class:no-side={!app.showCommits}
     class:no-panel={!app.showPanel}
   >
-    {#if app.showCommits}<HistoryRail />{/if}
+    {#if app.showCommits}<GraphPanel />{/if}
     <GraphView />
     {#if app.showPanel}
       <!-- svelte-ignore a11y_no_static_element_interactions -->

@@ -77,7 +77,7 @@
   --r-lg: 9px;
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --panel-w: min(460px, 40vw);
-  --side-w: 296px;
+  --side-w: 300px;
 }
 
 * { box-sizing: border-box; }

@@ -9,6 +9,7 @@ export const STEREOTYPE: Record<string, { label: string; glyph: string; shape: s
   dto: { label: 'DTO', glyph: 'D', shape: 'round-tag' },
   config: { label: 'Config', glyph: 'K', shape: 'hexagon' },
   component: { label: 'Component', glyph: 'B', shape: 'octagon' },
+  client: { label: 'Feign client', glyph: 'F', shape: 'diamond' },
   advice: { label: 'Advice', glyph: 'A', shape: 'round-triangle' },
   exception: { label: 'Exception', glyph: '!', shape: 'triangle' },
   other: { label: 'Other', glyph: '·', shape: 'ellipse' },

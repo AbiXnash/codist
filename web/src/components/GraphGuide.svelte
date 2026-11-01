@@ -13,6 +13,7 @@
     hexagon: '<path d="M7 4h10l4 8-4 8H7l-4-8z"/>',
     octagon: '<path d="M8 3h8l5 5v8l-5 5H8l-5-5V8z"/>',
     'round-triangle': '<path d="M12 4l9 15H3z"/>',
+    diamond: '<path d="M12 3l9 9-9 9-9-9z"/>',
     triangle: '<path d="M12 4l9 15H3z"/>',
   };
   const roles = Object.entries(STEREOTYPE);
@@ -24,6 +25,7 @@
     dto: 'Records and request/response classes that carry data',
     config: '@Configuration and @ConfigurationProperties',
     component: 'Other Spring beans (@Component)',
+    client: '@FeignClient: calls another service over HTTP',
     advice: '@ControllerAdvice: error handling for controllers',
     exception: 'Exception classes',
     other: 'Plain classes and interfaces',
@@ -48,7 +50,7 @@
           </div>
         {/each}
         <div class="r"><svg width="24" height="24" viewBox="0 0 24 24" fill="var(--node-fill)" stroke="var(--node-border)" stroke-width="1.6" stroke-dasharray="3 2"><circle cx="12" cy="12" r="8"/></svg><b>Dashed border</b><span class="faint">interface or abstract class</span></div>
-        <div class="r"><svg width="24" height="24" viewBox="0 0 24 24" fill="var(--node-fill)" stroke="var(--node-border)"><circle cx="8" cy="12" r="4"/><circle cx="17" cy="12" r="6.5"/></svg><b>Size</b><span class="faint">number of links by default; Controls → Size by switches to code size or open issues</span></div>
+        <div class="r"><svg width="24" height="24" viewBox="0 0 24 24" fill="var(--node-fill)" stroke="var(--node-border)"><circle cx="8" cy="12" r="4"/><circle cx="17" cy="12" r="6.5"/></svg><b>Size</b><span class="faint">number of links by default; Explorer → Size by switches to code size or open issues</span></div>
       </section>
 
       <section>
@@ -56,6 +58,8 @@
         <div class="r"><svg width="44" height="14"><line x1="2" y1="7" x2="34" y2="7" stroke="var(--text-2)" stroke-width="2.5"/><path d="M34 3l8 4-8 4z" fill="var(--text-2)"/></svg><b>Thick: injects</b><span class="faint">a field or constructor dependency Spring fills in</span></div>
         <div class="r"><svg width="44" height="14"><line x1="2" y1="7" x2="34" y2="7" stroke="var(--text-2)" stroke-width="1"/><path d="M34 4l7 3-7 3z" fill="var(--text-2)"/></svg><b>Thin: uses</b><span class="faint">calls it, takes or returns it, creates it</span></div>
         <div class="r"><svg width="44" height="14"><line x1="2" y1="7" x2="33" y2="7" stroke="var(--text-2)"/><path d="M33 2l9 5-9 5z" fill="none" stroke="var(--text-2)"/></svg><b>Hollow arrow: extends</b><span class="faint">dashed when it implements an interface</span></div>
+        <div class="r"><svg width="44" height="14"><line x1="2" y1="7" x2="34" y2="7" stroke="#06b6d4" stroke-width="3"/><path d="M34 2l8 5-8 5z" fill="#06b6d4"/></svg><b>Thick cyan: Feign call</b><span class="faint">a client calling a controller in another service; hover for the routes. A client with no such line calls a route nobody serves</span></div>
+        <div class="r"><svg width="44" height="14"><line x1="2" y1="7" x2="42" y2="7" stroke="var(--text-2)" stroke-dasharray="1 3"/></svg><b>Dotted: member</b><span class="faint">a method (circle, red when costly), field (square) or constant (green diamond) of an expanded class</span></div>
 
         <h3>Rings are state: what the selected commit or the issue list says</h3>
         <div class="r"><i class="ring" style:border-color={STATE_COLOR.changed}></i><b>Changed</b><span class="faint">modified in the selected commit (or in your uncommitted edits)</span></div>
@@ -70,7 +74,7 @@
       </section>
 
       <section>
-        <h3>Analysis overlays (Controls → Analysis)</h3>
+        <h3>Analysis overlays (Explorer → Analysis)</h3>
         <div class="r"><i class="ring" style:border-color="#e11d48"></i><b>Red: dependency cycle</b><span class="faint">classes that depend on each other in a loop; none can change or be tested alone</span></div>
         <div class="r"><svg width="44" height="14"><line x1="2" y1="7" x2="40" y2="7" stroke="#a855f7" stroke-width="2.5" stroke-dasharray="5 3"/></svg><b>Purple dashed: layer violation</b><span class="faint">a repository depending on a service, an entity on a repository, or a controller skipping the service</span></div>
         <div class="r"><i class="ring glow" style:border-color="#f97316"></i><b>Orange: blast radius</b><span class="faint">what depends on the chosen class; darker = closer. Re-test these after a change</span></div>
@@ -86,7 +90,8 @@
 
         <h3>Mouse and keys</h3>
         <dl>
-          <dt>click</dt><dd>open the class (details, code)</dd>
+          <dt>click</dt><dd>inspect it in the Explorer: methods, constants, costs, who uses it</dd>
+          <dt>double-click</dt><dd>draw its methods and constants on the graph</dd>
           <dt>right-click</dt><dd>blast radius, paths, show only neighbours or dependencies, hide</dd>
           <dt>drag</dt><dd>move a class; the rest settles around it</dd>
           <dt>/ or ⌘K</dt><dd>go to a class</dd>

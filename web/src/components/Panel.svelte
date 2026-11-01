@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app } from '../lib/store.svelte';
   import type { Tab } from '../lib/types';
+  import CommitsTab from './CommitsTab.svelte';
   import IssuesHub from './IssuesHub.svelte';
   import ReviewTab from './ReviewTab.svelte';
   import CodeTab from './CodeTab.svelte';
@@ -11,8 +12,9 @@
   const open = $derived((app.issueList?.issues ?? []).filter((i) => i.state === 'open' && (!i.group || i.groupRoot)).length);
   const hot = $derived((app.issueList?.openBySeverity.critical ?? 0) + (app.issueList?.openBySeverity.high ?? 0) > 0);
   const tabs = $derived<{ id: Tab; label: string; count?: number }[]>([
+    { id: 'commits', label: 'Commits', count: app.shownCommits.length },
     { id: 'issues', label: 'Issues', count: open },
-    { id: 'review', label: 'Commit', count: app.issues.length },
+    { id: 'review', label: 'Review', count: app.issues.length },
     { id: 'diff', label: 'Diff', count: app.detail?.analysis.files.length },
     { id: 'code', label: 'Code' },
     ...(app.selectedNode ? [{ id: 'type' as Tab, label: 'Type' }] : []),
@@ -35,7 +37,8 @@
   </div>
 
   <div class="body">
-    {#if app.tab === 'issues'}<IssuesHub />
+    {#if app.tab === 'commits'}<CommitsTab />
+    {:else if app.tab === 'issues'}<IssuesHub />
     {:else if app.tab === 'review'}<ReviewTab />
     {:else if app.tab === 'code'}<CodeTab />
     {:else if app.tab === 'diff'}<DiffTab />
