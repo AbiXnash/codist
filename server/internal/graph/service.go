@@ -53,6 +53,11 @@ func (s *Service) Reindex() {
 	s.hub.Publish("graph", map[string]any{"nodes": len(g.Nodes), "edges": len(g.Edges), "builtAt": g.BuiltAt})
 }
 
+// TypesIn parses one file and gives its types the IDs they have in the current graph.
+func (s *Service) TypesIn(src []byte, path string) []javaidx.Node {
+	return s.Graph().Qualify(javaidx.TypesIn(src, path))
+}
+
 // Dependents are the types that link to any of ids (one hop, reverse edges), excluding ids.
 func (s *Service) Dependents(ids map[string]bool) []string {
 	out := map[string]bool{}

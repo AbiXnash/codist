@@ -62,6 +62,7 @@ func Index(sources map[string][]byte, label string) Graph {
 	var decls []typeDecl
 	known := map[string]bool{}
 	bySimple := map[string][]string{}
+	declared := map[string][]typeDecl{}
 	for _, u := range units {
 		if u == nil {
 			errors++
@@ -72,10 +73,14 @@ func Index(sources map[string][]byte, label string) Graph {
 		}
 		for _, d := range u.types() {
 			decls = append(decls, d)
+			if !known[d.fqn] {
+				bySimple[d.name] = append(bySimple[d.name], d.fqn)
+			}
 			known[d.fqn] = true
-			bySimple[d.name] = append(bySimple[d.name], d.fqn)
+			declared[d.fqn] = append(declared[d.fqn], d)
 		}
 	}
+	ids := assignIDs(declared)
 
 	g := Graph{Nodes: []Node{}, Edges: []Edge{}, Source: label, BuiltAt: time.Now().UnixMilli(), ParseErrors: errors}
 	edges := map[string]Edge{}
@@ -92,27 +97,37 @@ func Index(sources map[string][]byte, label string) Graph {
 	for _, d := range decls {
 		u, f := d.unit, d.unit.f
 		res := resolver{u: u, known: known, bySimple: bySimple}
-		g.Nodes = append(g.Nodes, u.node(d))
+		self := ids[declKey(d)]
+		if self == "" { // a second declaration of the same name in one file: mid-edit code
+			continue
+		}
+		delete(ids, declKey(d))
+		node := u.node(d)
+		node.ID = self
+		g.Nodes = append(g.Nodes, node)
+		link := func(simple, kind string) {
+			add(self, pickDeclaration(res.resolve(simple), u, declared), kind)
+		}
 
 		for _, t := range typeList(d.node.ChildByFieldName("superclass")) {
-			add(d.fqn, res.resolve(f.baseType(t)), "extends")
+			link(f.baseType(t), "extends")
 		}
 		for _, t := range typeList(childOfType(d.node, "extends_interfaces")) {
-			add(d.fqn, res.resolve(f.baseType(t)), "extends")
+			link(f.baseType(t), "extends")
 		}
 		for _, t := range typeList(d.node.ChildByFieldName("interfaces")) {
-			add(d.fqn, res.resolve(f.baseType(t)), "implements")
+			link(f.baseType(t), "implements")
 		}
 		for _, name := range u.injected(d.node) {
-			add(d.fqn, res.resolve(name), "injects")
+			link(name, "injects")
 		}
 		walk(d.node, func(n *sitter.Node) bool {
 			switch n.Type() {
 			case "type_identifier":
-				add(d.fqn, res.resolve(f.text(n)), "uses")
+				link(f.text(n), "uses")
 			case "method_invocation", "field_access":
 				if obj := n.ChildByFieldName("object"); obj != nil && obj.Type() == "identifier" && isUpper(f.text(obj)) {
-					add(d.fqn, res.resolve(f.text(obj)), "uses") // static call or constant
+					link(f.text(obj), "uses") // static call or constant
 				}
 			}
 			return true
@@ -128,6 +143,124 @@ func Index(sources map[string][]byte, label string) Graph {
 		g.Edges = append(g.Edges, edges[k])
 	}
 	return g
+}
+
+func declKey(d typeDecl) string { return d.unit.path + "\x00" + d.fqn }
+
+// assignIDs gives every declaration its node ID, keyed by declKey.
+func assignIDs(declared map[string][]typeDecl) map[string]string {
+	ids := map[string]string{}
+	for _, ds := range declared {
+		for _, d := range ds {
+			ids[declKey(d)] = declID(d, ds)
+		}
+	}
+	return ids
+}
+
+// declID is one declaration's node ID, given all declarations of its name. A name declared once
+// keeps its plain FQN, so single-module projects see no change. Clashes get the module as a
+// prefix, or the file path when one module declares the name twice (say, in main and test).
+func declID(d typeDecl, all []typeDecl) string {
+	if len(all) == 1 {
+		return d.fqn
+	}
+	module := ModuleOf(d.unit.path)
+	inModule := 0
+	for _, o := range all {
+		if ModuleOf(o.unit.path) == module {
+			inModule++
+		}
+	}
+	if inModule > 1 {
+		return d.unit.path + ":" + d.fqn
+	}
+	if module == "" {
+		module = "(root)"
+	}
+	return module + ":" + d.fqn
+}
+
+// pickDeclaration returns the ID of the declaration of fqn that a reference from u means: the one
+// in u's own module and, failing a unique match, u's own source root. A clashing name with no
+// match is ambiguous, because module dependencies are not known here, so no link is drawn rather
+// than a wrong one.
+func pickDeclaration(fqn string, u *unit, declared map[string][]typeDecl) string {
+	all := declared[fqn]
+	if len(all) == 0 {
+		return ""
+	}
+	if len(all) == 1 {
+		return declID(all[0], all)
+	}
+	module, root := ModuleOf(u.path), sourceRoot(u.path)
+	var inModule, inRoot []typeDecl
+	for _, d := range all {
+		if ModuleOf(d.unit.path) == module {
+			inModule = append(inModule, d)
+			if sourceRoot(d.unit.path) == root {
+				inRoot = append(inRoot, d)
+			}
+		}
+	}
+	switch {
+	case len(inModule) == 1:
+		return declID(inModule[0], all)
+	case len(inRoot) == 1:
+		return declID(inRoot[0], all)
+	}
+	return ""
+}
+
+// ModuleOf returns the build module a source file belongs to: the directory holding its src/
+// folder ("rest" for rest/src/main/java/...). It is empty for a root-level project.
+func ModuleOf(path string) string {
+	if strings.HasPrefix(path, "src/") {
+		return ""
+	}
+	if i := strings.LastIndex(path, "/src/"); i >= 0 {
+		return path[:i]
+	}
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		return path[:i]
+	}
+	return ""
+}
+
+// sourceRoot is the part of the path before the package directories: src/main or src/test.
+func sourceRoot(path string) string {
+	i := strings.Index(path, "src/")
+	if i < 0 {
+		return ""
+	}
+	rest := path[i+len("src/"):]
+	if j := strings.Index(rest, "/"); j >= 0 {
+		return rest[:j]
+	}
+	return ""
+}
+
+// Qualify rewrites the IDs of types parsed from a single file (see TypesIn) to match this graph,
+// so a type from one module never picks up another module's links. A type the graph no longer
+// holds keeps its plain name, unless another module owns that name: then it gets a qualified ID
+// that links to nothing.
+func (g *Graph) Qualify(types []Node) []Node {
+	byFile := make(map[string]string, len(g.Nodes))
+	clash := map[string]bool{}
+	for _, n := range g.Nodes {
+		byFile[n.File+"\x00"+n.FQN] = n.ID
+		clash[n.FQN] = true
+	}
+	out := make([]Node, len(types))
+	for i, t := range types {
+		out[i] = t
+		if id, ok := byFile[t.File+"\x00"+t.FQN]; ok {
+			out[i].ID = id
+		} else if clash[t.FQN] {
+			out[i].ID = t.File + ":" + t.FQN
+		}
+	}
+	return out
 }
 
 // TypesIn returns the types in one file with their line ranges (no dependency resolution).
@@ -199,7 +332,7 @@ func (u *unit) types() []typeDecl {
 func (u *unit) node(d typeDecl) Node {
 	f := u.f
 	n := Node{
-		ID: d.fqn, Name: d.name, Pkg: u.pkg, File: u.path,
+		ID: d.fqn, FQN: d.fqn, Module: ModuleOf(u.path), Name: d.name, Pkg: u.pkg, File: u.path,
 		StartLine: startLine(d.node), EndLine: endLine(d.node),
 		Annotations: f.annotationNames(d.node), Members: []Member{}, Endpoints: []string{},
 	}

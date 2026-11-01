@@ -3,7 +3,6 @@ package review
 import (
 	"codist/internal/gitx"
 	"codist/internal/graph"
-	"codist/internal/javaidx"
 )
 
 type Analyzer struct {
@@ -34,7 +33,7 @@ func (a *Analyzer) Analyze(sha string) (Analysis, error) {
 				continue
 			}
 			if src, ok := a.Repo.ReadFile(c.Parents[0], f.OldPath); ok {
-				for _, t := range javaidx.TypesIn([]byte(src), f.OldPath) {
+				for _, t := range a.Graph.TypesIn([]byte(src), f.OldPath) {
 					changed = append(changed, ChangedType{ID: t.ID, File: f.OldPath, Status: "deleted", Members: []string{}})
 					ids[t.ID] = true
 				}
@@ -55,7 +54,7 @@ func (a *Analyzer) Analyze(sha string) (Analysis, error) {
 			}
 			return false
 		}
-		for _, t := range javaidx.TypesIn([]byte(src), f.NewPath) {
+		for _, t := range a.Graph.TypesIn([]byte(src), f.NewPath) {
 			if !added && !within(t.StartLine, t.EndLine) {
 				continue
 			}

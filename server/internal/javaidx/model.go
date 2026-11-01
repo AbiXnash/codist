@@ -2,9 +2,12 @@
 // and runs the deterministic Spring/Java rule checks.
 package javaidx
 
-// Node is a Java type in the project. ID is its fully qualified name.
+// Node is a Java type in the project. ID is its fully qualified name, prefixed with the module
+// ("rest:payroll.Employee") only when several modules declare that same name.
 type Node struct {
 	ID          string   `json:"id"`
+	FQN         string   `json:"fqn"`
+	Module      string   `json:"module,omitempty"` // Maven/Gradle module directory; empty at the repo root
 	Name        string   `json:"name"`
 	Pkg         string   `json:"pkg"`
 	Kind        string   `json:"kind"`       // class, abstract, interface, enum, record, annotation

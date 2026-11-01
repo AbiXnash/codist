@@ -96,7 +96,7 @@ func main() {
 	srv.Fixer.Known = func() map[string]bool {
 		out := map[string]bool{}
 		for _, n := range g.Graph().Nodes {
-			out[n.ID] = true
+			out[n.FQN] = true
 		}
 		return out
 	}

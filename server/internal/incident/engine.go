@@ -97,7 +97,7 @@ func (e *Engine) analyse(in *Incident) {
 func (e *Engine) isProjectClass() func(string) bool {
 	ids := map[string]bool{}
 	for _, n := range e.graph.Graph().Nodes {
-		ids[n.ID] = true
+		ids[n.FQN] = true
 	}
 	return func(c string) bool { return ids[OuterClass(c)] }
 }
@@ -117,9 +117,9 @@ func abbreviated(short, full string) bool {
 }
 
 func (e *Engine) locate(evs []ErrorEvent) []Location {
-	nodes := map[string]javaidxNode{}
+	nodes := map[string][]javaidxNode{} // by class name; several when modules share one
 	for _, n := range e.graph.Graph().Nodes {
-		nodes[n.ID] = javaidxNode{path: n.File, members: n.Members}
+		nodes[n.FQN] = append(nodes[n.FQN], javaidxNode{id: n.ID, path: n.File, members: n.Members})
 	}
 	head := e.repo.Head()
 	files := map[string][]string{}
@@ -138,10 +138,11 @@ func (e *Engine) locate(evs []ErrorEvent) []Location {
 	byKey := map[string]*Location{}
 	var order []string
 	add := func(class, method string, line int, origin bool, hits int) {
-		n, ok := nodes[OuterClass(class)]
+		candidates, ok := nodes[OuterClass(class)]
 		if !ok {
 			return
 		}
+		n := pickFrameNode(candidates, method, line)
 		lines := read(n.path)
 		if line <= 0 || line > len(lines) {
 			line = 0
@@ -160,7 +161,7 @@ func (e *Engine) locate(evs []ErrorEvent) []Location {
 			l.Origin = l.Origin || origin
 			return
 		}
-		loc := &Location{Path: n.path, Line: line, Class: OuterClass(class), Method: method, NodeID: OuterClass(class),
+		loc := &Location{Path: n.path, Line: line, Class: OuterClass(class), Method: method, NodeID: n.id,
 			Snippet: strings.TrimSpace(lines[line-1]), Origin: origin, Hits: hits}
 		for _, m := range n.members {
 			if m.StartLine <= line && line <= m.EndLine && m.Kind != "field" {
@@ -215,8 +216,32 @@ func (e *Engine) locate(evs []ErrorEvent) []Location {
 }
 
 type javaidxNode struct {
+	id      string
 	path    string
 	members []javaidx.Member
+}
+
+// pickFrameNode chooses which module's copy of a class a stack frame ran in. Frames carry only a
+// class name, so the best evidence is a method of that name spanning the reported line.
+func pickFrameNode(candidates []javaidxNode, method string, line int) javaidxNode {
+	byName := -1
+	for i, n := range candidates {
+		for _, m := range n.members {
+			if m.Name != method {
+				continue
+			}
+			if line >= m.StartLine && line <= m.EndLine {
+				return n
+			}
+			if byName < 0 {
+				byName = i
+			}
+		}
+	}
+	if byName >= 0 {
+		return candidates[byName]
+	}
+	return candidates[0]
 }
 
 var nullField = regexp.MustCompile(`because "(?:this\.)?(\w+)(?:\.\w+)*" is null|"this\.(\w+)"`)
@@ -280,7 +305,7 @@ func (e *Engine) suspects(locs []Location, fields map[string]bool) []Suspect {
 		}
 		// The declaration of a field the error names.
 		for _, n := range e.graph.Graph().Nodes {
-			if n.ID != l.Class {
+			if n.FQN != l.Class || n.File != l.Path {
 				continue
 			}
 			for _, m := range n.Members {

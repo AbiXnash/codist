@@ -86,7 +86,7 @@
             <button class:active={i === active} onmousedown={() => pick(n.id)}>
               <Glyph stereotype={n.stereotype} />
               <span class="rname">{n.name}</span>
-              <span class="rpkg mono">{n.pkg}</span>
+              <span class="rpkg mono">{n.module ? `${n.module} · ` : ''}{n.pkg}</span>
             </button>
           </li>
         {/each}

@@ -29,7 +29,7 @@
   <div class="type">
     <header>
       <div class="title"><Glyph stereotype={node.stereotype} /><h2>{node.name}</h2><span class="kind">{s.label}{node.kind !== 'class' ? ` · ${node.kind}` : ''}</span></div>
-      <button class="file mono" onclick={() => open(node.startLine)} title="Open {node.file}">{node.pkg} · {node.file.split('/').pop()}:{node.startLine}</button>
+      <button class="file mono" onclick={() => open(node.startLine)} title="Open {node.file}">{node.module ? `${node.module} · ` : ''}{node.pkg} · {node.file.split('/').pop()}:{node.startLine}</button>
     </header>
 
     {#if changed}

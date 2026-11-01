@@ -370,3 +370,102 @@ func TestUserHiddenBugs(t *testing.T) {
 		}
 	}
 }
+
+func TestModulesWithSameClassNames(t *testing.T) {
+	entity := "package payroll;\npublic class Employee {}\n"
+	repo := "package payroll;\npublic interface EmployeeRepository {}\n"
+	controller := `package payroll;
+import org.springframework.web.bind.annotation.RestController;
+@RestController
+public class EmployeeController {
+    private final EmployeeRepository repository;
+    EmployeeController(EmployeeRepository repository) { this.repository = repository; }
+    Employee one() { return null; }
+}
+`
+	g := Index(map[string][]byte{
+		"rest/src/main/java/payroll/Employee.java":            []byte(entity),
+		"rest/src/main/java/payroll/EmployeeRepository.java":  []byte(repo),
+		"rest/src/main/java/payroll/EmployeeController.java":  []byte(controller),
+		"links/src/main/java/payroll/Employee.java":           []byte(entity),
+		"links/src/main/java/payroll/EmployeeRepository.java": []byte(repo),
+		"links/src/main/java/payroll/EmployeeController.java": []byte(controller),
+		"links/src/main/java/payroll/Order.java":              []byte("package payroll;\npublic class Order { Employee owner; }\n"),
+		"nonrest/src/main/java/payroll/Lonely.java":           []byte("package payroll;\npublic class Lonely { Order o; Employee e; }\n"),
+	}, "test")
+
+	seen := map[string]bool{}
+	for _, n := range g.Nodes {
+		if seen[n.ID] {
+			t.Errorf("duplicate node id %s", n.ID)
+		}
+		seen[n.ID] = true
+	}
+	if !seen["rest:payroll.Employee"] || !seen["links:payroll.Employee"] {
+		t.Errorf("clashing types should be module-qualified: %v", seen)
+	}
+	if !seen["payroll.Order"] {
+		t.Errorf("a unique type keeps its plain name: %v", seen)
+	}
+
+	edge := func(from, to string) bool {
+		for _, e := range g.Edges {
+			if e.Source == from && e.Target == to {
+				return true
+			}
+		}
+		return false
+	}
+	if !edge("rest:payroll.EmployeeController", "rest:payroll.EmployeeRepository") {
+		t.Errorf("controller should inject its own module's repository: %+v", g.Edges)
+	}
+	if edge("rest:payroll.EmployeeController", "links:payroll.EmployeeRepository") {
+		t.Error("link crossed modules")
+	}
+	if !edge("payroll.Order", "links:payroll.Employee") {
+		t.Errorf("unique type should link within its module: %+v", g.Edges)
+	}
+	if !edge("nonrest:payroll.Lonely", "payroll.Order") && !edge("payroll.Lonely", "payroll.Order") {
+		t.Errorf("a name declared once links from anywhere: %+v", g.Edges)
+	}
+	for _, e := range g.Edges {
+		if e.Source == "payroll.Lonely" && strings.Contains(e.Target, "Employee") {
+			t.Errorf("an ambiguous name should not be linked: %+v", e)
+		}
+	}
+
+	path := "rest/src/main/java/payroll/Employee.java"
+	if got := g.Qualify(TypesIn([]byte(entity), path)); got[0].ID != "rest:payroll.Employee" {
+		t.Errorf("Qualify = %s", got[0].ID)
+	}
+	gone := "evolution/src/main/java/payroll/Employee.java"
+	if got := g.Qualify(TypesIn([]byte(entity), gone)); got[0].ID == "rest:payroll.Employee" || got[0].ID == "links:payroll.Employee" {
+		t.Errorf("a type from another module must not take this graph's ID: %s", got[0].ID)
+	}
+}
+
+func TestMainAndTestSameName(t *testing.T) {
+	src := "package a;\npublic class Helper {}\n"
+	user := "package a;\npublic class User { Helper h; }\n"
+	g := Index(map[string][]byte{
+		"src/main/java/a/Helper.java":   []byte(src),
+		"src/test/java/a/Helper.java":   []byte(src),
+		"src/test/java/a/UserTest.java": []byte("package a;\npublic class UserTest { Helper h; }\n"),
+		"src/main/java/a/User.java":     []byte(user),
+	}, "test")
+	if len(g.Nodes) != 4 {
+		t.Fatalf("nodes = %d", len(g.Nodes))
+	}
+	want := map[string]string{"a.User": "src/main/java/a/Helper.java:a.Helper", "a.UserTest": "src/test/java/a/Helper.java:a.Helper"}
+	for from, to := range want {
+		found := false
+		for _, e := range g.Edges {
+			if e.Source == from && e.Target == to {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("missing %s -> %s in %+v", from, to, g.Edges)
+		}
+	}
+}
