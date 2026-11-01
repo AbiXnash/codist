@@ -124,6 +124,23 @@ func NewTracker(repo *gitx.Repo, store *Store, ignores *Ignores) *Tracker {
 	return &Tracker{repo: repo, store: store, ignores: ignores, files: map[string]string{}, fixedAt: map[string]string{}}
 }
 
+// closedHere says a closed issue is closed on the followed branch, and by which commit.
+func (t *Tracker) closedHere(res Resolution) (Resolution, bool) {
+	if res.Manual {
+		return res, res.Branch == "" || res.Branch == t.repo.Branch()
+	}
+	if res.Commit == "" {
+		return res, true
+	}
+	for _, c := range append([]string{res.Commit}, res.Also...) {
+		if t.repo.Contains(c) {
+			res.Commit = c
+			return res, true
+		}
+	}
+	return res, false
+}
+
 func (t *Tracker) fileAt(sha, path string) (string, bool) {
 	key := sha + ":" + path
 	t.mu.Lock()
@@ -235,6 +252,12 @@ func (t *Tracker) compute() []Issue {
 			res, hasRes = t.Resolved.Get(id)
 			if c, ok := bySHA[is.LastSeen]; hasRes && ok && res.Commit != is.LastSeen && c.Time > res.At {
 				hasRes = false // reported again after it was closed
+			}
+			if hasRes {
+				var here bool
+				if res, here = t.closedHere(res); !here {
+					hasRes = false // closed on another branch: this one still has the bug
+				}
 			}
 		}
 		region := ""

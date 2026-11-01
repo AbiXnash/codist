@@ -34,6 +34,7 @@ Later files win over earlier ones.
 | `features` | `branchGraph` | Hides the Branch graph |
 | `features` | `branchSwitcher` | Shows the branch name without the switcher and refuses switching |
 | `features` | `fix` | Removes the Fix buttons and refuses fixes |
+| `features` | `fixAllBranches` | Removes fixing the same bug on other branches |
 | `features` | `reword` | Removes suggesting and rewording commit messages |
 | `features` | `localPlan` | Removes the recommended commits for local changes |
 | `features` | `issueWorkflow` | Removes Start, In review and the stage display |

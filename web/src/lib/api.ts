@@ -1,4 +1,4 @@
-import type { Activity, Flags, PeopleReport, HistoryCommit, BranchRef, BranchReport, MemoryItem, MemoryReport, PlannedCommit, RepoReport, FixRef, Working, CommitItem, DependencyReport, Detail, FixProposal, Graph, Incident, IncidentRow, IssueList, RcaReport, ReleaseReport, SignOff, Status } from './types';
+import type { Activity, BranchFix, Flags, PeopleReport, HistoryCommit, BranchRef, BranchReport, MemoryItem, MemoryReport, PlannedCommit, RepoReport, FixRef, Working, CommitItem, DependencyReport, Detail, FixProposal, Graph, Incident, IncidentRow, IssueList, RcaReport, ReleaseReport, SignOff, Status } from './types';
 
 const json = (method: string, body?: unknown): RequestInit => ({
   method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body),
@@ -36,6 +36,8 @@ export const api = {
   setStage: (ids: string[], stage: string, assignee: string) => fetch('/api/issues/stage', json('POST', { ids, stage, assignee })),
   features: () => request<Flags>('/features'),
   people: () => request<PeopleReport>('/people'),
+  branchFixes: (sha: string) => request<BranchFix[]>(`/commits/${sha}/branch-fix`),
+  applyToBranches: (sha: string, branches: string[]) => request<BranchFix[]>(`/commits/${sha}/branch-fix`, json('POST', { branches })),
   refs: () => request<BranchRef[]>('/refs'),
   history: (branches: string[]) => request<HistoryCommit[]>(`/history${branches.length ? `?branches=${encodeURIComponent(branches.join(','))}` : ''}`),
   follow: (name: string) => request<{ branch: string }>('/refs/follow', json('POST', { name })),

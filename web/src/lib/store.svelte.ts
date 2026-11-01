@@ -1,6 +1,6 @@
 import { api, cancelAI } from './api';
 import { cycles, layerViolations, metrics } from './graphAnalysis';
-import type { FixRef, Working, AskMessage, CommitItem, Detail, FindingWithPath, FixProposal, Graph, IgnoreScope, Incident, Issue, IssueList, IncidentRow, Mode, OpenFile, Severity, Status, Tab, Flags } from './types';
+import type { BranchFix, FixRef, Working, AskMessage, CommitItem, Detail, FindingWithPath, FixProposal, Graph, IgnoreScope, Incident, Issue, IssueList, IncidentRow, Mode, OpenFile, Severity, Status, Tab, Flags } from './types';
 
 export interface Toast {
   id: number;
@@ -151,6 +151,8 @@ class AppState {
   hiddenEdges = $state<string[]>([]);
   graphQuery = $state('');
   graphQueryMode = $state<'highlight' | 'only'>('highlight');
+  /** The fix-in-all-branches dialog. */
+  branchFix = $state.raw<{ commit: string; title: string; targets: BranchFix[] } | null>(null);
   /** What features.json turned on. Until it loads, everything is on. */
   flags = $state.raw<Flags | null>(null);
   menuOn = (name: string) => this.flags?.menus[name] !== false;
@@ -569,12 +571,30 @@ export async function applyFix(message: string) {
   try {
     const { commit } = await api.applyFix(f.proposal.id, message);
     app.fix = null;
-    if (commit) toast(`Committed ${commit.slice(0, 7)} · reviewing the fix`, 'good', 5000);
+    if (commit) {
+      toast(`Committed ${commit.slice(0, 7)} · reviewing the fix`, 'good', 5000);
+      void offerBranchFix(commit, f.finding.title, true);
+    }
     else toast('Applied to your working tree · commit it with your changes', 'good', 5000);
     void loadIssues();
     void loadWorking();
   } catch (e) {
     app.fix = { ...f, busy: null, error: (e as Error).message };
+  }
+}
+
+/**
+ * Looks for the same code on other branches. After a fix it stays quiet when nothing else needs it;
+ * asked for directly, it says so.
+ */
+export async function offerBranchFix(commit: string, title: string, quiet = false) {
+  if (!app.featureOn('fixAllBranches')) return;
+  try {
+    const targets = await api.branchFixes(commit);
+    if (quiet && !targets.some((t) => t.status === 'ready' || t.status === 'conflict' || t.status === 'skipped')) return;
+    app.branchFix = { commit, title, targets };
+  } catch (e) {
+    if (!quiet) toast((e as Error).message, 'bad');
   }
 }
 

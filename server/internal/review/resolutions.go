@@ -16,6 +16,9 @@ type Resolution struct {
 	At     int64  `json:"at"`
 	Commit string `json:"commit,omitempty"`
 	Manual bool   `json:"manual,omitempty"`
+	Branch string `json:"branch,omitempty"` // where it was marked by hand; empty for older records
+	// The same fix cherry-picked onto other branches.
+	Also []string `json:"also,omitempty"`
 }
 
 // Resolutions is stored at <data-dir>/<repo>/resolutions.json.
@@ -48,6 +51,37 @@ func (r *Resolutions) Set(ids []string, res Resolution) error {
 		res.At = time.Now().UnixMilli()
 	}
 	for _, id := range ids {
+		r.items[id] = res
+	}
+	return r.persist()
+}
+
+// AlsoFixedBy records that a fix commit now also exists on another branch as a new commit.
+func (r *Resolutions) AlsoFixedBy(commit string, others []string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for id, res := range r.items {
+		if res.Commit == commit {
+			res.Also = append(res.Also, others...)
+			r.items[id] = res
+		}
+	}
+	return r.persist()
+}
+
+// Rekey follows commits that got new ids, as rewording does.
+func (r *Resolutions) Rekey(mapping map[string]string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for id, res := range r.items {
+		if to, ok := mapping[res.Commit]; ok {
+			res.Commit = to
+		}
+		for i, c := range res.Also {
+			if to, ok := mapping[c]; ok {
+				res.Also[i] = to
+			}
+		}
 		r.items[id] = res
 	}
 	return r.persist()

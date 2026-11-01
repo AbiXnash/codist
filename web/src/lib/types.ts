@@ -413,3 +413,5 @@ export interface HistoryCommit { sha: string; parents: string[]; author: string;
 export interface Flags { menus: Record<string, boolean>; panels: Record<string, boolean>; features: Record<string, boolean>; problems?: string[]; sources: string[] }
 export interface PersonStats { name: string; commits: number; added: number; removed: number; files: number; owned: number }
 export interface PeopleReport { head: string; people: PersonStats[]; totalLines: number; tookMs: number }
+
+export interface BranchFix { branch: string; status: 'ready' | 'fixed' | 'conflict' | 'skipped' | 'unaffected' | 'already'; detail?: string; files?: string[]; commit?: string }

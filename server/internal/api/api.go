@@ -74,7 +74,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/fix", s.proposeFix)
 	mux.HandleFunc("POST /api/fix/{id}/apply", s.applyFix)
 	mux.HandleFunc("POST /api/issues/{id}/resolve", func(w http.ResponseWriter, r *http.Request) {
-		if err := s.Tracker.Resolved.Set([]string{r.PathValue("id")}, review.Resolution{By: s.Repo.UserName(), Manual: true}); err != nil {
+		if err := s.Tracker.Resolved.Set([]string{r.PathValue("id")}, review.Resolution{By: s.Repo.UserName(), Manual: true, Branch: s.Repo.Branch()}); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -208,6 +208,7 @@ func (s *Server) Handler() http.Handler {
 			return
 		}
 		s.Store.Rekey(mapping)
+		_ = s.Tracker.Resolved.Rekey(mapping)
 		writeJSON(w, map[string]any{"commit": mapping[c.SHA], "rewritten": len(mapping)})
 	})
 	mux.HandleFunc("GET /api/memory", func(w http.ResponseWriter, r *http.Request) {
@@ -303,6 +304,40 @@ func (s *Server) Handler() http.Handler {
 		}
 		writeJSON(w, s.people)
 	})
+	mux.HandleFunc("GET /api/commits/{sha}/branch-fix", func(w http.ResponseWriter, r *http.Request) {
+		out, err := s.Repo.BranchFixes(r.PathValue("sha"))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, out)
+	})
+	mux.HandleFunc("POST /api/commits/{sha}/branch-fix", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Branches []string `json:"branches"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Branches) == 0 {
+			writeError(w, http.StatusBadRequest, "branches are required")
+			return
+		}
+		sha := r.PathValue("sha")
+		out, err := s.Repo.ApplyToBranches(sha, req.Branches)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		var made []string
+		for _, b := range out {
+			if b.Commit != "" {
+				made = append(made, b.Commit)
+			}
+		}
+		if len(made) > 0 {
+			_ = s.Tracker.Resolved.AlsoFixedBy(sha, made)
+			s.Hub.Publish("commits", map[string]any{"head": s.Repo.Head(), "new": []string{}})
+		}
+		writeJSON(w, out)
+	})
 	mux.HandleFunc("GET /api/history", func(w http.ResponseWriter, r *http.Request) {
 		var names []string
 		if b := r.URL.Query().Get("branches"); b != "" {
@@ -364,6 +399,8 @@ func (s *Server) guard(next http.Handler) http.Handler {
 				blocked = "features.fix"
 			case path == "/ask" && off(f.Panels, "ask"):
 				blocked = "panels.ask"
+			case strings.HasSuffix(path, "/branch-fix") && off(f.Features, "fixAllBranches"):
+				blocked = "features.fixAllBranches"
 			case strings.HasSuffix(path, "/reword") && off(f.Features, "reword"):
 				blocked = "features.reword"
 			case strings.HasPrefix(path, "/working/") && off(f.Features, "localPlan"):
