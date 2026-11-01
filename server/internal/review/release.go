@@ -67,14 +67,17 @@ func Release(repo *gitx.Repo, tracker *Tracker, store *Store, ignores *Ignores, 
 	tracked := map[string]Issue{}
 	for _, is := range tracker.Issues() {
 		tracked[is.ID] = is
-		if is.State == "ignored" || is.Source == "rule" {
-			continue
+		if is.State != "open" || is.Source == "rule" {
+			continue // fixed or ignored; rule findings were just found again by the scan
 		}
 		ls, ok := lines[is.Path]
 		if !ok {
 			continue
 		}
 		line := lineOf(ls, is.Snippet)
+		if strings.TrimSpace(is.Snippet) == "" && is.Line >= 1 && is.Line <= len(ls) {
+			line = is.Line // the model pointed at a line without quoting code: nothing to match
+		}
 		if line == 0 {
 			continue
 		}

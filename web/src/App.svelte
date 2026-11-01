@@ -23,6 +23,7 @@
     savePref('commits', app.showCommits);
     savePref('panel', app.showPanel);
     savePref('legend', app.showLegend);
+    savePref('graphPanel', app.showGraphPanel);
     requestAnimationFrame(() => window.dispatchEvent(new Event('codist:resize')));
   });
 

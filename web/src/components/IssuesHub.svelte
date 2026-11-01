@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { app, ignoreFinding, loadIssues, loadWorking, openFile, pickIssue, proposeFix, selectCommit, showWorking, unignore } from '../lib/store.svelte';
+  import { app, ignoreFinding, loadIssues, openFile, pickIssue, proposeFix, selectCommit, showWorking, unignore } from '../lib/store.svelte';
   import { ago, INSTANT_REFS, NOT_FIXABLE, SEVERITIES } from '../lib/theme';
   import CommitRef from './CommitRef.svelte';
   import FixSuggest from './FixSuggest.svelte';
-  import type { FindingWithPath, Issue, Severity } from '../lib/types';
+  import type { FindingWithPath, FixRef, Issue, Severity } from '../lib/types';
 
-  const LEVELS: Severity[] = ['critical', 'high', 'medium', 'low'];
+  const LEVELS: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
   const states = [
     { id: 'open', label: 'Open' },
     { id: 'resolved', label: 'Fixed' },
@@ -18,13 +18,7 @@
     for (const g of app.scoped) m[g[0].severity] = (m[g[0].severity] ?? 0) + 1;
     return m;
   });
-  const stateCount = (s: string) => {
-    if (app.scope === 'working') return app.workingIssues.filter((i) => i.state === s && (!i.group || i.groupRoot)).length;
-    const all = app.issueList?.issues ?? [];
-    const sha = app.selectedSha;
-    return all.filter((i) => i.state === s && (s !== 'open' || !i.group || i.groupRoot) &&
-      (app.scope === 'all' || (app.scope === 'mine' ? app.isMe(i.firstBy) || app.isMe(i.fixedBy) : i.firstSeen === sha || i.fixedIn === sha))).length;
-  };
+  const stateCount = (s: Issue['state']) => app.groupsIn(s).length;
   const sections = $derived(
     SEVERITIES.map((s) => ({ level: s, groups: app.hub.filter((g) => g[0].severity === s) })).filter((x) => x.groups.length),
   );
@@ -46,16 +40,10 @@
     app.picked = null;
   }
   async function ignore(g: Issue[]) {
-    const prev = app.selectedSha;
-    for (const i of g) {
-      app.selectedSha = i.lastSeen;
-      await ignoreFinding(asFinding(i), 'code');
-    }
-    app.selectedSha = prev;
+    for (const i of g) await ignoreFinding(asFinding(i), 'code', false, i.lastSeen);
     app.picked = null;
-    void loadIssues();
-    void loadWorking();
   }
+  const others = (g: Issue[]): FixRef[] => g.slice(1).map((m) => ({ sha: m.lastSeen, path: m.path, line: m.reviewLine, title: m.title }));
   const isWorking = (i: Issue) => i.firstSeen === 'working';
   const changedFiles = $derived(app.working?.changes.length ?? 0);
   function openCommit(sha: string) {
@@ -128,7 +116,7 @@
             <button class="btn secondary" title="A heads-up, not a defect: confirm the readers still expect the new value" onclick={() => ignore(g)}>Mark as checked</button>
           {:else}
             {#if app.status?.canFix && g.every((m) => m.path.endsWith('.java'))}
-              <button class="btn" onclick={() => proposeFix(asFinding(i), i.lastSeen)}>{i.ref && INSTANT_REFS.has(i.ref) ? '⚡ Fix' : 'Fix with AI'}</button>
+              <button class="btn" onclick={() => proposeFix(asFinding(i), i.lastSeen, others(g))}>{i.ref && INSTANT_REFS.has(i.ref) ? '⚡ Fix' : 'Fix with AI'}{g.length > 1 ? ` all ${g.length} places` : ''}</button>
             {/if}
             <button class="btn secondary" onclick={() => ignore(g)}>Ignore</button>
           {/if}
@@ -140,7 +128,7 @@
         {#if i.ref}<span class="faint ref mono">{i.ref}</span>{/if}
       </div>
       {#if i.state === 'open' && !NOT_FIXABLE.has(i.ref ?? '') && g.every((m) => m.path.endsWith('.java'))}
-        <FixSuggest finding={asFinding(i)} sha={i.lastSeen} />
+        <FixSuggest finding={asFinding(i)} sha={i.lastSeen} also={others(g)} />
       {/if}
     </div>
   {:else}
@@ -239,8 +227,8 @@
   .note { margin: 0; padding: 8px 10px; border-radius: var(--r-lg); background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--text-2); font-size: 12px; }
   .n { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 
-  .levels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-  .level { --c: var(--sev-low); position: relative; display: grid; gap: 0; padding: 8px 10px 7px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); text-align: left; overflow: hidden; transition: border-color 0.15s, opacity 0.15s; }
+  .levels { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
+  .level { --c: var(--sev-low); position: relative; display: grid; gap: 0; padding: 7px 8px 6px 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); text-align: left; overflow: hidden; transition: border-color 0.15s, opacity 0.15s; }
   .level::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c); }
   .level b { font-size: 20px; line-height: 1.15; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--c); }
   .level span { font-size: 11px; color: var(--text-3); text-transform: capitalize; }
@@ -251,6 +239,7 @@
   .level.critical { --c: var(--sev-critical); }
   .level.high { --c: var(--sev-high); }
   .level.medium { --c: var(--sev-medium); }
+  .level.info { --c: var(--sev-info); }
   :global(:root[data-theme='dark']) .level.low { --c: #94a3b8; }
 
   .row2 { display: flex; gap: 8px; flex-wrap: wrap; }

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { app, proposeGuidedFix } from '../lib/store.svelte';
-  import type { FindingWithPath } from '../lib/types';
+  import type { FindingWithPath, FixRef } from '../lib/types';
 
   // A suggestion for how to fix THIS issue. The server refuses anything about other issues or code.
-  let { finding, sha }: { finding: FindingWithPath; sha: string } = $props();
+  let { finding, sha, also = [] }: { finding: FindingWithPath; sha: string; also?: FixRef[] } = $props();
   let open = $state(false);
   let text = $state('');
   let busy = $state(false);
@@ -13,7 +13,7 @@
     if (!text.trim() || busy) return;
     busy = true;
     refused = null;
-    refused = await proposeGuidedFix(finding, sha, text);
+    refused = await proposeGuidedFix(finding, sha, text, also);
     busy = false;
     if (!refused) { text = ''; open = false; }
   }
@@ -41,7 +41,7 @@
 {/if}
 
 <style>
-  .link { border: 0; background: none; padding: 0; color: var(--accent-text); font-size: 12px; }
+  .link { justify-self: start; border: 0; background: none; padding: 0; color: var(--accent-text); font-size: 12px; }
   .link:hover:not(:disabled) { text-decoration: underline; }
   .link:disabled { opacity: 0.5; cursor: default; }
   .suggest { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); width: 100%; }

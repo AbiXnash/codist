@@ -238,6 +238,9 @@ func (s *Service) run(sha string) {
 		slog.Info("reviewing", "file", f.Path, "sha", sha[:7])
 		fr, in, ok := s.rulePass(a, f, kb, build)
 		if res == nil {
+			r.Files = append(r.Files, fr) // show the first rule findings while the analysers run
+			s.save(r)
+			r.Files = r.Files[:len(r.Files)-1]
 			got := <-analysis
 			res = &got
 			r.Analysers, r.AnalysisProblems = got.Ran, got.Problems
@@ -461,7 +464,7 @@ func (s *Service) rulePass(a Analysis, f gitx.FileChange, kb *knowledge.Base, bu
 	in.added = added.String()
 
 	if f.IsJava() {
-		in.types = javaidx.TypesIn([]byte(src), f.NewPath)
+		in.types = s.graph.TypesIn([]byte(src), f.NewPath)
 		ctx := javaidx.ProjectContext(s.graph.Graph())
 		ctx.Path = f.NewPath
 		for _, x := range javaidx.Check([]byte(src), in.changed, ctx) {

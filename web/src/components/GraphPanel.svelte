@@ -13,10 +13,21 @@
   const all = $derived(app.graph?.nodes ?? []);
   const byId = $derived(new Map(all.map((n) => [n.id, n])));
   const name = (id: string) => byId.get(id)?.name ?? id.slice(id.lastIndexOf('.') + 1);
+  // Lists where names sit apart from the graph need the module to tell same-named classes apart.
+  const clashes = $derived.by(() => {
+    const seen = new Map<string, number>();
+    for (const n of all) seen.set(n.name, (seen.get(n.name) ?? 0) + 1);
+    return seen;
+  });
+  const label = (id: string) => {
+    const n = byId.get(id);
+    return n?.module && (clashes.get(n.name) ?? 0) > 1 ? `${n.name} (${n.module})` : name(id);
+  };
 
   const roles = $derived.by(() => {
     const c = new Map<string, number>();
     for (const n of all) c.set(n.stereotype, (c.get(n.stereotype) ?? 0) + 1);
+    // Test classes are switched by "Tests"; their chip below does that.
     return Object.keys(STEREOTYPE).filter((k) => c.has(k)).map((k) => ({ key: k, n: c.get(k)! }));
   });
   const pkgs = $derived.by(() => {
@@ -62,6 +73,14 @@
     if (e.key === 'Escape') app.graphQuery = '';
   }
 
+  // Started from the right-click menu: bring the results into view.
+  let analysis = $state<HTMLElement>();
+  $effect(() => {
+    if (app.overlay === 'none') return;
+    open.analysis = true;
+    requestAnimationFrame(() => analysis?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  });
+
   const blast = $derived(app.overlay === 'blast' && app.overlayNode && app.graph ? [...dependents(app.graph, app.overlayNode)].sort((a, b) => a[1] - b[1]) : []);
   const route = $derived(app.overlay === 'path' && app.pathFrom && app.pathTo && app.graph ? path({ ...app.graph, edges: visible.edges }, app.pathFrom, app.pathTo) : []);
   const reverseRoute = $derived(app.overlay === 'path' && app.pathFrom && app.pathTo && app.graph && !route.length ? path({ ...app.graph, edges: visible.edges }, app.pathTo, app.pathFrom) : []);
@@ -78,11 +97,11 @@
   <header>
     <b>Graph controls</b>
     <span class="faint">{visible.nodes.length} of {all.length} types · {visible.edges.length} links</span>
-    <button class="x" aria-label="Close" onclick={() => { app.showGraphPanel = false; savePref('graphPanel', false); }}>×</button>
+    <button class="x" aria-label="Close" onclick={() => (app.showGraphPanel = false)}>×</button>
   </header>
 
   <section>
-    <button class="sh" onclick={() => (open.find = !open.find)}>Find</button>
+    <button class="sh" aria-expanded={open.find} onclick={() => (open.find = !open.find)}><svg class:closed={!open.find} width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m3 6 5 5 5-5"/></svg>Find</button>
     {#if open.find}
       <input class="in" bind:value={app.graphQuery} onkeydown={find} placeholder="Class, package or @Annotation…" spellcheck="false" />
       <div class="row">
@@ -93,18 +112,20 @@
         {#if q}<span class="faint small">{hits.length} match{hits.length === 1 ? '' : 'es'} · ↵ jumps</span>{/if}
       </div>
       {#if q && hits.length}
-        <div class="list">{#each hits.slice(0, 8) as h}<button onclick={() => focusNode(h.id)}><Glyph stereotype={h.stereotype} />{h.name}<span class="faint mono">{h.pkg.split('.').pop()}</span></button>{/each}</div>
+        <div class="list">{#each hits.slice(0, 8) as h}<button onclick={() => focusNode(h.id)}><Glyph stereotype={h.stereotype} />{h.name}<span class="faint mono">{h.module ? `${h.module} · ` : ''}{h.pkg.split('.').pop()}</span></button>{/each}</div>
       {/if}
     {/if}
   </section>
 
   <section>
-    <button class="sh" onclick={() => (open.show = !open.show)}>Show</button>
+    <button class="sh" aria-expanded={open.show} onclick={() => (open.show = !open.show)}><svg class:closed={!open.show} width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m3 6 5 5 5-5"/></svg>Show</button>
     {#if open.show}
       <div class="label">Roles <span class="faint">click to hide · double-click for only this</span></div>
       <div class="chips">
         {#each roles as r}
-          <button class="chip-t" class:off={app.hiddenRoles.includes(r.key)} onclick={() => toggle('hiddenRoles', r.key)} ondblclick={() => only('hiddenRoles', r.key, roles.map((x) => x.key))}>
+          <button class="chip-t" class:off={r.key === 'test' ? !app.showTests : app.hiddenRoles.includes(r.key)}
+            onclick={() => { if (r.key === 'test') app.showTests = !app.showTests; else toggle('hiddenRoles', r.key); }}
+            ondblclick={() => { if (r.key !== 'test') only('hiddenRoles', r.key, roles.map((x) => x.key)); }}>
             <Glyph stereotype={r.key} />{stereo(r.key).label}<span class="n">{r.n}</span>
           </button>
         {/each}
@@ -116,7 +137,6 @@
             <i class="ln {k}"></i>{k}
           </button>
         {/each}
-        <button class="chip-t" class:off={!app.showTests} onclick={() => (app.showTests = !app.showTests)}>tests</button>
       </div>
       <div class="label">Packages</div>
       <div class="pk">
@@ -126,7 +146,7 @@
       </div>
       {#if app.hiddenNodes.length}
         <div class="label">Hidden types <button class="lnk" onclick={() => { app.hiddenNodes = []; saveList('hiddenNodes', []); }}>show all {app.hiddenNodes.length}</button></div>
-        <div class="list">{#each app.hiddenNodes.slice(0, 12) as id}<button onclick={() => toggle('hiddenNodes', id)}>{name(id)}<span class="faint">show</span></button>{/each}</div>
+        <div class="list">{#each app.hiddenNodes.slice(0, 12) as id}<button onclick={() => toggle('hiddenNodes', id)}>{label(id)}<span class="faint">show</span></button>{/each}</div>
       {/if}
       {#if app.hiddenRoles.length || app.hiddenPkgs.length || app.hiddenNodes.length || app.hiddenEdges.length || q}
         <button class="btn secondary sm" onclick={showAll}>Reset filters</button>
@@ -135,7 +155,7 @@
   </section>
 
   <section>
-    <button class="sh" onclick={() => (open.layout = !open.layout)}>Layout</button>
+    <button class="sh" aria-expanded={open.layout} onclick={() => (open.layout = !open.layout)}><svg class:closed={!open.layout} width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m3 6 5 5 5-5"/></svg>Layout</button>
     {#if open.layout}
       <div class="seg wide">
         <button class:on={app.layoutMode === 'natural'} onclick={() => setLayout('natural')} title="Force-directed: related types pull together">Natural</button>
@@ -155,8 +175,8 @@
     {/if}
   </section>
 
-  <section>
-    <button class="sh" onclick={() => (open.analysis = !open.analysis)}>Analysis</button>
+  <section bind:this={analysis}>
+    <button class="sh" aria-expanded={open.analysis} onclick={() => (open.analysis = !open.analysis)}><svg class:closed={!open.analysis} width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m3 6 5 5 5-5"/></svg>Analysis</button>
     {#if open.analysis}
       <div class="seg wide">
         <button class:on={app.overlay === 'none'} onclick={() => (app.overlay = 'none')}>Off</button>
@@ -169,32 +189,32 @@
       {#if app.overlay === 'cycles'}
         <p class="note">A cycle is a loop of dependencies: none of its types can change, be tested or be reused alone. Break it with an interface or by moving the shared part out.</p>
         {#each cycles as c, i}
-          <div class="card"><b>Cycle {i + 1}</b> · {c.length} types<div class="names">{#each c as id}<button onclick={() => focusNode(id)}>{name(id)}</button>{/each}</div></div>
+          <div class="card"><b>Cycle {i + 1}</b> · {c.length} types<div class="names">{#each c as id}<button onclick={() => focusNode(id)}>{label(id)}</button>{/each}</div></div>
         {:else}<p class="good">No dependency cycles.</p>{/each}
       {:else if app.overlay === 'layers'}
         <p class="note">Spring layering: controllers → services → repositories → entities. Arrows going up, or controllers reaching a repository directly, bypass business rules and transactions.</p>
         {#each violations as v}
-          <div class="card"><button onclick={() => focusNode(v.source)}>{name(v.source)}</button> → <button onclick={() => focusNode(v.target)}>{name(v.target)}</button><div class="faint small">{v.why}</div></div>
+          <div class="card"><button onclick={() => focusNode(v.source)}>{label(v.source)}</button> → <button onclick={() => focusNode(v.target)}>{label(v.target)}</button><div class="faint small">{v.why}</div></div>
         {:else}<p class="good">No layer violations.</p>{/each}
       {:else if app.overlay === 'blast'}
-        <select class="in" bind:value={app.overlayNode}><option value={null}>Pick a type…</option>{#each sorted as n}<option value={n.id}>{n.name}</option>{/each}</select>
+        <select class="in" bind:value={app.overlayNode}><option value={null}>Pick a type…</option>{#each sorted as n}<option value={n.id}>{label(n.id)}</option>{/each}</select>
         {#if app.overlayNode}
-          <p class="note">If <b>{name(app.overlayNode)}</b> changes, these may break (darker = closer). Re-test them.</p>
+          <p class="note">If <b>{label(app.overlayNode)}</b> changes, these may break (darker = closer). Re-test them.</p>
           {#each [1, 2, 3] as d}
             {@const at = blast.filter(([, x]) => (d === 3 ? x >= 3 : x === d))}
             {#if at.length}<div class="label">{d === 1 ? 'Directly' : d === 2 ? 'Through one other' : 'Further away'} · {at.length}</div>
-              <div class="names">{#each at as [id]}<button onclick={() => focusNode(id)}>{name(id)}</button>{/each}</div>{/if}
+              <div class="names">{#each at as [id]}<button onclick={() => focusNode(id)}>{label(id)}</button>{/each}</div>{/if}
           {/each}
           {#if !blast.length}<p class="good">Nothing depends on it.</p>{/if}
         {:else}<p class="faint small">Or right-click a type → Blast radius.</p>{/if}
       {:else if app.overlay === 'path'}
         <div class="row2">
-          <select class="in" bind:value={app.pathFrom}><option value={null}>From…</option>{#each sorted as n}<option value={n.id}>{n.name}</option>{/each}</select>
-          <select class="in" bind:value={app.pathTo}><option value={null}>To…</option>{#each sorted as n}<option value={n.id}>{n.name}</option>{/each}</select>
+          <select class="in" bind:value={app.pathFrom}><option value={null}>From…</option>{#each sorted as n}<option value={n.id}>{label(n.id)}</option>{/each}</select>
+          <select class="in" bind:value={app.pathTo}><option value={null}>To…</option>{#each sorted as n}<option value={n.id}>{label(n.id)}</option>{/each}</select>
         </div>
         {#if app.pathFrom && app.pathTo}
-          {#if route.length}<p class="note">{route.length - 1} step{route.length === 2 ? '' : 's'}: {#each route as id, i}{i ? ' → ' : ''}<button class="inl" onclick={() => focusNode(id)}>{name(id)}</button>{/each}</p>
-          {:else if reverseRoute.length}<p class="note">No path that way, but {name(app.pathTo)} reaches {name(app.pathFrom)} in {reverseRoute.length - 1} steps.</p>
+          {#if route.length}<p class="note">{route.length - 1} step{route.length === 2 ? '' : 's'}: {#each route as id, i}{i ? ' → ' : ''}<button class="inl" onclick={() => focusNode(id)}>{label(id)}</button>{/each}</p>
+          {:else if reverseRoute.length}<p class="note">No path that way, but {label(app.pathTo)} reaches {label(app.pathFrom)} in {reverseRoute.length - 1} steps.</p>
           {:else}<p class="note">These types are not connected (with the current filters).</p>{/if}
         {/if}
       {/if}
@@ -202,14 +222,14 @@
   </section>
 
   <section>
-    <button class="sh" onclick={() => (open.hotspots = !open.hotspots)}>Hotspots</button>
+    <button class="sh" aria-expanded={open.hotspots} onclick={() => (open.hotspots = !open.hotspots)}><svg class:closed={!open.hotspots} width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m3 6 5 5 5-5"/></svg>Hotspots</button>
     {#if open.hotspots}
       <div class="label">Most depended on <span class="faint">changes here ripple</span></div>
-      {#each mostUsed as h}<button class="hs" onclick={() => focusNode(h.id)}>{name(h.id)}<span class="faint">{h.v} in</span></button>{/each}
+      {#each mostUsed as h}<button class="hs" onclick={() => focusNode(h.id)}>{label(h.id)}<span class="faint">{h.v} in</span></button>{/each}
       <div class="label">Fragile <span class="faint">depends on much, and others depend on it</span></div>
-      {#each fragile as h}<button class="hs" onclick={() => focusNode(h.id)}>{name(h.id)}<span class="faint">in {metrics.get(h.id)?.fanIn} · out {metrics.get(h.id)?.fanOut}</span></button>{:else}<p class="faint small">None.</p>{/each}
+      {#each fragile as h}<button class="hs" onclick={() => focusNode(h.id)}>{label(h.id)}<span class="faint">in {metrics.get(h.id)?.fanIn} · out {metrics.get(h.id)?.fanOut}</span></button>{:else}<p class="faint small">None.</p>{/each}
       <div class="label">Largest</div>
-      {#each largest as h}<button class="hs" onclick={() => focusNode(h.id)}>{name(h.id)}<span class="faint">{h.v} lines</span></button>{/each}
+      {#each largest as h}<button class="hs" onclick={() => focusNode(h.id)}>{label(h.id)}<span class="faint">{h.v} lines</span></button>{/each}
     {/if}
   </section>
 </aside>
@@ -220,9 +240,12 @@
   header .faint { font-size: 11px; }
   .x { margin-left: auto; border: 0; background: none; font-size: 16px; color: var(--text-3); }
   section { padding: 8px 12px 10px; border-bottom: 1px solid var(--border); display: grid; gap: 7px; }
-  .sh { justify-self: start; border: 0; background: none; padding: 0; font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
+  .sh { display: inline-flex; align-items: center; gap: 5px; justify-self: start; border: 0; background: none; padding: 0; font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
   .sh:hover { color: var(--text); }
-  .label { font-size: 11px; color: var(--text-2); font-weight: 500; }
+  .sh svg { transition: transform 0.15s; }
+  .sh svg.closed { transform: rotate(-90deg); }
+  section :global(.btn) { justify-self: start; }
+  .label { font-size: 11px; color: var(--text-2); font-weight: 500; text-transform: none; letter-spacing: 0; }
   .label .faint { font-weight: 400; }
   .in { width: 100%; height: 28px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface-2); color: var(--text); font: inherit; font-size: 12px; }
   .in:focus { outline: none; border-color: var(--accent); }

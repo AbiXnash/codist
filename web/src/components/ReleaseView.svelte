@@ -67,6 +67,7 @@
   function goToIssue(is: Issue) {
     if (!report) return;
     app.mode = 'review';
+    app.showPanel = true;
     void openFile(is.path, report.to, is.line);
   }
   function copy() {
@@ -163,7 +164,7 @@
           <h2>Not reviewed by the model · {report.notReviewed.length}</h2>
           <p class="faint small hint">Rule checks ran on every file. These source files have never been through an AI review, so only the rules have looked at them.</p>
           {#each report.notReviewed as p}
-            <button class="row issue" onclick={() => { app.mode = 'review'; void openFile(p, report!.to); }}><span class="mono t">{p}</span></button>
+            <button class="row issue" onclick={() => { app.mode = 'review'; app.showPanel = true; void openFile(p, report!.to); }}><span class="mono t">{p}</span></button>
           {:else}<p class="faint">Every source file has been reviewed.</p>{/each}
         </section>
       </div>

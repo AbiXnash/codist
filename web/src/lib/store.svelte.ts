@@ -1,5 +1,5 @@
 import { api } from './api';
-import type { Working, AskMessage, CommitItem, Detail, FindingWithPath, FixProposal, Graph, IgnoreScope, Incident, Issue, IssueList, IncidentRow, Mode, OpenFile, Severity, Status, Tab } from './types';
+import type { FixRef, Working, AskMessage, CommitItem, Detail, FindingWithPath, FixProposal, Graph, IgnoreScope, Incident, Issue, IssueList, IncidentRow, Mode, OpenFile, Severity, Status, Tab } from './types';
 
 export interface Toast {
   id: number;
@@ -36,9 +36,12 @@ export function saveStr(key: string, value: string) {
   }
 }
 
+// Filters name this repository's classes and packages, so they are remembered per repository.
+let listScope = '';
+
 function prefList(key: string): string[] {
   try {
-    const v = JSON.parse(localStorage.getItem('codist.' + key) ?? '[]');
+    const v = JSON.parse(localStorage.getItem(`codist.${listScope}.${key}`) ?? '[]');
     return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
   } catch {
     return [];
@@ -47,7 +50,7 @@ function prefList(key: string): string[] {
 
 export function saveList(key: string, v: string[]) {
   try {
-    localStorage.setItem('codist.' + key, JSON.stringify(v));
+    localStorage.setItem(`codist.${listScope}.${key}`, JSON.stringify(v));
   } catch {
     /* storage unavailable */
   }
@@ -131,10 +134,10 @@ class AppState {
   showTests = $state(false);
 
   // Graph controls. What is hidden and how it is laid out is remembered per browser.
-  hiddenRoles = $state<string[]>(prefList('hiddenRoles'));
-  hiddenPkgs = $state<string[]>(prefList('hiddenPkgs'));
-  hiddenNodes = $state<string[]>(prefList('hiddenNodes'));
-  hiddenEdges = $state<string[]>(prefList('hiddenEdges'));
+  hiddenRoles = $state<string[]>([]);
+  hiddenPkgs = $state<string[]>([]);
+  hiddenNodes = $state<string[]>([]);
+  hiddenEdges = $state<string[]>([]);
   graphQuery = $state('');
   graphQueryMode = $state<'highlight' | 'only'>('highlight');
   layoutMode = $state<'natural' | 'layers' | 'hubs' | 'grid'>(prefStr('layoutMode', ['natural', 'layers', 'hubs', 'grid'] as const, 'natural'));
@@ -159,7 +162,7 @@ class AppState {
   shownCommits = $derived(this.history === 'mine' && this.me ? this.myCommits : this.commits);
 
   /** Issues in the hub's scope and state, before the level filter: one entry per root cause, root first. */
-  scoped: Issue[][] = $derived.by(() => {
+  groupsIn = (state: Issue['state']): Issue[][] => {
     const all = this.scope === 'working' ? this.workingIssues : this.issueList?.issues ?? [];
     const sha = this.selectedSha;
     const q = this.hubQuery.trim().toLowerCase();
@@ -167,7 +170,7 @@ class AppState {
       this.scope === 'all' || this.scope === 'working' ? true
       : this.scope === 'mine' ? this.isMe(i.firstBy) || this.isMe(i.fixedBy)
       : !!sha && (i.firstSeen === sha || i.fixedIn === sha);
-    const list = all.filter((i) => i.state === this.issueState && inScope(i) && (!q || `${i.title} ${i.path} ${i.ref ?? ''}`.toLowerCase().includes(q)));
+    const list = all.filter((i) => i.state === state && inScope(i) && (!q || `${i.title} ${i.path} ${i.ref ?? ''}`.toLowerCase().includes(q)));
     const m = new Map<string, Issue[]>();
     for (const i of list) {
       const k = i.state === 'open' && i.group ? i.group : i.id;
@@ -176,7 +179,8 @@ class AppState {
     return [...m.values()]
       .map((g) => [...g].sort((a, b) => Number(!!b.groupRoot) - Number(!!a.groupRoot)))
       .sort((a, b) => SEV_ORDER.indexOf(a[0].severity) - SEV_ORDER.indexOf(b[0].severity) || b[0].firstTime - a[0].firstTime);
-  });
+  };
+  scoped: Issue[][] = $derived(this.groupsIn(this.issueState));
   /** What the hub lists and the graph highlights. */
   hub: Issue[][] = $derived(this.level ? this.scoped.filter((g) => g[0].severity === this.level) : this.scoped);
   /** The picked issue with the other places of the same root cause, root first. */
@@ -326,8 +330,8 @@ export async function requestReview(sha: string) {
   }
 }
 
-export async function ignoreFinding(f: FindingWithPath | FindingWithPath[], scope: IgnoreScope, team = false) {
-  const sha = app.selectedSha;
+export async function ignoreFinding(f: FindingWithPath | FindingWithPath[], scope: IgnoreScope, team = false, fromSha?: string) {
+  const sha = fromSha ?? app.selectedSha;
   if (!sha) return;
   const members = Array.isArray(f) ? f : [f];
   // A rule ignore covers every place at once; commit and line ignores are added per place.
@@ -336,7 +340,7 @@ export async function ignoreFinding(f: FindingWithPath | FindingWithPath[], scop
     for (const m of targets) await api.ignore({ scope, sha, path: m.path, line: m.line, title: m.title, team });
     const where = { commit: 'in this commit', code: 'on this line in every commit', rule: 'everywhere' }[scope];
     toast(`Ignored ${where}${team ? ' (saved to .codist/ignore.yaml)' : ''}`, 'good');
-    await Promise.all([refreshDetail(), loadCommits(), loadIssues()]);
+    await Promise.all([refreshDetail(), loadCommits(), loadIssues(), loadWorking()]);
   } catch (e) {
     toast((e as Error).message, 'bad');
   }
@@ -389,12 +393,12 @@ export async function requestEdit(instruction: string) {
   }
 }
 
-export async function proposeFix(finding: FindingWithPath, fromSha?: string) {
+export async function proposeFix(finding: FindingWithPath, fromSha?: string, also: FixRef[] = []) {
   const sha = fromSha ?? app.selectedSha;
   if (!sha) return;
   app.fix = { finding, sha, busy: 'generating', proposal: null, error: null };
   try {
-    const proposal = await api.proposeFix({ sha, path: finding.path, line: finding.line, title: finding.title });
+    const proposal = await api.proposeFix({ sha, path: finding.path, line: finding.line, title: finding.title, also });
     if (app.fix?.finding === finding) app.fix = { ...app.fix, busy: null, proposal };
   } catch (e) {
     if (app.fix?.finding === finding) app.fix = { ...app.fix, busy: null, error: (e as Error).message };
@@ -405,9 +409,9 @@ export async function proposeFix(finding: FindingWithPath, fromSha?: string) {
  * Fixes an issue the way the developer suggested. Returns why the suggestion was refused (it must be
  * about this issue), or null once the proposal is open in the fix dialog.
  */
-export async function proposeGuidedFix(finding: FindingWithPath, sha: string, guidance: string): Promise<string | null> {
+export async function proposeGuidedFix(finding: FindingWithPath, sha: string, guidance: string, also: FixRef[] = []): Promise<string | null> {
   try {
-    const r = await api.proposeFix({ sha, path: finding.path, line: finding.line, title: finding.title, guidance });
+    const r = await api.proposeFix({ sha, path: finding.path, line: finding.line, title: finding.title, guidance, also });
     if (r.blocked) return r.error ?? 'This suggestion is not about this issue.';
     app.fix = { finding, sha, busy: null, proposal: r, error: null };
   } catch (e) {
@@ -493,7 +497,10 @@ export async function openFile(path: string, sha: string | null, line: number | 
 /** Opens a type: shows its details and loads its file (at the selected commit when it changed there). */
 export function selectNode(id: string | null) {
   app.selectedNode = id;
-  if (!id) return;
+  if (!id) {
+    if (app.tab === 'type') app.tab = 'issues';
+    return;
+  }
   const node = app.graph?.nodes.find((n) => n.id === id);
   if (!node) return;
   app.tab = 'type';
@@ -521,7 +528,7 @@ export function connect() {
     const d = JSON.parse((e as MessageEvent).data) as { head: string; new: string[] };
     await Promise.all([loadStatus(), loadCommits(), loadWorking()]);
     toast(`${d.new.length} new commit${d.new.length > 1 ? 's' : ''} on ${app.status?.tracking} · reviewing`, 'info', 5000);
-    if (app.follow) await selectCommit(d.head);
+    if (app.follow && app.shownCommits.some((c) => c.commit.sha === d.head)) await selectCommit(d.head);
   });
 
   es.addEventListener('ignores', async () => {
@@ -560,8 +567,16 @@ export function connect() {
 
 export async function boot() {
   await loadStatus();
+  listScope = app.status?.repo ?? '';
+  app.hiddenRoles = prefList('hiddenRoles');
+  app.hiddenPkgs = prefList('hiddenPkgs');
+  app.hiddenNodes = prefList('hiddenNodes');
+  app.hiddenEdges = prefList('hiddenEdges');
   await Promise.all([loadGraph(), loadCommits(), loadIssues(), loadIncidents(), loadWorking()]);
-  if (app.commits.length) await selectCommit(app.commits[0].commit.sha);
+  // A repository you have no commits in (a fresh clone): "Mine" would be empty.
+  if (app.history === 'mine' && !app.myCommits.length) app.history = 'everyone';
+  const first = app.shownCommits[0];
+  if (first) await selectCommit(first.commit.sha);
   connect();
   setInterval(() => void loadStatus(), 30_000);
 }

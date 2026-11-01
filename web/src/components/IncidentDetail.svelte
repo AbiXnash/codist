@@ -34,6 +34,7 @@
   }
   function goToCommit(sha: string) {
     app.mode = 'review';
+    app.showPanel = true;
     void selectCommit(sha, true);
     app.tab = 'review';
   }

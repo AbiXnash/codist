@@ -200,11 +200,12 @@ func (s *Server) webhook(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) proposeFix(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		SHA      string `json:"sha"`
-		Path     string `json:"path"`
-		Line     int    `json:"line"`
-		Title    string `json:"title"`
-		Guidance string `json:"guidance"` // optional: how the developer wants it fixed
+		SHA      string          `json:"sha"`
+		Path     string          `json:"path"`
+		Line     int             `json:"line"`
+		Title    string          `json:"title"`
+		Guidance string          `json:"guidance"` // optional: how the developer wants it fixed
+		Also     []review.FixRef `json:"also"`     // other places of the same issue, from other reviews
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request")
@@ -219,7 +220,7 @@ func (s *Server) proposeFix(w http.ResponseWriter, r *http.Request) {
 		}
 		sha = c.SHA
 	}
-	p, err := s.Fixer.ProposeGuided(sha, req.Path, req.Line, req.Title, req.Guidance)
+	p, err := s.Fixer.ProposeGuided(sha, req.Path, req.Line, req.Title, req.Guidance, req.Also...)
 	var off review.ErrOffTopic
 	if errors.As(err, &off) {
 		writeJSON(w, map[string]any{"blocked": true, "error": off.Reason})

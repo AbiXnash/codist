@@ -41,7 +41,7 @@ func (l *Lessons) Write() (int, error) {
 		if n >= maxLessons {
 			break
 		}
-		if is.State != "resolved" || is.FixedIn == "" || seen[is.ID] {
+		if _, headsUp := notFixable[is.Ref]; headsUp || is.State != "resolved" || is.FixedIn == "" || seen[is.ID] {
 			continue
 		}
 		seen[is.ID] = true

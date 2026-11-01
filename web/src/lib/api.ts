@@ -1,4 +1,4 @@
-import type { Working, CommitItem, DependencyReport, Detail, FixProposal, Graph, Incident, IncidentRow, IssueList, RcaReport, ReleaseReport, SignOff, Status } from './types';
+import type { FixRef, Working, CommitItem, DependencyReport, Detail, FixProposal, Graph, Incident, IncidentRow, IssueList, RcaReport, ReleaseReport, SignOff, Status } from './types';
 
 const json = (method: string, body?: unknown): RequestInit => ({
   method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body),
@@ -26,7 +26,7 @@ export const api = {
   working: () => request<Working>('/working'),
   issues: (state: string) => request<IssueList>(`/issues?state=${state}`),
   review: (sha: string) => request<{ sha: string; queued: boolean }>(`/commits/${sha}/review`, { method: 'POST' }),
-  proposeFix: (body: { sha: string; path: string; line: number; title: string; guidance?: string }) =>
+  proposeFix: (body: { sha: string; path: string; line: number; title: string; guidance?: string; also?: FixRef[] }) =>
     request<FixProposal & { blocked?: boolean; error?: string }>('/fix', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   applyFix: (id: string, message: string) =>
     request<{ commit: string }>(`/fix/${id}/apply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message }) }),

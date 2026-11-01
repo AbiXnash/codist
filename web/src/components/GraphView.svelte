@@ -12,7 +12,7 @@
 
   cytoscape.use(fcose);
 
-  let container: HTMLDivElement;
+  let container!: HTMLDivElement;
   let cy: Core | null = null;
   let builtKey = '';
   let hover = $state<{ x: number; y: number; node: GraphNode } | null>(null);
@@ -81,10 +81,15 @@
     const pkgs = [...new Set(nodes.map((n) => n.pkg))];
     const prefix = commonPrefix(pkgs);
     const out: ElementDefinition[] = [];
+    // A package split across build modules is drawn as one group per module.
+    const groupId = (n: GraphNode) => `pkg:${n.module ?? ''}|${n.pkg}`;
     if (app.groupPackages) {
-      for (const pkg of pkgs) {
-        const label = pkg === prefix ? pkg.split('.').pop() || '(default)' : pkg.slice(prefix ? prefix.length + 1 : 0);
-        out.push({ group: 'nodes', data: { id: 'pkg:' + pkg, label, isPkg: true } });
+      const multiModule = new Set(nodes.map((n) => n.module ?? '')).size > 1;
+      for (const n of nodes) {
+        const id = groupId(n);
+        if (out.some((e) => e.data.id === id)) continue;
+        const name = n.pkg === prefix ? n.pkg.split('.').pop() || '(default)' : n.pkg.slice(prefix ? prefix.length + 1 : 0);
+        out.push({ group: 'nodes', data: { id, label: multiModule && n.module ? `${n.module} · ${name}` : name, isPkg: true } });
       }
     }
     for (const n of nodes) {
@@ -92,7 +97,7 @@
         group: 'nodes',
         data: {
           id: n.id, name: n.name, label: n.name, kind: n.kind, size: size(n.id, degree.get(n.id) ?? 0), degree: degree.get(n.id) ?? 0,
-          stereotype: n.stereotype, shape: stereo(n.stereotype).shape, ...(app.groupPackages ? { parent: 'pkg:' + n.pkg } : {}),
+          stereotype: n.stereotype, shape: stereo(n.stereotype).shape, ...(app.groupPackages ? { parent: groupId(n) } : {}),
         },
       });
     }
@@ -296,6 +301,7 @@
       }
 
       // Analysis overlays replace the focus.
+      if (app.overlay !== 'none') keep = cy!.collection(); // nothing chosen yet: stay neutral below
       if (app.overlay === 'cycles') {
         let k = cy!.collection();
         for (const c of cycleList) {
@@ -341,7 +347,7 @@
           k = k.union(n.closedNeighborhood());
           n.connectedEdges().addClass('hl');
         }
-        keep = k.union(k.nodes().ancestors());
+        if (app.overlay === 'none') keep = k.union(k.nodes().ancestors());
       }
       if (picked) {
         const n = cy!.getElementById(picked);
@@ -357,7 +363,7 @@
         hits.addClass('match');
         keep = hits.union(hits.ancestors());
       }
-      if (keep) cy!.elements().not(keep).addClass('dim');
+      if (keep && (keep as cytoscape.Collection).nonempty()) cy!.elements().not(keep).addClass('dim');
     });
   }
 
@@ -367,7 +373,12 @@
   }
 
   export function fit() {
-    cy?.animate({ fit: { eles: cy.elements().not('.dim'), padding: 40 } }, { duration: 400 });
+    if (!cy) return;
+    // Frame what is lit, but a single highlighted class must not fill the screen.
+    const lit = cy.elements().not('.dim');
+    const limit = cy.maxZoom();
+    cy.maxZoom(1.5);
+    cy.animate({ fit: { eles: lit.nodes().nonempty() ? lit : cy.elements(), padding: 50 } }, { duration: 400, complete: () => cy?.maxZoom(limit) });
   }
 
   function exportPng() {
@@ -418,7 +429,7 @@
       selectNode(e.target.id());
       app.showPanel = true;
     });
-    cy.on('tap', (e) => { menu = null; if (e.target === cy) app.selectedNode = null; });
+    cy.on('tap', (e) => { menu = null; if (e.target === cy) selectNode(null); });
     cy.on('cxttap', 'node', (e) => {
       if (e.target.data('isPkg')) return;
       const p = e.renderedPosition;
@@ -479,6 +490,15 @@
     untrack(highlight);
   });
 
+  // The canvas changes width when the controls open or close.
+  let panelSeen = app.showGraphPanel;
+  $effect(() => {
+    const open = app.showGraphPanel;
+    if (open === panelSeen) return;
+    panelSeen = open;
+    untrack(() => requestAnimationFrame(() => { cy?.resize(); fit(); }));
+  });
+
   $effect(() => {
     void app.theme; void app.showLabels;
     untrack(() => requestAnimationFrame(() => cy?.style(styles())));
@@ -488,12 +508,17 @@
     const present = new Set(visible.nodes.map((n) => n.stereotype));
     return Object.entries(STEREOTYPE).filter(([k]) => present.has(k)).map(([k, s]) => ({ ...s, key: k }));
   });
-  const hidden = $derived((app.graph?.nodes.length ?? 0) - visible.nodes.length);
+  // Tests are off by default, so they do not count as something the user hid.
+  const hidden = $derived((app.graph?.nodes ?? []).filter((n) => (app.showTests || !isTest(n)) && !visible.nodes.includes(n)).length);
   const hm = $derived(hover ? m.get(hover.node.id) : null);
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, Math.max(lo, hi)));
+  const menuPos = $derived(menu ? { x: clamp(menu.x, 8, (container?.clientWidth ?? 0) - 250), y: clamp(menu.y, 8, (container?.clientHeight ?? 0) - 340) } : { x: 0, y: 0 });
+  const tipBelow = $derived(!!hover && hover.y < 120);
+  const tipX = $derived(hover ? clamp(hover.x, 190, (container?.clientWidth ?? 0) - 190) : 0);
 </script>
 
 <section class="graph">
-  <div class="canvas" bind:this={container}></div>
+  <div class="canvas" class:beside={app.showGraphPanel} bind:this={container}></div>
 
   <div class="toolbar">
     <div class="seg">
@@ -524,7 +549,7 @@
   </div>
 
   {#if hover && hm}
-    <div class="tip" style:left="{hover.x}px" style:top="{hover.y}px">
+    <div class="tip" class:below={tipBelow} style:left="{tipX}px" style:top="{hover.y}px">
       <div class="th"><Glyph stereotype={hover.node.stereotype} /><b>{hover.node.name}</b><span class="faint">{stereo(hover.node.stereotype).label}{hover.node.kind !== 'class' ? ' · ' + hover.node.kind : ''}</span></div>
       <div class="mono faint pkg">{hover.node.pkg}</div>
       <div class="nums">
@@ -540,7 +565,7 @@
 
   {#if menu}
     {@const n = app.graph?.nodes.find((x) => x.id === menu?.id)}
-    <div class="menu" role="menu" style:left="{menu.x}px" style:top="{menu.y}px">
+    <div class="menu" role="menu" style:left="{menuPos.x}px" style:top="{menuPos.y}px">
       <div class="mh"><b>{n?.name}</b></div>
       <button role="menuitem" onclick={() => menuAction('open')}>Open details</button>
       <button role="menuitem" onclick={() => menuAction('code')}>Open code</button>
@@ -579,11 +604,15 @@
   {/if}
 </section>
 
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape') { menu = null; app.showGuide = false; } }} />
+<svelte:window
+  onkeydown={(e) => { if (e.key === 'Escape') { menu = null; app.showGuide = false; } }}
+  onclick={(e) => { if (!e.ctrlKey) menu = null; }}
+/>
 
 <style>
-  .graph { position: relative; min-width: 0; min-height: 360px; overflow: hidden; background-color: var(--canvas); background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px); background-size: 18px 18px; }
+  .graph { container-type: inline-size; position: relative; min-width: 0; min-height: 360px; overflow: hidden; background-color: var(--canvas); background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px); background-size: 18px 18px; }
   .canvas { position: absolute; inset: 0; }
+  .canvas.beside { right: 330px; } /* the graph stays fully visible next to the controls */
   .toolbar { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 6px; z-index: 3; pointer-events: none; }
   .toolbar > * { pointer-events: auto; }
   .seg { display: flex; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
@@ -597,6 +626,7 @@
   .ov { font-size: 10.5px; padding: 0 6px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-text); text-transform: capitalize; }
 
   .tip { position: absolute; z-index: 4; transform: translate(-50%, calc(-100% - 10px)); display: grid; gap: 3px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow); font-size: 12px; white-space: nowrap; pointer-events: none; }
+  .tip.below { transform: translate(-50%, 54px); }
   .th { display: flex; align-items: center; gap: 6px; }
   .pkg { font-size: 10.5px; }
   .nums { display: flex; gap: 10px; font-size: 11.5px; color: var(--text-2); }
@@ -618,6 +648,11 @@
   .legend .sep { width: 1px; height: 12px; background: var(--border-strong); }
   .legend .more { border: 0; background: none; padding: 0; color: var(--accent-text); font-size: 11.5px; }
   .legend .more:hover { text-decoration: underline; }
+  /* Too narrow to sit side by side: the controls float over the graph and the legend steps aside. */
+  @container (max-width: 760px) {
+    .canvas.beside { right: 0; }
+    .legend.shifted { display: none; }
+  }
   .overlay { position: absolute; inset: 0; display: flex; gap: 10px; align-items: center; justify-content: center; }
   @media (max-width: 1000px) { .graph { height: 60vh; } }
 </style>

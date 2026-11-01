@@ -215,7 +215,9 @@ func (t *Tracker) compute() []Issue {
 		default:
 			if line := t.locate(is); line > 0 && recheck(is, line) {
 				is.State, is.Line = "open", line
-				if fixed, back := t.reopened(is); back != "" {
+				if _, headsUp := notFixable[is.Ref]; headsUp {
+					// A reminder about a change, not a defect: its line coming back means nothing.
+				} else if fixed, back := t.reopened(is); back != "" {
 					is.WasFixedIn, is.ReopenedIn = fixed, back
 					if c, ok := bySHA[back]; ok {
 						is.ReopenedBy, is.ReopenedAt, is.ReopenedMsg = c.Author, c.Time, c.Message

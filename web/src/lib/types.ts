@@ -1,5 +1,8 @@
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
+/** Another place of an issue, in the review that reported it. */
+export interface FixRef { sha: string; path: string; line: number; title: string }
+
 export interface FixProposal {
   id: string;
   sha: string;
@@ -50,6 +53,8 @@ export interface Member {
 
 export interface GraphNode {
   id: string;
+  fqn: string;
+  module?: string;
   name: string;
   pkg: string;
   kind: string;

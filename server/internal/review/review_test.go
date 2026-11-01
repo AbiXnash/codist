@@ -467,6 +467,13 @@ func TestRuleIssueFixedElsewhereIsResolved(t *testing.T) {
 		}
 	}
 
+	// The release report agrees with the tracker: a model finding that is fixed stays fixed.
+	for _, is := range Release(repo, tr, store, ig, kb, c2, "HEAD").Open {
+		if is.Ref == "copy-paste-wrong-constant" {
+			t.Fatalf("a resolved finding came back in the release report: %+v", is)
+		}
+	}
+
 	x := &Fixer{repo: repo, store: store, Ignores: ig, Rules: rules}
 	if _, err := x.plan(c1, usePath, flagged[0].Line, flagged[0].Title); err == nil || !strings.Contains(err.Error(), "already fixed") {
 		t.Fatalf("no fix should be proposed for a resolved issue, got %v", err)
@@ -704,5 +711,76 @@ func TestTeamHistoryRevertMergeAndConflicts(t *testing.T) {
 	}
 	if len(files) != 1 || len(files[0].AddedLines) != 1 || files[0].AddedLines[0] != 2 {
 		t.Fatalf("a merge should be reviewed only for its conflict resolution (line 2 of B): %+v", files)
+	}
+}
+
+func TestFixCoversEveryPlaceAndAnalyserFindingsStayOpen(t *testing.T) {
+	dir, data := t.TempDir(), t.TempDir()
+	git := func(args ...string) string {
+		out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=a@b", "-c", "user.name=Dev"}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %s", args, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	a, b := "src/main/java/x/A.java", "src/main/java/x/B.java"
+	os.MkdirAll(filepath.Join(dir, "src/main/java/x"), 0o755)
+	os.WriteFile(filepath.Join(dir, a), []byte("package x;\nclass A {\n    void a() { }\n    void x() {\n        System.out.println(\"a\");\n    }\n}\n"), 0o644)
+	git("init", "-q", "-b", "main")
+	git("add", "-A")
+	git("commit", "-qm", "one")
+	c1 := git("rev-parse", "HEAD")
+	os.WriteFile(filepath.Join(dir, b), []byte("package x;\nclass B {\n    void x() {\n        System.out.println(\"b\");\n    }\n}\n"), 0o644)
+	git("add", "-A")
+	git("commit", "-qm", "two")
+	c2 := git("rev-parse", "HEAD")
+
+	repo, _ := gitx.Open(config.Config{RepoPath: dir})
+	kb, _ := knowledge.Load()
+	rules := func() (javaidx.Context, *knowledge.Base, bool) {
+		g := javaidx.Index(repo.JavaFilesWorking(), "wt")
+		return javaidx.ProjectContext(&g), kb, true
+	}
+	scan := func(path string, rev string) []Finding {
+		src, _ := repo.ReadFile(rev, path)
+		ctx, _, _ := rules()
+		var out []Finding
+		for _, f := range RuleScan(path, []byte(src), ctx, kb) {
+			if f.Ref == "console-output" {
+				out = append(out, f)
+			}
+		}
+		return out
+	}
+	fa, fb := scan(a, c1), scan(b, c2)
+	if len(fa) != 1 || len(fb) != 1 {
+		t.Fatalf("scan: %+v %+v", fa, fb)
+	}
+	store, _ := NewStore(data, "r")
+	store.Save(Review{SHA: c1, Status: StatusDone, Files: []FileReview{{Path: a, Findings: append(fa,
+		Finding{Line: 3, EndLine: 3, Severity: "medium", Title: "Unwritten field (SpotBugs)", Source: "rule", Ref: "spotbugs:UWF_UNWRITTEN_FIELD", Snippet: "void a() { }"})}}})
+	store.Save(Review{SHA: c2, Status: StatusDone, Files: []FileReview{{Path: b, Findings: fb}}})
+	ig := NewIgnores(data, "r", dir)
+
+	tr := NewTracker(repo, store, ig)
+	tr.Rules = rules
+	for _, is := range tr.Issues() {
+		if is.Ref == "spotbugs:UWF_UNWRITTEN_FIELD" && is.State != "open" {
+			t.Fatalf("an analyser finding must stay open while its code is there: %+v", is)
+		}
+	}
+
+	x := &Fixer{repo: repo, store: store, Ignores: ig, Rules: rules, proposals: map[string]*Proposal{}, prefetched: map[string]*Proposal{}}
+	p, err := x.ProposeGuided(c1, a, fa[0].Line, fa[0].Title, "", FixRef{SHA: c2, Path: b, Line: fb[0].Line, Title: fb[0].Title})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Paths) != 2 {
+		t.Fatalf("the fix must cover both places, got %v", p.Paths)
+	}
+	for _, e := range p.edits {
+		if strings.Contains(e.proposed, "System.out") {
+			t.Fatalf("%s still prints:\n%s", e.path, e.proposed)
+		}
 	}
 }

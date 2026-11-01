@@ -67,9 +67,10 @@ func ConflictMarkers(lines []string, changed map[int]bool) []Finding {
 }
 
 // Recheckable: a rule finding on a Java file that a whole-file scan can confirm. Findings that
-// come from the diff itself (a constant's value changing) cannot be re-derived from one version.
+// come from the diff itself (a constant's value changing) or from an analyser ("pmd:...",
+// "spotbugs:...") cannot be re-derived by the scan.
 func Recheckable(path string, f Finding) bool {
-	return f.Source == "rule" && f.Ref != "" && f.Ref != "shared-constant-changed" && strings.HasSuffix(path, ".java")
+	return f.Source == "rule" && f.Ref != "" && f.Ref != "shared-constant-changed" && !strings.Contains(f.Ref, ":") && strings.HasSuffix(path, ".java")
 }
 
 // fires reports whether a scan still flags ref at line. The code can be unchanged while the issue

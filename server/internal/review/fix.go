@@ -163,12 +163,51 @@ type ErrOffTopic struct{ Reason string }
 
 func (e ErrOffTopic) Error() string { return e.Reason }
 
-// ProposeGuided fixes an issue the way the developer suggested. The suggestion must be about this
-// issue: one naming other classes, or that the model judges unrelated, is refused before any fix
-// is generated.
-func (x *Fixer) ProposeGuided(sha, path string, line int, title, guidance string) (*Proposal, error) {
+// FixRef points at a finding in a review: another place of the issue being fixed.
+type FixRef struct {
+	SHA   string `json:"sha"`
+	Path  string `json:"path"`
+	Line  int    `json:"line"`
+	Title string `json:"title"`
+}
+
+// addPlaces adds other places of the issue, which may have been reported by other reviews.
+func (x *Fixer) addPlaces(p *fixPlan, also []FixRef) {
+	var more []placed
+	for _, ref := range also {
+		rv, ok := x.store.Get(ref.SHA)
+		if isWorking(ref.SHA) {
+			rv, ok = x.workingReview(), true
+		}
+		if !ok {
+			continue
+		}
+		f, ok := findFinding(rv, ref.Path, ref.Line, ref.Title)
+		if !ok {
+			continue
+		}
+		dup := slices.ContainsFunc(p.members, func(m placed) bool {
+			return m.path == ref.Path && m.f.Ref == f.Ref && m.f.Title == f.Title && normalizeCode(m.f.Snippet) == normalizeCode(f.Snippet)
+		})
+		if dup {
+			continue
+		}
+		if _, read := p.current[ref.Path]; !read {
+			if src, exists, err := x.repo.ReadWorking(ref.Path); err == nil && exists {
+				p.current[ref.Path] = src
+			}
+		}
+		more = append(more, placed{ref.Path, f})
+	}
+	p.members = append(p.members, x.stillFlagged(relocate(more, p.current), p.current)...)
+}
+
+// ProposeGuided fixes an issue in all its places, the way the developer suggested if they did. A
+// suggestion must be about this issue: one naming other classes, or that the model judges unrelated,
+// is refused before any fix is generated.
+func (x *Fixer) ProposeGuided(sha, path string, line int, title, guidance string, also ...FixRef) (*Proposal, error) {
 	guidance = strings.TrimSpace(guidance)
-	if guidance == "" {
+	if guidance == "" && len(also) == 0 {
 		return x.Propose(sha, path, line, title)
 	}
 	if err := x.ready(); err != nil {
@@ -184,13 +223,17 @@ func (x *Fixer) ProposeGuided(sha, path string, line int, title, guidance string
 	if why, ok := notFixable[plan.target.Ref]; ok {
 		return nil, errors.New(why)
 	}
-	if reason := x.offTopic(plan, guidance); reason != "" {
-		return nil, ErrOffTopic{reason}
+	x.addPlaces(plan, also)
+	if guidance != "" {
+		if reason := x.offTopic(plan, guidance); reason != "" {
+			return nil, ErrOffTopic{reason}
+		}
 	}
 	plan.guidance = guidance
 	p, err := x.build(plan)
 	if err == nil && isWorking(sha) {
 		p.Working = true
+		p.Message = strings.Replace(p.Message, "Found by Codist reviewing working", "Found by Codist in your uncommitted changes", 1)
 	}
 	return p, err
 }
