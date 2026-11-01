@@ -348,9 +348,10 @@ func (u *unit) node(d typeDecl) Node {
 			if m.Type() != "method_declaration" {
 				kind = "constructor"
 			}
+			cost := MethodCost(f, m)
 			n.Members = append(n.Members, Member{
 				Name: f.text(m.ChildByFieldName("name")), Kind: kind, Signature: f.signature(m),
-				StartLine: startLine(m), EndLine: endLine(m),
+				StartLine: startLine(m), EndLine: endLine(m), Cost: &cost,
 			})
 		case "field_declaration", "constant_declaration":
 			var names []string

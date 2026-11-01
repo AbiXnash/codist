@@ -691,6 +691,9 @@ func (s *Service) fileContext(a Analysis, f gitx.FileChange, in fileInput, known
 		add("## Types that depend on this file (may break)", strings.Join(deps, ", ")+"\n", 5, 0)
 	}
 
+	if costs := methodCosts(in); costs != "" {
+		add("## What the changed methods cost (measured, not guessed)", costs, 2, 300)
+	}
 	if len(guidelines) > 0 {
 		add("## Knowledge: bug patterns that resemble this code (reference, not a checklist)", knowledge.FormatEntries(guidelines, 14), 3, 1800)
 	}
@@ -864,4 +867,25 @@ func orDefault(s, def string) string {
 		return def
 	}
 	return s
+}
+
+// methodCosts summarises the measured cost of the methods this change touches, for the model.
+func methodCosts(in fileInput) string {
+	var b strings.Builder
+	for _, t := range in.types {
+		for _, m := range t.Members {
+			if m.Cost == nil || m.Kind != "method" {
+				continue
+			}
+			touched := false
+			for l := m.StartLine; l <= m.EndLine && !touched; l++ {
+				touched = in.changed[l]
+			}
+			if touched {
+				fmt.Fprintf(&b, "- %s.%s(): %s, complexity %d, %d lines, %d database and %d remote call(s), %d inside loops\n",
+					t.Name, m.Name, m.Cost.Estimate, m.Cost.Complexity, m.Cost.Lines, m.Cost.DBCalls, m.Cost.Remote, m.Cost.LoopIO)
+			}
+		}
+	}
+	return b.String()
 }

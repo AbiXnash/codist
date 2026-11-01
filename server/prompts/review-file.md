@@ -17,6 +17,14 @@ Find problems they do not mention too. Entries titled "Fixed here before" come f
 history; entries titled "Judged not a problem here" were dismissed by the team: do not report the same kind
 of finding on similar code unless it is clearly a real defect.
 
+Look beyond defects too, and say so when you see one of these on the changed lines:
+- dead code: commented-out methods, conditions or blocks, unused variables, conditions that decide nothing, comments
+  admitting a bug that is still there
+- a better method: a standard API that is clearer or cheaper than what the code does by hand
+- better logs: what a log line should add so someone can diagnose a failure from it alone, or logs that only add noise
+- a better approach: a simpler design or a cheaper algorithm, using the measured costs in "What the changed methods cost".
+  Name the concrete change and what it gains. Use severity "low" or "info" for these unless they cause real harm.
+
 Rules:
 - Only report issues tied to a specific line. Do not invent problems. If the change is fine, return no findings.
 - "line" and "endLine" must be line numbers from the numbered file.

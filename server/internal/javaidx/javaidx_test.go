@@ -469,3 +469,72 @@ func TestMainAndTestSameName(t *testing.T) {
 		}
 	}
 }
+
+func TestDeadCodeAndRecommendations(t *testing.T) {
+	src := `package shop;
+import java.util.List;
+import java.util.Map;
+public class Bad {
+    private int unusedField;
+    private final List<String> names = List.of();
+    // FIXME this breaks for empty carts
+    // public int total(Cart cart) {
+    //     return cart.sum();
+    // }
+    // if (cart == null) {
+    //     throw new IllegalStateException();
+    // }
+    // Explain why prices are rounded here, in words.
+    public int a(List<String> list, OrderRepository orderRepository) {
+        int never = 3;
+        if (true) { log.info("x" + list); }
+        if (list.size() == 0) { }
+        else { }
+        if (list.isEmpty()) { return 1; } else { return 1; }
+    }
+    public boolean b(String s) {
+        if (s.isEmpty()) { return true; } else { return false; }
+    }
+    int c(List<String> xs, List<Long> ids, OrderRepository orderRepository) {
+        for (String x : xs) { for (String y : xs) { names.size(); } }
+        for (Long id : ids) { orderRepository.findById(id); }
+        try { names.size(); } catch (RuntimeException e) { log.error("failed"); }
+        return 1;
+    }
+    private void neverCalled() { names.size(); }
+    int d() { return 1; }
+}`
+	got := map[string]bool{}
+	var lines []string
+	all := map[int]bool{}
+	for i := 1; i < 60; i++ {
+		all[i] = true
+	}
+	for _, f := range Check([]byte(src), all, Context{Path: "src/main/java/shop/Bad.java"}) {
+		got[f.ID] = true
+		lines = append(lines, f.Title)
+	}
+	for _, id := range []string{"commented-out-code", "bug-comment", "unused-field", "unused-import", "unused-local", "unused-method", "constant-condition",
+		"empty-block", "identical-branches", "simplify-boolean-return", "nested-loops", "query-in-loop", "better-method", "better-log"} {
+		if !got[id] {
+			t.Errorf("%s not reported; got %v", id, lines)
+		}
+	}
+	// Prose comments are not code, and used things are not unused.
+	clean := `package shop;
+import java.util.List;
+class Good {
+    // Prices are rounded half up because finance reports use that rule.
+    private final List<String> names = List.of();
+    int n() { int k = names.size(); return k; }
+}`
+	if fs := Check([]byte(clean), all, Context{Path: "src/main/java/shop/Good.java"}); len(fs) != 0 {
+		t.Errorf("false positives: %+v", fs)
+	}
+	g := Index(map[string][]byte{"src/main/java/shop/Bad.java": []byte(src)}, "t")
+	for _, m := range g.Nodes[0].Members {
+		if m.Name == "c" && (m.Cost == nil || m.Cost.LoopIO != 1 || m.Cost.DBCalls != 1 || m.Cost.Estimate != "O(n) round trips") {
+			t.Errorf("cost of c: %+v", m.Cost)
+		}
+	}
+}

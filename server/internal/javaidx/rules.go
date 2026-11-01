@@ -34,6 +34,7 @@ type Context struct {
 	Constants map[string]Constant // keyed by "Type.FIELD" (simple type name)
 	Domains   map[string]bool     // business areas: package segments such as customer, product, order
 	Beans     map[string]string   // simple type name -> stereotype, for project types
+	Unused    map[string]bool     // classes nothing else references and the framework does not call
 }
 
 // ProjectContext derives rule context from the graph.
@@ -62,6 +63,17 @@ func ProjectContext(g *Graph) Context {
 		}
 	}
 	ctx.IsEntity = func(s string) bool { return entities[s] }
+	// Unused classes: nothing links to them and Spring does not create them.
+	linked := map[string]bool{}
+	for _, e := range g.Edges {
+		linked[e.Target] = true
+	}
+	ctx.Unused = map[string]bool{}
+	for _, n := range g.Nodes {
+		if !linked[n.ID] && (n.Stereotype == "other" || n.Stereotype == "dto" || n.Stereotype == "exception") && n.Kind != "annotation" && !strings.Contains(n.File, "src/test/") {
+			ctx.Unused[n.Name] = true
+		}
+	}
 	return ctx
 }
 
@@ -139,6 +151,8 @@ func Check(src []byte, changed map[int]bool, ctx Context) []RuleFinding {
 			c.controller(t)
 		}
 	}
+
+	c.quality(test)
 
 	var out []RuleFinding
 	for _, x := range c.out {
@@ -547,6 +561,11 @@ func ruleID(title string) string {
 		{"Remote call", "remote-call-in-loop"},
 		{"Same message logged twice", "duplicate-log"},
 	} {
+		if strings.HasPrefix(title, m.prefix) {
+			return m.id
+		}
+	}
+	for _, m := range qualityIDs {
 		if strings.HasPrefix(title, m.prefix) {
 			return m.id
 		}

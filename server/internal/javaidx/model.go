@@ -29,6 +29,7 @@ type Member struct {
 	StartLine int    `json:"startLine"`
 	EndLine   int    `json:"endLine"`
 	Value     string `json:"value,omitempty"` // literal value of a static final constant
+	Cost      *Cost  `json:"cost,omitempty"`  // methods: what it costs to run and maintain
 }
 
 // Edge kinds: extends, implements, injects, uses.
