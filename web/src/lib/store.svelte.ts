@@ -369,6 +369,11 @@ export async function followBranch(name: string) {
 async function reloadBranch() {
   app.scope = 'all';
   app.picked = null;
+  // What was selected belongs to the branch being left.
+  app.selectedNode = null;
+  app.expanded = [];
+  app.file = null;
+  if (app.tab === 'type' || app.tab === 'code') app.tab = 'issues';
   await Promise.all([loadStatus(), loadGraph(), loadCommits(), loadIssues(), loadWorking()]);
   if (app.status?.head) await selectCommit(app.status.head);
 }

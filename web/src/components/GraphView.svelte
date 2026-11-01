@@ -316,7 +316,10 @@
     if (!cy || !app.graph) return;
     const els = elements();
     const key = [app.groupBy, app.layoutMode].join('|');
-    const rebuild = key !== builtKey || cy.elements().empty();
+    // Another branch can be entirely different code: lay it out afresh rather than around what is gone.
+    const incoming = els.filter((e) => e.group === 'nodes');
+    const kept = incoming.filter((e) => cy!.getElementById(e.data.id!).nonempty()).length;
+    const rebuild = key !== builtKey || cy.elements().empty() || kept < incoming.length / 2;
     builtKey = key;
     if (rebuild) {
       cy.elements().remove();
