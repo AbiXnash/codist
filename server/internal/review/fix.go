@@ -624,49 +624,47 @@ func (x *Fixer) ProposeEdit(ctx context.Context, path, instruction string) (*Pro
 
 // generate asks the model for the whole updated file and checks it before anyone sees it.
 func (x *Fixer) generate(llm *Ollama, system, task, path, current string) (string, string, error) {
-	answer, err := llm.ChatText(system, task+fileBlock(path, current))
-	if err != nil {
-		return "", "", err
-	}
-	m := fence.FindStringSubmatch(answer)
-	if m == nil {
-		return "", "", errors.New("the model did not return a code block; try again")
-	}
-	proposed := stripLineNumbers(m[1])
-	if strings.HasSuffix(current, "\n") && !strings.HasSuffix(proposed, "\n") {
-		proposed += "\n"
-	}
-	if proposed == current {
-		return "", "", errors.New("the model returned the file unchanged; try again or fix it by hand")
-	}
-	if strings.HasSuffix(path, ".java") && javaidx.Valid([]byte(current)) && !javaidx.Valid([]byte(proposed)) {
-		return "", "", errors.New("the model's version does not parse as Java; nothing was changed, try again")
-	}
-	if lc, lp := strings.Count(current, "\n"), strings.Count(proposed, "\n"); lp < lc/2 {
-		return "", "", errors.New("the model's version dropped most of the file; nothing was changed, try again")
-	}
-	var bad []string
-	proposed, bad = x.checkImports(current, proposed)
-	// A small model often invents a class, like a ConflictException the project does not have. It gets
-	// told what it may use instead, twice, because a second chance alone rarely changes its mind.
-	for try := 0; len(bad) > 0; try++ {
-		if try == 2 {
-			return "", "", fmt.Errorf("the model kept using classes this project does not have (%s), so nothing was changed. Try again, or say which class to use in the suggestion box, for example IllegalStateException", strings.Join(bad, ", "))
-		}
-		retry := task + "\n" + prompts.Render("retry-bad-imports", map[string]any{"Items": bad, "Candidates": x.importCandidates(bad)}) + "\n"
-		if answer, err = llm.ChatText(system, retry+fileBlock(path, current)); err != nil {
+	ask := task
+	var proposed string
+	for try := 0; ; try++ {
+		answer, err := llm.ChatText(system, ask+fileBlock(path, current))
+		if err != nil {
 			return "", "", err
 		}
-		if m = fence.FindStringSubmatch(answer); m == nil {
+		m := fence.FindStringSubmatch(answer)
+		if m == nil {
 			return "", "", errors.New("the model did not return a code block; try again")
 		}
 		proposed = stripLineNumbers(m[1])
 		if strings.HasSuffix(current, "\n") && !strings.HasSuffix(proposed, "\n") {
 			proposed += "\n"
 		}
-		proposed, bad = x.checkImports(current, proposed)
-		if len(bad) == 0 && strings.HasSuffix(path, ".java") && !javaidx.Valid([]byte(proposed)) {
+		if strings.HasSuffix(path, ".java") && javaidx.Valid([]byte(current)) && !javaidx.Valid([]byte(proposed)) {
 			return "", "", errors.New("the model's version does not parse as Java; nothing was changed, try again")
+		}
+		if lc, lp := strings.Count(current, "\n"), strings.Count(proposed, "\n"); lp < lc/2 {
+			return "", "", errors.New("the model's version dropped most of the file; nothing was changed, try again")
+		}
+		var bad []string
+		proposed, bad = x.checkImports(current, proposed)
+		// Every attempt is checked, because a model told off often gives up and hands the file back
+		// unchanged, sometimes with a blank line moved so that it still looks like a diff.
+		unchanged := sameCode(current, proposed)
+		if !unchanged && len(bad) == 0 {
+			break
+		}
+		if try == 2 {
+			if unchanged {
+				return "", "", errors.New("the model could not produce a change that fixes this, so nothing was changed. Say how to fix it in the suggestion box, or fix it by hand")
+			}
+			return "", "", fmt.Errorf("the model kept using classes this project does not have (%s), so nothing was changed. Say which class to use in the suggestion box, for example IllegalStateException", strings.Join(bad, ", "))
+		}
+		// A small model often invents a class, like a ConflictException the project does not have. It
+		// is shown its own attempt and told what it may use instead, so it keeps the fix.
+		if unchanged {
+			ask = task + "\n" + prompts.Render("retry-no-change", nil) + "\n"
+		} else {
+			ask = task + "\n" + prompts.Render("retry-bad-imports", map[string]any{"Items": bad, "Candidates": x.importCandidates(bad), "Previous": proposed}) + "\n"
 		}
 	}
 	patch, err := gitx.UnifiedDiff(path, current, proposed)
@@ -1055,6 +1053,11 @@ func (x *Fixer) checkImports(before, after string) (string, []string) {
 		return line
 	})
 	return out, bad
+}
+
+// sameCode says two versions differ only in spacing and blank lines.
+func sameCode(a, b string) bool {
+	return strings.Join(strings.Fields(a), " ") == strings.Join(strings.Fields(b), " ")
 }
 
 // importCandidates lists real project classes of the same sort as the invented ones: for an invented

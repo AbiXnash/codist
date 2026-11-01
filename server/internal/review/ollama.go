@@ -89,26 +89,11 @@ func (o *Ollama) chatJSON(system, user string) (map[string]any, error) {
 			{"role": "user", "content": user},
 		},
 	})
-	done := o.record(system, user)
-	resp, err := o.post(body)
+	answer, err := o.once(body, system, user)
 	if err != nil {
-		done("", err, 0, 0)
 		return nil, err
 	}
-	defer resp.Body.Close()
-	var out struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-		PromptEvalCount int `json:"prompt_eval_count"`
-		EvalCount       int `json:"eval_count"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		done("", err, 0, 0)
-		return nil, err
-	}
-	done(out.Message.Content, nil, out.PromptEvalCount, out.EvalCount)
-	content := strings.TrimSpace(out.Message.Content)
+	content := strings.TrimSpace(answer)
 	content = strings.TrimPrefix(strings.TrimPrefix(content, "```json"), "```")
 	content = strings.TrimSpace(strings.TrimSuffix(content, "```"))
 	var parsed map[string]any
@@ -186,6 +171,11 @@ func (o *Ollama) ChatText(system, user string) (string, error) {
 			{"role": "user", "content": user},
 		},
 	})
+	return o.once(body, system, user)
+}
+
+// exchange makes one real model call and records it.
+func (o *Ollama) exchange(body []byte, system, user string) (string, error) {
 	done := o.record(system, user)
 	resp, err := o.post(body)
 	if err != nil {

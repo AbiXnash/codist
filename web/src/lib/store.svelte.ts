@@ -579,6 +579,7 @@ export async function openIncident(id: string | null) {
 }
 
 export function closeFix() {
+  if (app.fix?.busy === 'generating') toast('Cancelled: the model has stopped working on this fix', 'info', 3000);
   cancelAI(); // still generating: stop the model
   const id = app.fix?.proposal?.id;
   if (id) void api.discardFix(id);

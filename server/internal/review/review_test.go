@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1133,5 +1134,119 @@ func TestCheckImportsCorrectsWrongPackageAndOffersRealClasses(t *testing.T) {
 	got := x.importCandidates(bad)
 	if len(got) != 2 || got[0] != "com.demo.shop.error.BadRequestException" {
 		t.Errorf("candidates = %v, want the project's exceptions", got)
+	}
+}
+
+func TestSameCodeIgnoresOnlySpacing(t *testing.T) {
+	if !sameCode("import a;\n\nimport b;\nclass A {}\n", "import a;\nimport b;\nclass A  {}\n") {
+		t.Error("removing a blank line is not a change")
+	}
+	if sameCode("int a = 1;", "int a = 2;") {
+		t.Error("a changed value is a change")
+	}
+}
+
+// A model answers with what it is scripted to, one reply per call.
+func scriptedFixer(t *testing.T, known map[string]bool, replies ...string) (*Fixer, *Ollama, *int) {
+	t.Helper()
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		reply := replies[min(calls, len(replies)-1)]
+		calls++
+		_ = json.NewEncoder(w).Encode(map[string]any{"message": map[string]string{"content": "```java\n" + reply + "\n```"}, "done": true})
+	}))
+	t.Cleanup(srv.Close)
+	return &Fixer{Known: func() map[string]bool { return known }}, &Ollama{URL: srv.URL, Model: "m", HTTP: srv.Client()}, &calls
+}
+
+func TestGenerateKeepsAskingUntilTheFixIsReal(t *testing.T) {
+	known := map[string]bool{"com.demo.A": true, "com.demo.B": true}
+	current := "package com.demo;\n\nimport com.demo.B;\n\nclass A { int x = 1; }\n"
+	invented := "package com.demo;\n\nimport com.demo.nope.Missing;\nimport com.demo.B;\n\nclass A { int x = 2; }"
+	blank := "package com.demo;\nimport com.demo.B;\n\nclass A { int x = 1; }"
+	fixed := "package com.demo;\n\nimport com.demo.B;\n\nclass A { int x = 2; }"
+
+	x, llm, calls := scriptedFixer(t, known, invented, blank, fixed)
+	got, _, err := x.generate(llm, "s", "t", "A.java", current)
+	if err != nil || !strings.Contains(got, "x = 2") || *calls != 3 {
+		t.Fatalf("got %q, err %v, calls %d", got, err, *calls)
+	}
+
+	x, llm, calls = scriptedFixer(t, known, blank)
+	// The second retry is the same prompt as the first, so it is answered without another call.
+	if _, _, err = x.generate(llm, "s", "t", "A.java", current); err == nil || *calls != 2 {
+		t.Fatalf("a whitespace-only fix must be refused after retries: err %v, calls %d", err, *calls)
+	}
+}
+
+func TestIdenticalModelCallsAreMadeOnce(t *testing.T) {
+	var mu sync.Mutex
+	calls := 0
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		mu.Lock()
+		calls++
+		mu.Unlock()
+		select {
+		case <-release:
+		case <-r.Context().Done():
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"message": map[string]string{"content": "answer"}})
+	}))
+	defer srv.Close()
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
+	o := &Ollama{URL: srv.URL, Model: "m", HTTP: srv.Client()}
+	count := func() int { mu.Lock(); defer mu.Unlock(); return calls }
+
+	// The first caller cancels: the one that joined it gets its own call, and nothing is lost.
+	ctx, cancel := context.WithCancel(context.Background())
+	first := make(chan error, 1)
+	go func() { _, err := o.With(ctx).ChatText("s", "u"); first <- err }()
+	for count() == 0 {
+		time.Sleep(5 * time.Millisecond)
+	}
+	var wg sync.WaitGroup
+	answers := make([]string, 4)
+	for i := range answers {
+		wg.Add(1)
+		go func() { defer wg.Done(); answers[i], _ = o.ChatText("s", "u") }()
+	}
+	time.Sleep(50 * time.Millisecond)
+	if n := count(); n != 1 {
+		t.Fatalf("joined callers made their own calls: %d", n)
+	}
+	cancel()
+	if err := <-first; !errors.Is(err, context.Canceled) {
+		t.Fatalf("the cancelled caller should see it: %v", err)
+	}
+	for count() < 2 {
+		time.Sleep(5 * time.Millisecond)
+	}
+	close(release)
+	wg.Wait()
+	for _, a := range answers {
+		if a != "answer" {
+			t.Fatalf("answers = %v", answers)
+		}
+	}
+	if n := count(); n != 2 {
+		t.Errorf("calls = %d, want the cancelled one and one more", n)
+	}
+
+	// Asked again later: no call. Asked something else: a call.
+	if a, _ := o.ChatText("s", "u"); a != "answer" || count() != 2 {
+		t.Errorf("a repeat should reuse the answer: %q, %d calls", a, count())
+	}
+	if _, _ = o.ChatText("s", "different"); count() != 3 {
+		t.Errorf("a different prompt needs its own call: %d", count())
 	}
 }

@@ -60,6 +60,10 @@
     return out;
   });
 
+  // The model can change plenty and still leave the problem. It can't be proven here, but this can be seen.
+  const flagged = $derived((app.fix?.finding.snippet ?? '').split('\n').map((l) => l.trim()).find((l) => l.length > 3) ?? '');
+  const untouched = $derived(!!flagged && !lines.some((l) => l.startsWith('-') && l.includes(flagged)));
+
   // Saying why teaches later reviews and fixes; it is never required.
   async function reject() {
     const f = app.fix;
@@ -91,7 +95,7 @@
 {#if app.fix}
   {@const f = app.fix}
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-  <div class="backdrop" onclick={() => { if (f.busy !== 'applying') closeFix(); }}></div>
+  <div class="backdrop" onclick={() => { if (!f.busy && !f.proposal) closeFix(); }}></div>
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="fix-title">
     <header>
       <div>
@@ -101,7 +105,7 @@
           {f.proposal ? (f.proposal.working ? ' · working tree, not committed' : ` · commit to ${f.proposal.branch}`) : ''}
         </div>
       </div>
-      <button class="icon-btn" aria-label="Close" disabled={!!f.busy} onclick={closeFix}>
+      <button class="icon-btn" aria-label={f.busy === 'generating' ? 'Cancel' : 'Close'} title={f.busy === 'generating' ? 'Cancel and stop the model' : 'Close'} disabled={f.busy === 'applying'} onclick={closeFix}>
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m4 4 8 8M12 4l-8 8"/></svg>
       </button>
     </header>
@@ -116,6 +120,9 @@
             {#if f.finding.detail}<p>{f.finding.detail}</p>{/if}
             {#if f.finding.suggestion}<p class="rec"><b>Recommendation:</b> {f.finding.suggestion}</p>{/if}
           </section>
+        {/if}
+        {#if untouched}
+          <p class="warn"><b>The flagged line is unchanged:</b> <code>{flagged}</code>. Check that this really fixes the problem before applying it.</p>
         {/if}
         <div class="diff-head">
           <span class="label">Old and new</span>
@@ -160,7 +167,7 @@
     </div>
 
     <footer>
-      <span class="faint hint">{f.proposal ? `⌘↵ to ${f.proposal.working ? 'apply' : 'commit'} · Esc to discard` : f.busy === 'generating' ? 'Esc to cancel' : ''}</span>
+      <span class="faint hint">{f.proposal ? `⌘↵ to ${f.proposal.working ? 'apply' : 'commit'} · Esc to discard` : f.busy === 'generating' ? 'Cancel or Esc stops the model. Clicking outside does nothing.' : ''}</span>
       {#if f.proposal && rejecting}
         <button class="btn secondary" onclick={() => (rejecting = false)}>Back</button>
         <button class="btn" onclick={reject}>{reason.trim() ? 'Reject and remember' : 'Reject'}</button>
@@ -203,6 +210,9 @@
   .why { margin-bottom: 12px; padding: 9px 12px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--r); background: var(--surface-2); }
   .why p { margin: 4px 0 0; color: var(--text-2); }
   .why .rec b { color: var(--text); font-weight: 600; }
+  .warn { margin: 0 0 12px; padding: 8px 12px; border-radius: var(--r); color: var(--text); background: color-mix(in srgb, var(--warn) 13%, transparent); font-size: 12.5px; }
+  .warn b { color: var(--warn); font-weight: 600; }
+  .warn code { font: 11.5px var(--mono); overflow-wrap: anywhere; }
   .grow { flex: 1; }
   .seg { display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface-2); }
   .seg button { height: 20px; padding: 0 8px; border: 0; border-radius: 3px; background: none; font-size: 11px; color: var(--text-3); }

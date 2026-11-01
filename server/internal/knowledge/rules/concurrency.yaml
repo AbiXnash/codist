@@ -25,7 +25,7 @@
   good: |
     // unique constraint on email, and translate the violation:
     try { customers.saveAndFlush(new Customer(email)); }
-    catch (DataIntegrityViolationException e) { throw new ConflictException("Email already registered"); }
+    catch (DataIntegrityViolationException e) { throw new IllegalStateException("Email already registered", e); }
 
 - id: lost-update
   title: Read-modify-write without locking (lost update)
