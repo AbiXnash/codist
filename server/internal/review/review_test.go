@@ -924,3 +924,161 @@ func TestClassify(t *testing.T) {
 		}
 	}
 }
+
+func newRepoT(t *testing.T) (string, func(who string, args ...string) string) {
+	dir := t.TempDir()
+	git := func(who string, args ...string) string {
+		out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=" + who + "@x", "-c", "user.name=" + who}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %s", args, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	git("Ann", "init", "-q", "-b", "main")
+	return dir, git
+}
+
+func TestRewordKeepsContentAndRefusesPushed(t *testing.T) {
+	dir, git := newRepoT(t)
+	for i, m := range []string{"one", "wip", "three"} {
+		os.WriteFile(filepath.Join(dir, "f.txt"), []byte(strings.Repeat("x\n", i+1)), 0o644)
+		git("Ann", "add", "-A")
+		git("Ann", "commit", "-qm", m)
+	}
+	os.WriteFile(filepath.Join(dir, "local.txt"), []byte("uncommitted\n"), 0o644)
+	treeBefore := git("Ann", "rev-parse", "HEAD^{tree}")
+	authorBefore := git("Ann", "log", "--format=%an %ae %at", "-3")
+	target := git("Ann", "rev-parse", "HEAD~1")
+	repo, _ := gitx.Open(config.Config{RepoPath: dir})
+	mapping, err := repo.Reword(target, "fix(core): say what it does")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mapping) != 2 {
+		t.Fatalf("the commit and the one after it are recreated: %v", mapping)
+	}
+	if got := git("Ann", "log", "--format=%s", "-3"); got != "three\nfix(core): say what it does\none" {
+		t.Fatalf("messages:\n%s", got)
+	}
+	if git("Ann", "rev-parse", "HEAD^{tree}") != treeBefore || git("Ann", "log", "--format=%an %ae %at", "-3") != authorBefore {
+		t.Fatal("content, authors and dates must not change")
+	}
+	if st := git("Ann", "status", "--short"); st != "?? local.txt" {
+		t.Fatalf("local changes must survive: %q", st)
+	}
+	remote := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", "--bare", remote).CombinedOutput(); err != nil {
+		t.Fatalf("%s", out)
+	}
+	git("Ann", "remote", "add", "origin", remote)
+	git("Ann", "push", "-q", "origin", "main")
+	if _, err := repo.Reword(repo.Head(), "nope"); err == nil || !strings.Contains(err.Error(), "already pushed") {
+		t.Fatalf("pushed commits must be refused: %v", err)
+	}
+}
+
+func TestBranchAlerts(t *testing.T) {
+	dir, git := newRepoT(t)
+	write := func(p, s string) { os.WriteFile(filepath.Join(dir, p), []byte(s), 0o644) }
+	write("a.txt", "1\n2\n3\n")
+	write("b.txt", "b\n")
+	git("Ann", "add", "-A")
+	git("Ann", "commit", "-qm", "start")
+	git("Ann", "checkout", "-qb", "ana/one")
+	write("a.txt", "1\nANA\n3\n")
+	git("Ana", "commit", "-qam", "ana")
+	git("Ann", "checkout", "-q", "main")
+	git("Ann", "checkout", "-qb", "ravi/two")
+	write("a.txt", "1\nRAVI\n3\n")
+	git("Ravi", "commit", "-qam", "ravi")
+	git("Ann", "checkout", "-q", "main")
+	git("Ann", "checkout", "-qb", "sam/three")
+	write("b.txt", "sam\n")
+	git("Sam", "commit", "-qam", "sam")
+	git("Ann", "checkout", "-q", "main")
+	git("Ann", "branch", "old")
+	write("a.txt", "1\nMAIN\n3\n")
+	git("Ann", "commit", "-qam", "main moves")
+	repo, _ := gitx.Open(config.Config{RepoPath: dir})
+	rep, err := Branches(repo, []string{"b.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var titles []string
+	for _, a := range rep.Alerts {
+		titles = append(titles, a.Severity+": "+a.Title+" "+strings.Join(a.People, ","))
+	}
+	all := strings.Join(titles, "\n")
+	for _, want := range []string{"conflict: ana/one conflicts with main Ana", "conflict: ravi/two conflicts with main Ravi", "conflict: ana/one and ravi/two conflict Ana,Ravi", "overlap: Your local changes touch files changed on sam/three Sam"} {
+		if !strings.Contains(all, want) {
+			t.Errorf("missing %q in:\n%s", want, all)
+		}
+	}
+	if strings.Contains(all, "sam/three conflicts") {
+		t.Errorf("sam/three merges cleanly:\n%s", all)
+	}
+	for _, b := range rep.Branches {
+		if b.Name == "old" && !b.Merged {
+			t.Errorf("old has nothing to merge: %+v", b)
+		}
+	}
+}
+
+func TestCommitPlanGroupsRelatedFiles(t *testing.T) {
+	w := Working{Changes: []gitx.FileChange{
+		{ChangeType: "MODIFY", NewPath: "order-service/src/main/java/o/OrderService.java", Path: "order-service/src/main/java/o/OrderService.java"},
+		{ChangeType: "MODIFY", NewPath: "order-service/src/main/java/o/OrderController.java", Path: "order-service/src/main/java/o/OrderController.java"},
+		{ChangeType: "ADD", NewPath: "order-service/src/test/java/o/OrderServiceTest.java", Path: "order-service/src/test/java/o/OrderServiceTest.java"},
+		{ChangeType: "MODIFY", NewPath: "product-service/src/main/java/p/Price.java", Path: "product-service/src/main/java/p/Price.java"},
+		{ChangeType: "MODIFY", NewPath: "README.md", Path: "README.md"},
+		{ChangeType: "MODIFY", NewPath: "pom.xml", Path: "pom.xml"},
+	}}
+	g := &javaidx.Graph{Nodes: []javaidx.Node{{ID: "o.OrderController", File: "order-service/src/main/java/o/OrderController.java"}, {ID: "o.OrderService", File: "order-service/src/main/java/o/OrderService.java"}},
+		Edges: []javaidx.Edge{{Source: "o.OrderController", Target: "o.OrderService", Kind: "injects"}}}
+	plan := CommitPlan(g, w)
+	if len(plan) != 4 {
+		t.Fatalf("expected build, order (with its test), product and docs: %+v", plan)
+	}
+	if !strings.HasPrefix(plan[0].Message, "build") || !strings.HasPrefix(plan[len(plan)-1].Message, "docs") {
+		t.Fatalf("order: %+v", plan)
+	}
+	for _, c := range plan {
+		if strings.Contains(c.Message, "(order)") && len(c.Files) != 3 {
+			t.Fatalf("the service, controller and test belong together: %+v", c)
+		}
+	}
+}
+
+func TestMemoryReachesPromptsAndCanBeShared(t *testing.T) {
+	data, root := t.TempDir(), t.TempDir()
+	m := NewMemory(data, "r", root)
+	a, err := m.Add(MemoryItem{Text: "We keep field injection in legacy controllers", Ref: "field-injection", Title: "Field injection", Kind: "rejected-fix", By: "Ann"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Add(MemoryItem{Text: "Never log card tokens", By: "Ann"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := m.ForPrompt("A.java", "field-injection"); !strings.Contains(got, "legacy controllers") || !strings.Contains(got, "card tokens") {
+		t.Fatalf("prompt: %s", got)
+	}
+	if got := m.ForPrompt("A.java", "console-output"); strings.Contains(got, "legacy controllers") || !strings.Contains(got, "card tokens") {
+		t.Fatalf("another rule must not get this item: %s", got)
+	}
+	if err := m.Share(a.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	other := NewMemory(t.TempDir(), "r", root) // a teammate's checkout
+	if got := other.All(); len(got) != 1 || !got[0].Team {
+		t.Fatalf("teammate sees: %+v", got)
+	}
+	if err := m.Share(a.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Remove(a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.All()) != 1 {
+		t.Fatalf("after remove: %+v", m.All())
+	}
+}

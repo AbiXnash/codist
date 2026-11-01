@@ -7,6 +7,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -808,6 +809,105 @@ func (r *Repo) TrackedFiles() []string {
 		return nil
 	}
 	return strings.Fields(out)
+}
+
+// Run executes a git command in the repository.
+func (r *Repo) Run(args ...string) (string, error) { return r.git(args...) }
+
+// Pushed reports whether a commit is already on a remote branch, so rewriting it would diverge.
+func (r *Repo) Pushed(sha string) bool {
+	out, err := r.git("branch", "-r", "--contains", sha)
+	return err == nil && strings.TrimSpace(out) != ""
+}
+
+// Reword replaces a commit's message without touching any file: the commit and those after it are
+// recreated with the same trees, authors and dates, then the branch moves in one atomic step. It
+// returns old -> new ids. Merges in the range, and commits already pushed, are refused.
+func (r *Repo) Reword(sha, message string) (map[string]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.Remote {
+		return nil, errors.New("this repository is a read-only mirror")
+	}
+	if b, _ := r.git("rev-parse", "--abbrev-ref", "HEAD"); strings.TrimSpace(b) != r.Branch {
+		return nil, fmt.Errorf("switch to %s first", r.Branch)
+	}
+	head := r.Head()
+	if _, err := r.git("merge-base", "--is-ancestor", sha, head); err != nil {
+		return nil, errors.New("this commit is not on the current branch")
+	}
+	if r.Pushed(sha) {
+		return nil, errors.New("this commit is already pushed: rewording it would rewrite shared history, so Codist will not do it")
+	}
+	// The commit and everything after it; a root commit means the whole branch.
+	var list string
+	var err error
+	if parents, perr := r.git("rev-list", "--parents", "-n", "1", sha); perr == nil && len(strings.Fields(parents)) > 1 {
+		list, err = r.git("rev-list", "--reverse", "--ancestry-path", strings.Fields(parents)[1]+".."+head)
+	} else {
+		list, err = r.git("rev-list", "--reverse", head)
+	}
+	if err != nil {
+		return nil, err
+	}
+	mapping := map[string]string{}
+	newHead := ""
+	for _, c := range strings.Fields(list) {
+		info, err := r.git("show", "-s", "--format=%T%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%cn%x1f%ce%x1f%cI%x1f%B", c)
+		if err != nil {
+			return nil, err
+		}
+		f := strings.SplitN(info, "\x1f", 9)
+		if len(f) != 9 {
+			return nil, fmt.Errorf("cannot read commit %s", c)
+		}
+		parents := strings.Fields(f[1])
+		if len(parents) > 1 {
+			return nil, errors.New("there is a merge after this commit; reword it with git rebase instead")
+		}
+		msg := strings.TrimRight(f[8], "\n") + "\n"
+		if c == sha {
+			msg = strings.TrimSpace(message) + "\n"
+		}
+		args := []string{"-C", r.Root, "commit-tree", f[0], "-F", "-"}
+		for _, p := range parents {
+			if n, ok := mapping[p]; ok {
+				p = n
+			}
+			args = append(args, "-p", p)
+		}
+		cmd := exec.Command("git", args...)
+		cmd.Stdin = strings.NewReader(msg)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME="+f[2], "GIT_AUTHOR_EMAIL="+f[3], "GIT_AUTHOR_DATE="+f[4],
+			"GIT_COMMITTER_NAME="+f[5], "GIT_COMMITTER_EMAIL="+f[6], "GIT_COMMITTER_DATE="+f[7])
+		out, err := cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("recreating %s: %w", c[:7], err)
+		}
+		newHead = strings.TrimSpace(string(out))
+		mapping[c] = newHead
+	}
+	if newHead == "" {
+		return nil, errors.New("nothing to reword")
+	}
+	if _, err := r.git("update-ref", "-m", "codist: reword "+sha[:7], "refs/heads/"+r.Branch, newHead, head); err != nil {
+		return nil, fmt.Errorf("the branch moved meanwhile, nothing was changed: %w", err)
+	}
+	return mapping, nil
+}
+
+// CommitPaths stages the given paths and commits exactly those, leaving other changes alone.
+func (r *Repo) CommitPaths(paths []string, message string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, err := r.git(append([]string{"add", "-A", "--"}, paths...)...); err != nil {
+		return "", err
+	}
+	if _, err := r.git(append([]string{"commit", "--quiet", "-m", message, "--"}, paths...)...); err != nil {
+		return "", err
+	}
+	out, err := r.git("rev-parse", "HEAD")
+	return strings.TrimSpace(out), err
 }
 
 // UserName is the git user.name configured for the repository (who signs off).

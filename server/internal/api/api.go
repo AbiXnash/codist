@@ -2,6 +2,7 @@
 package api
 
 import (
+	"codist/internal/knowledge"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -14,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"codist/internal/config"
 	"codist/internal/events"
@@ -39,6 +41,7 @@ type Server struct {
 	Tracker   *review.Tracker
 	Incidents *incident.Engine
 	SignOffs  *review.SignOffs
+	Memory    *review.Memory
 
 	relMu    sync.Mutex
 	relCache map[string]review.ReleaseReport // release commit + tracker version -> report
@@ -91,6 +94,160 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /api/repo", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, review.Repo(s.Repo, s.Graph.Graph(), s.Tracker.Issues()))
+	})
+	mux.HandleFunc("GET /api/branches", func(w http.ResponseWriter, r *http.Request) {
+		began := time.Now()
+		local := []string{}
+		if changes, err := s.Repo.WorkingChanges(); err == nil && !s.Repo.Remote {
+			for _, c := range changes {
+				local = append(local, firstNonEmpty(c.NewPath, c.Path))
+			}
+		}
+		rep, err := review.Branches(s.Repo, local)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		rep.TookMs = time.Since(began).Milliseconds()
+		writeJSON(w, rep)
+	})
+	mux.HandleFunc("GET /api/working/plan", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, review.CommitPlan(s.Graph.Graph(), review.WorkingReview(s.Repo, s.Fixer.Rules, s.Reviews.Ignores)))
+	})
+	mux.HandleFunc("POST /api/working/message", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Files []string `json:"files"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Files) == 0 {
+			writeError(w, http.StatusBadRequest, "which files?")
+			return
+		}
+		diff, err := s.Repo.Run(append([]string{"diff", "--no-color", "HEAD", "--"}, req.Files...)...)
+		if err != nil {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		if strings.TrimSpace(diff) == "" {
+			diff = "New files: " + strings.Join(req.Files, ", ")
+		}
+		msg, why, err := s.Fixer.CommitMessage(r.Context(), "", req.Files[0], diff, "")
+		if err != nil {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeJSON(w, map[string]string{"message": msg, "why": why})
+	})
+	mux.HandleFunc("POST /api/working/commit", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Files   []string `json:"files"`
+			Message string   `json:"message"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Files) == 0 || strings.TrimSpace(req.Message) == "" {
+			writeError(w, http.StatusBadRequest, "files and a message are required")
+			return
+		}
+		if !s.Fixer.Enabled() {
+			writeError(w, http.StatusConflict, "this repository is a read-only mirror")
+			return
+		}
+		if op := s.Repo.Operation(); op != "" {
+			writeError(w, http.StatusConflict, "a "+op+" is in progress; finish or abort it first")
+			return
+		}
+		sha, err := s.Repo.CommitPaths(req.Files, req.Message)
+		if err != nil {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeJSON(w, map[string]string{"commit": sha})
+	})
+	mux.HandleFunc("POST /api/commits/{sha}/message", func(w http.ResponseWriter, r *http.Request) {
+		c, err := s.Repo.Commit(r.PathValue("sha"))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		diff, err := s.Repo.Run("show", "--no-color", "--format=", c.SHA)
+		if err != nil {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		msg, why, err := s.Fixer.CommitMessage(r.Context(), c.SHA, "", diff, c.FullMessage)
+		if err != nil {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"message": msg, "why": why, "pushed": s.Repo.Pushed(c.SHA)})
+	})
+	mux.HandleFunc("POST /api/commits/{sha}/reword", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Message string `json:"message"`
+		}
+		c, err := s.Repo.Commit(r.PathValue("sha"))
+		if err != nil || json.NewDecoder(r.Body).Decode(&req) != nil || strings.TrimSpace(req.Message) == "" {
+			writeError(w, http.StatusBadRequest, "a commit and a message are required")
+			return
+		}
+		if op := s.Repo.Operation(); op != "" {
+			writeError(w, http.StatusConflict, "a "+op+" is in progress; finish or abort it first")
+			return
+		}
+		mapping, err := s.Repo.Reword(c.SHA, req.Message)
+		if err != nil {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		s.Store.Rekey(mapping)
+		writeJSON(w, map[string]any{"commit": mapping[c.SHA], "rewritten": len(mapping)})
+	})
+	mux.HandleFunc("GET /api/memory", func(w http.ResponseWriter, r *http.Request) {
+		kb := s.Reviews.Knowledge()
+		lessons := []knowledge.Entry{}
+		for _, e := range kb.Entries {
+			if e.Source != "built-in" {
+				lessons = append(lessons, e)
+			}
+		}
+		rules := []knowledge.Rule{}
+		for _, ru := range kb.Rules {
+			if !strings.HasPrefix(ru.Source, "built-in") {
+				rules = append(rules, ru)
+			}
+		}
+		writeJSON(w, map[string]any{"items": s.Memory.All(), "lessons": lessons, "rules": rules, "ignores": s.Reviews.Ignores.All(),
+			"builtinEntries": len(kb.Entries) - len(lessons), "builtinRules": len(kb.Rules) - len(rules)})
+	})
+	mux.HandleFunc("POST /api/memory", func(w http.ResponseWriter, r *http.Request) {
+		var it review.MemoryItem
+		if err := json.NewDecoder(r.Body).Decode(&it); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request")
+			return
+		}
+		it.By = s.Repo.UserName()
+		saved, err := s.Memory.Add(it)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, saved)
+	})
+	mux.HandleFunc("DELETE /api/memory/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if err := s.Memory.Remove(r.PathValue("id")); err != nil {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("POST /api/memory/{id}/share", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Team bool `json:"team"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if err := s.Memory.Share(r.PathValue("id"), req.Team); err != nil {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("GET /api/prompts", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, prompts.All()) })
 	mux.HandleFunc("GET /api/working", func(w http.ResponseWriter, r *http.Request) {

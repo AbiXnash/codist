@@ -119,7 +119,9 @@ func (w *Watcher) tick() {
 		w.hub.Publish("commits", map[string]any{"head": head, "new": shas})
 		if w.cfg.AutoReview {
 			for _, sha := range shas {
-				w.reviews.Enqueue(sha)
+				if !w.reviews.Reviewed(sha) { // a reworded commit keeps its review
+					w.reviews.Enqueue(sha)
+				}
 			}
 		}
 	}

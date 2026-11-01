@@ -98,6 +98,7 @@ type Fixer struct {
 	Busy    func() bool                    // true while reviews are running; prefetch waits
 	OnReady func(sha, key string)          // a prefetched fix became available
 	OnFixed func(ids []string, sha string) // a fix was committed
+	Memory  *Memory                        // what developers taught Codist about this repository
 }
 
 func NewFixer(repo *gitx.Repo, fix, ask *Ollama, store *Store) *Fixer {
@@ -453,6 +454,9 @@ func (x *Fixer) build(p *fixPlan) (out *Proposal, err error) {
 			if f.Suggestion != "" {
 				user.WriteString("Suggested fix:\n" + f.Suggestion + "\n")
 			}
+		}
+		if told := x.Memory.ForPrompt(file, target.Ref); told != "" {
+			user.WriteString("\n## What the developers of this repository told you (follow it)\n" + told)
 		}
 		if p.guidance != "" {
 			user.WriteString("\n" + prompts.Render("fix-guidance", map[string]any{"Guidance": p.guidance}) + "\n")
@@ -1093,4 +1097,26 @@ class %s {
 	f := Finding{Title: "Regression test: " + cls + "." + field + " is injected", Detail: title, Severity: "info", Category: "test"}
 	msg := fmt.Sprintf("test(%s): assert %s is injected\n\nRegression test for: %s\n\nWritten by Codist.", cls, field, title)
 	return x.store_("", f, msg, []edit{{path: testPath, proposed: test, created: true}})
+}
+
+// CommitMessage asks the model for a better message from a diff and the author's message.
+func (x *Fixer) CommitMessage(ctx context.Context, sha, path, diff, old string) (string, string, error) {
+	var user strings.Builder
+	if old != "" {
+		user.WriteString("## The message the author wrote\n" + old + "\n\n")
+	}
+	user.WriteString("## The diff\n```diff\n" + trimTo(diff, 24000) + "\n```\n")
+	title := "Commit message for local changes"
+	if sha != "" {
+		title = "Commit message for " + shortSHA(sha)
+	}
+	out, err := x.llm.With(ctx).For(Label{Kind: "commit-message", Title: title, SHA: sha, Path: path}).ChatJSON(prompts.Get("commit-message"), user.String())
+	if err != nil {
+		return "", "", err
+	}
+	msg := strings.TrimSpace(str(out["message"]))
+	if msg == "" {
+		return "", "", errors.New("the model returned no message; try again")
+	}
+	return msg, strings.TrimSpace(str(out["why"])), nil
 }

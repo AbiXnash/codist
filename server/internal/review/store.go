@@ -82,3 +82,13 @@ func (s *Store) All() []Review {
 	})
 	return out
 }
+
+// Rekey makes reviews follow commits that were recreated with the same content (a reworded message).
+func (s *Store) Rekey(mapping map[string]string) {
+	for old, now := range mapping {
+		if r, ok := s.Get(old); ok {
+			r.SHA = now
+			s.Save(r)
+		}
+	}
+}

@@ -101,7 +101,7 @@ type RepoConstant struct {
 	Line  int    `json:"line"`
 }
 
-var serverPort = regexp.MustCompile(`(?m)^\s*server\.port\s*[=:]\s*(\S+)`)
+var serverPort = regexp.MustCompile(`(?m)^\s*server\.port\s*[=:]\s*(\S+)|^server:\s*\n\s+port:\s*(\S+)`)
 
 // Repo builds the report from the graph, the tracker and git.
 func Repo(repo *gitx.Repo, g *javaidx.Graph, issues []Issue) RepoReport {
@@ -152,7 +152,7 @@ func Repo(repo *gitx.Repo, g *javaidx.Graph, issues []Issue) RepoReport {
 			s := service(strings.TrimSuffix(mod, "/"))
 			if src, ok := repo.ReadFile(head, f); ok {
 				if m := serverPort.FindStringSubmatch(src); m != nil {
-					s.Port = m[1]
+					s.Port = m[1] + m[2]
 				}
 			}
 		}
@@ -277,7 +277,9 @@ func Repo(repo *gitx.Repo, g *javaidx.Graph, issues []Issue) RepoReport {
 		return r.Endpoints[i].Route < r.Endpoints[j].Route
 	})
 	sort.Slice(r.Calls, func(i, j int) bool { return r.Calls[i].From+r.Calls[i].To < r.Calls[j].From+r.Calls[j].To })
-	sort.Slice(r.Constants, func(i, j int) bool { return r.Constants[i].Class+r.Constants[i].Name < r.Constants[j].Class+r.Constants[j].Name })
+	sort.Slice(r.Constants, func(i, j int) bool {
+		return r.Constants[i].Class+r.Constants[i].Name < r.Constants[j].Class+r.Constants[j].Name
+	})
 	for _, s := range services {
 		if s.Files > 0 || s.Types > 0 {
 			sort.Strings(s.Calls)
@@ -297,4 +299,6 @@ func Repo(repo *gitx.Repo, g *javaidx.Graph, issues []Issue) RepoReport {
 
 var repoPathVar = regexp.MustCompile(`\{[^}]*\}`)
 
-func pathVarRoute(route string) string { return repoPathVar.ReplaceAllString(strings.TrimSpace(route), "{}") }
+func pathVarRoute(route string) string {
+	return repoPathVar.ReplaceAllString(strings.TrimSpace(route), "{}")
+}

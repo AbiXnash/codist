@@ -47,6 +47,7 @@ type Service struct {
 
 	OnDone func(sha string) // called after a review finishes (used to prefetch fixes)
 	Tools  *tools.Runner    // PMD and SpotBugs; nil or none active to skip
+	Memory *Memory          // what developers taught Codist about this repository
 
 	kbMu    sync.Mutex
 	kb      *knowledge.Base
@@ -702,6 +703,9 @@ func (s *Service) fileContext(a Analysis, f gitx.FileChange, in fileInput, known
 		add("## Types that depend on this file (may break)", strings.Join(deps, ", ")+"\n", 5, 0)
 	}
 
+	if told := s.Memory.ForPrompt(f.NewPath, ""); told != "" {
+		add("## What the developers of this repository told you (follow it; do not suggest what they rejected)", told, 1, 500)
+	}
 	if costs := methodCosts(in); costs != "" {
 		add("## What the changed methods cost (measured, not guessed)", costs, 2, 300)
 	}

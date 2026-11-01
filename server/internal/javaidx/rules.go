@@ -35,6 +35,8 @@ type Context struct {
 	Domains   map[string]bool     // business areas: package segments such as customer, product, order
 	Beans     map[string]string   // simple type name -> stereotype, for project types
 	Unused    map[string]bool     // classes nothing else references and the framework does not call
+	// Feign clients' routes that the service they name does not serve, by simple class name.
+	FeignUnserved map[string][]string
 }
 
 // ProjectContext derives rule context from the graph.
@@ -63,6 +65,32 @@ func ProjectContext(g *Graph) Context {
 		}
 	}
 	ctx.IsEntity = func(s string) bool { return entities[s] }
+	ctx.FeignUnserved = map[string][]string{}
+	for _, c := range g.Nodes {
+		if c.FeignTarget == "" {
+			continue
+		}
+		known := false
+		served := map[string]bool{}
+		for _, t := range g.Nodes {
+			if sameService(t.Module, c.FeignTarget) {
+				known = true
+				if t.Stereotype == "controller" {
+					for _, e := range t.Endpoints {
+						served[routeOf(e)] = true
+					}
+				}
+			}
+		}
+		if !known {
+			continue // the service lives in another repository
+		}
+		for _, e := range c.Endpoints {
+			if !served[routeOf(e)] {
+				ctx.FeignUnserved[c.Name] = append(ctx.FeignUnserved[c.Name], routeOf(e))
+			}
+		}
+	}
 	// Unused classes: nothing links to them and Spring does not create them.
 	linked := map[string]bool{}
 	for _, e := range g.Edges {

@@ -3,8 +3,10 @@ package review
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"codist/internal/gitx"
@@ -51,17 +53,26 @@ func Release(repo *gitx.Repo, tracker *Tracker, store *Store, ignores *Ignores, 
 	}
 	sort.Strings(paths)
 
-	r := Review{SHA: to}
-	lines := map[string][]string{}
+	// Scan every file at once: parsing and matching are CPU work and share nothing.
+	r := Review{SHA: to, Files: make([]FileReview, len(paths))}
+	lines := make(map[string][]string, len(paths))
 	for _, p := range paths {
-		src := files[p]
-		ls := strings.Split(string(src), "\n")
-		lines[p] = ls
+		lines[p] = strings.Split(string(files[p]), "\n")
 		rep.Files++
-		rep.Lines += len(ls)
-		fr := FileReview{Path: p, Findings: RuleScan(p, src, ctx, kb)}
-		r.Files = append(r.Files, fr)
+		rep.Lines += len(lines[p])
 	}
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, runtime.NumCPU())
+	for i, p := range paths {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int, p string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			r.Files[i] = FileReview{Path: p, Findings: RuleScan(p, files[p], ctx, kb)}
+		}(i, p)
+	}
+	wg.Wait()
 
 	// The model's findings: rules cannot rediscover them, so keep the tracked ones whose code is still there.
 	tracked := map[string]Issue{}

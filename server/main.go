@@ -90,6 +90,8 @@ func main() {
 		}
 		return javaidx.ProjectContext(gr), reviews.Knowledge(), true
 	}
+	srv.Memory = review.NewMemory(cfg.DataDir, repo.Name(), repo.Root)
+	reviews.Memory, srv.Fixer.Memory = srv.Memory, srv.Memory
 	srv.Tracker.Rules = rules
 	srv.Tracker.Resolved = review.NewResolutions(cfg.DataDir, repo.Name())
 	srv.Fixer.OnFixed = func(ids []string, sha string) {

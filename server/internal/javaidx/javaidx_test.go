@@ -538,3 +538,46 @@ class Good {
 		}
 	}
 }
+
+func TestFeignLinksAndStaleRoutes(t *testing.T) {
+	g := Index(map[string][]byte{
+		"customer-service/src/main/java/c/CustomerController.java": []byte(`package c;
+@RestController @RequestMapping("/api/v2/customers")
+class CustomerController { @GetMapping("/{id}") String get(Long id) { return ""; } }`),
+		"order-service/src/main/java/o/CustomerClient.java": []byte(`package o;
+@FeignClient(name = "customer-service", url = "x")
+interface CustomerClient { @GetMapping("/api/v2/customers/{customerId}") String get(Long id); }`),
+		"report-service/src/main/java/r/OldClient.java": []byte(`package r;
+@FeignClient(name = "customer-service", contextId = "old")
+interface OldClient { @GetMapping("/api/customers/{id}") String get(Long id); }`),
+		"report-service/src/main/java/r/ElsewhereClient.java": []byte(`package r;
+@FeignClient(name = "billing-service")
+interface ElsewhereClient { @GetMapping("/x") String get(); }`),
+	}, "t")
+	feign := map[string]bool{}
+	for _, e := range g.Edges {
+		if e.Kind == "feign" {
+			feign[e.Source+">"+e.Target] = true
+		}
+	}
+	if !feign["o.CustomerClient>c.CustomerController"] || len(feign) != 1 {
+		t.Fatalf("feign edges (variable names must not matter): %v", feign)
+	}
+	ctx := ProjectContext(&g)
+	if r := ctx.FeignUnserved["OldClient"]; len(r) != 1 || r[0] != "GET /api/customers/{}" {
+		t.Fatalf("stale route: %v", ctx.FeignUnserved)
+	}
+	if _, reported := ctx.FeignUnserved["ElsewhereClient"]; reported {
+		t.Fatal("a service in another repository cannot be judged")
+	}
+	all := map[int]bool{1: true, 2: true, 3: true}
+	ctx.Path = "report-service/src/main/java/r/OldClient.java"
+	src := []byte("package r;\n@FeignClient(name = \"customer-service\")\ninterface OldClient { @GetMapping(\"/api/customers/{id}\") String get(Long id); }")
+	found := false
+	for _, f := range Check(src, all, ctx) {
+		found = found || (f.ID == "feign-route-missing" && f.Severity == "critical")
+	}
+	if !found {
+		t.Fatal("stale route not reported")
+	}
+}

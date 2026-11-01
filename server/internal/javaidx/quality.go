@@ -13,6 +13,7 @@ import (
 // method, better logs, and what a method costs.
 
 var qualityIDs = []struct{ prefix, id string }{
+	{"Feign route", "feign-route-missing"},
 	{"Commented-out", "commented-out-code"},
 	{"Comment flags", "bug-comment"},
 	{"Unused local variable", "unused-local"},
@@ -71,6 +72,9 @@ func (c *checker) quality(test bool) {
 		for _, n := range named(f.root) {
 			if _, ok := typeDecls[n.Type()]; ok {
 				name := f.text(n.ChildByFieldName("name"))
+				for _, route := range c.ctx.FeignUnserved[name] {
+					c.add(n, n, "critical", "bug", "Feign route not served: "+route, name+" calls "+route+", but the service it names has no controller for that route. Every call fails with 404 at run time; the code compiles and unit tests with mocks pass. This usually follows a contract change that not every caller picked up.", "Update the client to the route the service now serves, or restore the old route until all callers have moved.")
+				}
 				if c.ctx.Unused[name] && !hasMainMethod(n) {
 					c.add(n, n, "low", "design", "Unused class "+name, name+" is not referenced by any other class in the project and is not a Spring bean. Unused classes keep costing reading and upgrade time.", "Delete it (git keeps the history), or wire it in if it was meant to be used.")
 				}
