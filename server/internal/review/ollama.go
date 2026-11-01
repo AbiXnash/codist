@@ -2,6 +2,7 @@ package review
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,6 +19,17 @@ type Ollama struct {
 	Model  string
 	NumCtx int
 	HTTP   *http.Client
+	ctx    context.Context
+}
+
+// With returns a client whose requests stop when ctx is cancelled (the developer pressed Cancel).
+func (o *Ollama) With(ctx context.Context) *Ollama {
+	if o == nil {
+		return nil
+	}
+	c := *o
+	c.ctx = ctx
+	return &c
 }
 
 func NewOllama(url, model string, numCtx int, timeout time.Duration) *Ollama {
@@ -162,10 +174,26 @@ func (o *Ollama) ChatText(system, user string) (string, error) {
 func (o *Ollama) post(body []byte) (*http.Response, error) {
 	var last string
 	for attempt := 0; attempt < 3; attempt++ {
-		if attempt > 0 {
-			time.Sleep(time.Duration(attempt*3) * time.Second)
+		ctx := o.ctx
+		if ctx == nil {
+			ctx = context.Background()
 		}
-		resp, err := o.HTTP.Post(o.URL+"/api/chat", "application/json", bytes.NewReader(body))
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(time.Duration(attempt*3) * time.Second):
+			}
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.URL+"/api/chat", bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := o.HTTP.Do(req)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		if err != nil {
 			last = err.Error()
 			continue

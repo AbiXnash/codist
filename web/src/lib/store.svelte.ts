@@ -1,4 +1,4 @@
-import { api } from './api';
+import { api, cancelAI } from './api';
 import type { FixRef, Working, AskMessage, CommitItem, Detail, FindingWithPath, FixProposal, Graph, IgnoreScope, Incident, Issue, IssueList, IncidentRow, Mode, OpenFile, Severity, Status, Tab } from './types';
 
 export interface Toast {
@@ -99,6 +99,7 @@ class AppState {
   incidents = $state.raw<IncidentRow[]>([]);
   incident = $state.raw<Incident | null>(null);
   incidentMarkdown = $state('');
+  incidentError = $state<string | null>(null);
   incidentId = $state<string | null>(null); // null = "new analysis" form
   /** Every tracked issue (all states); the hub filters it client-side. */
   issueList = $state.raw<IssueList | null>(null);
@@ -415,7 +416,7 @@ export async function proposeGuidedFix(finding: FindingWithPath, sha: string, gu
     if (r.blocked) return r.error ?? 'This suggestion is not about this issue.';
     app.fix = { finding, sha, busy: null, proposal: r, error: null };
   } catch (e) {
-    app.fix = { finding, sha, busy: null, proposal: null, error: (e as Error).message };
+    if ((e as Error).name !== 'AbortError') app.fix = { finding, sha, busy: null, proposal: null, error: (e as Error).message };
   }
   return null;
 }
@@ -458,18 +459,22 @@ export async function loadIncidents() {
 
 export async function openIncident(id: string | null) {
   app.incidentId = id;
-  if (!id) {
-    app.incident = null;
-    return;
-  }
-  const d = await api.incident(id);
-  if (app.incidentId === id) {
-    app.incident = d.incident;
-    app.incidentMarkdown = d.markdown;
+  app.incidentError = null;
+  if (app.incident?.id !== id) app.incident = null;
+  if (!id) return;
+  try {
+    const d = await api.incident(id);
+    if (app.incidentId === id) {
+      app.incident = d.incident;
+      app.incidentMarkdown = d.markdown;
+    }
+  } catch (e) {
+    if (app.incidentId === id) app.incidentError = (e as Error).message;
   }
 }
 
 export function closeFix() {
+  cancelAI(); // still generating: stop the model
   const id = app.fix?.proposal?.id;
   if (id) void api.discardFix(id);
   app.fix = null;

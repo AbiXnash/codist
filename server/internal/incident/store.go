@@ -22,6 +22,7 @@ func NewStore(dataDir, repo string) *Store {
 }
 
 func (s *Store) Save(in *Incident) {
+	in.normalize()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	b, _ := json.MarshalIndent(in, "", "  ")
@@ -43,6 +44,7 @@ func (s *Store) Get(id string) (*Incident, bool) {
 	if json.Unmarshal(b, &in) != nil {
 		return nil, false
 	}
+	in.normalize()
 	return &in, true
 }
 
@@ -65,4 +67,36 @@ func (s *Store) All() []*Incident {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
 	return out
+}
+
+// normalize gives the UI empty lists instead of null, including for incidents saved by older versions.
+func (in *Incident) normalize() {
+	if in.Errors == nil {
+		in.Errors = []ErrorEvent{}
+	}
+	if in.Locations == nil {
+		in.Locations = []Location{}
+	}
+	if in.Suspects == nil {
+		in.Suspects = []Suspect{}
+	}
+	if in.Similar == nil {
+		in.Similar = []Similar{}
+	}
+	if in.Causes == nil {
+		in.Causes = []Cause{}
+	}
+	if in.Timeline == nil {
+		in.Timeline = []string{}
+	}
+	for i := range in.Errors {
+		if in.Errors[i].Frames == nil {
+			in.Errors[i].Frames = []Frame{}
+		}
+	}
+	for i := range in.Causes {
+		if in.Causes[i].Evidence == nil {
+			in.Causes[i].Evidence = []Evidence{}
+		}
+	}
 }

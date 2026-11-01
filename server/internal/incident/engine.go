@@ -30,6 +30,13 @@ type Engine struct {
 }
 
 func NewEngine(repo *gitx.Repo, g *graph.Service, llm *review.Ollama, tracker *review.Tracker, reviews *review.Service, store *Store, hub *events.Hub) *Engine {
+	// An analysis cut off by a restart will never finish: say so instead of "analysing" forever.
+	for _, in := range store.All() {
+		if in.Status == "analysing" {
+			in.Status, in.Error = "failed", "Interrupted: Codist stopped before the analysis finished. Run it again."
+			store.Save(in)
+		}
+	}
 	return &Engine{repo: repo, graph: g, llm: llm, tracker: tracker, reviews: reviews, store: store, hub: hub}
 }
 

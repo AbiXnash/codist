@@ -72,6 +72,8 @@
   <main class="content">
     {#if app.incidentId && app.incident}
       <IncidentDetail />
+    {:else if app.incidentError}
+      <div class="empty">Could not open this incident: {app.incidentError} <button class="btn secondary sm" onclick={() => openIncident(app.incidentId)}>Try again</button></div>
     {:else if app.incidentId}
       <div class="empty"><span class="spinner"></span></div>
     {:else}

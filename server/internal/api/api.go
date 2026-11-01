@@ -64,6 +64,22 @@ func (s *Server) Handler() http.Handler {
 	s.extensionRoutes(mux)
 	mux.HandleFunc("POST /api/fix", s.proposeFix)
 	mux.HandleFunc("POST /api/fix/{id}/apply", s.applyFix)
+	mux.HandleFunc("POST /api/issues/{id}/resolve", func(w http.ResponseWriter, r *http.Request) {
+		if err := s.Tracker.Resolved.Set([]string{r.PathValue("id")}, review.Resolution{By: s.Repo.UserName(), Manual: true}); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		s.Hub.Publish("ignores", map[string]string{"changed": "resolutions"})
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("DELETE /api/issues/{id}/resolve", func(w http.ResponseWriter, r *http.Request) {
+		if err := s.Tracker.Resolved.Remove(r.PathValue("id")); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		s.Hub.Publish("ignores", map[string]string{"changed": "resolutions"})
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("GET /api/prompts", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, prompts.All()) })
 	mux.HandleFunc("GET /api/working", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, review.WorkingReview(s.Repo, s.Fixer.Rules, s.Reviews.Ignores))
@@ -220,7 +236,7 @@ func (s *Server) proposeFix(w http.ResponseWriter, r *http.Request) {
 		}
 		sha = c.SHA
 	}
-	p, err := s.Fixer.ProposeGuided(sha, req.Path, req.Line, req.Title, req.Guidance, req.Also...)
+	p, err := s.Fixer.ProposeGuided(r.Context(), sha, req.Path, req.Line, req.Title, req.Guidance, req.Also...)
 	var off review.ErrOffTopic
 	if errors.As(err, &off) {
 		writeJSON(w, map[string]any{"blocked": true, "error": off.Reason})
@@ -407,7 +423,7 @@ func (s *Server) edit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "path and instruction are required")
 		return
 	}
-	p, err := s.Fixer.ProposeEdit(req.Path, req.Instruction)
+	p, err := s.Fixer.ProposeEdit(r.Context(), req.Path, req.Instruction)
 	if err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return

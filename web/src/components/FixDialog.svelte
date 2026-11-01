@@ -29,7 +29,7 @@
 
   function key(e: KeyboardEvent) {
     if (!app.fix) return;
-    if (e.key === 'Escape' && !app.fix.busy) closeFix();
+    if (e.key === 'Escape' && app.fix.busy !== 'applying') closeFix();
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && app.fix.proposal && !app.fix.busy) void applyFix(message);
   }
 </script>
@@ -39,7 +39,7 @@
 {#if app.fix}
   {@const f = app.fix}
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-  <div class="backdrop" onclick={() => { if (!f.busy) closeFix(); }}></div>
+  <div class="backdrop" onclick={() => { if (f.busy !== 'applying') closeFix(); }}></div>
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="fix-title">
     <header>
       <div>
@@ -76,8 +76,8 @@
     </div>
 
     <footer>
-      <span class="faint hint">{f.proposal ? `⌘↵ to ${f.proposal.working ? 'apply' : 'commit'} · Esc to discard` : ''}</span>
-      <button class="btn secondary" disabled={!!f.busy} onclick={closeFix}>{f.proposal ? 'Discard' : 'Close'}</button>
+      <span class="faint hint">{f.proposal ? `⌘↵ to ${f.proposal.working ? 'apply' : 'commit'} · Esc to discard` : f.busy === 'generating' ? 'Esc to cancel' : ''}</span>
+      <button class="btn secondary" disabled={f.busy === 'applying'} onclick={closeFix}>{f.busy === 'generating' ? 'Cancel' : f.proposal ? 'Discard' : 'Close'}</button>
       {#if f.proposal}
         <button class="btn" disabled={!!f.busy || (!f.proposal?.working && !message.trim())} onclick={() => applyFix(message)}>
           {#if f.busy === 'applying'}<span class="spinner"></span>Applying…{:else if f.proposal?.working}Apply to working tree{:else}Apply & commit{/if}

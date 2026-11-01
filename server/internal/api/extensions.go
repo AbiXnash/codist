@@ -171,7 +171,7 @@ func (s *Server) incidentFix(w http.ResponseWriter, r *http.Request) {
 		}
 		text := strings.ToLower(c.Title + " " + c.Explanation)
 		if (c.Line > 0 && abs(is.Line-c.Line) <= 3) || (is.Ref == "uninjected-dependency" && strings.Contains(text, "inject")) {
-			if p, err := s.Fixer.Propose(is.LastSeen, is.Path, is.ReviewLine, is.Title); err == nil {
+			if p, err := s.Fixer.Propose(r.Context(), is.LastSeen, is.Path, is.ReviewLine, is.Title); err == nil {
 				p.Message = strings.Replace(p.Message, "\n\n", fmt.Sprintf("\n\nRoot cause of incident \"%s\".\n", in.Title), 1)
 				writeJSON(w, p)
 				return
@@ -182,7 +182,7 @@ func (s *Server) incidentFix(w http.ResponseWriter, r *http.Request) {
 	if c.Line > 0 {
 		instruction += fmt.Sprintf("\nThe error is thrown at line %d.", c.Line)
 	}
-	p, err := s.Fixer.ProposeEdit(c.Path, instruction)
+	p, err := s.Fixer.ProposeEdit(r.Context(), c.Path, instruction)
 	if err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return
@@ -217,7 +217,7 @@ func (s *Server) incidentTest(w http.ResponseWriter, r *http.Request) {
 	if len(in.Errors) > 0 {
 		exc = in.Errors[0].Exception
 	}
-	p, err := s.Fixer.ProposeTest(c.Path, defect, s.Reviews.Build(s.Repo.Head()).Summary(), exc)
+	p, err := s.Fixer.ProposeTest(r.Context(), c.Path, defect, s.Reviews.Build(s.Repo.Head()).Summary(), exc)
 	if err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return
@@ -266,7 +266,7 @@ func (s *Server) issueTest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	defect := fmt.Sprintf("%s (line %d). %s", req.Title, req.Line, req.Detail)
-	p, err := s.Fixer.ProposeTest(req.Path, defect, s.Reviews.Build(s.Repo.Head()).Summary())
+	p, err := s.Fixer.ProposeTest(r.Context(), req.Path, defect, s.Reviews.Build(s.Repo.Head()).Summary())
 	if err != nil {
 		writeError(w, http.StatusConflict, err.Error())
 		return

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { app, ignoreFinding, loadIssues, openFile, pickIssue, proposeFix, selectCommit, showWorking, unignore } from '../lib/store.svelte';
+  import { api } from '../lib/api';
+  import { app, ignoreFinding, loadCommits, loadIssues, refreshDetail, toast, openFile, pickIssue, proposeFix, selectCommit, showWorking, unignore } from '../lib/store.svelte';
   import { ago, INSTANT_REFS, NOT_FIXABLE, SEVERITIES } from '../lib/theme';
   import CommitRef from './CommitRef.svelte';
   import FixSuggest from './FixSuggest.svelte';
@@ -42,6 +43,17 @@
   async function ignore(g: Issue[]) {
     for (const i of g) await ignoreFinding(asFinding(i), 'code', false, i.lastSeen);
     app.picked = null;
+  }
+  async function markFixed(g: Issue[]) {
+    for (const i of g) await api.markFixed(i.id);
+    app.picked = null;
+    toast(g.length > 1 ? `Marked ${g.length} places as fixed` : 'Marked as fixed', 'good', 2500);
+    await Promise.all([loadIssues(), loadCommits(), refreshDetail()]);
+  }
+  async function reopen(i: Issue) {
+    await api.reopenIssue(i.id);
+    app.picked = null;
+    await Promise.all([loadIssues(), loadCommits(), refreshDetail()]);
   }
   const others = (g: Issue[]): FixRef[] => g.slice(1).map((m) => ({ sha: m.lastSeen, path: m.path, line: m.reviewLine, title: m.title }));
   const isWorking = (i: Issue) => i.firstSeen === 'working';
@@ -101,7 +113,8 @@
           {/if}
           {#if i.state === 'resolved'}
             <li><span class="dot done"></span>
-              {#if i.fixedIn}Fixed in <CommitRef sha={i.fixedIn} /> by <b>{who(i.fixedBy)}</b> · {ago(i.fixedAt ?? 0)}<div class="tmsg">{i.fixedMsg}</div>
+              {#if i.manual}Marked as fixed by <b>{who(i.fixedBy)}</b> · {ago(i.fixedAt ?? 0)}
+              {:else if i.fixedIn}Fixed in <CommitRef sha={i.fixedIn} /> by <b>{who(i.fixedBy)}</b> · {ago(i.fixedAt ?? 0)}<div class="tmsg">{i.fixedMsg}</div>
               {:else if i.uncommitted}Fixed in the working tree, not committed yet{:else}Fixed{/if}
             </li>
           {:else if i.state === 'ignored'}<li><span class="dot seen"></span>Ignored</li>
@@ -122,6 +135,11 @@
           {/if}
         {:else if i.state === 'ignored' && i.ignoreId}
           <button class="btn secondary" onclick={() => unignore(i.ignoreId!).then(loadIssues)}>Stop ignoring</button>
+        {/if}
+        {#if i.state === 'open' && !isWorking(i)}
+          <button class="btn secondary" title="You already fixed it: close this issue. It reopens if a later review reports it again." onclick={() => markFixed(g)}>Mark as fixed</button>
+        {:else if i.manual}
+          <button class="btn secondary" onclick={() => reopen(i)}>Reopen</button>
         {/if}
         <button class="btn secondary" onclick={() => openFile(i.path, null, i.line || null)}>Open code</button>
         {#if !isWorking(i)}<button class="btn secondary" onclick={() => openCommit(i.firstSeen)}>Open commit</button>{/if}

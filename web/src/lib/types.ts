@@ -176,6 +176,7 @@ export interface Issue {
   fixedAt?: number;
   fixedMsg?: string;
   uncommitted?: boolean;
+  manual?: boolean;
   wasFixedIn?: string;
   reopenedIn?: string;
   reopenedBy?: string;

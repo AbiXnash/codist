@@ -37,6 +37,7 @@ type Issue struct {
 	FixedBy    string `json:"fixedBy,omitempty"`
 	FixedAt    int64  `json:"fixedAt,omitempty"`
 	FixedMsg   string `json:"fixedMsg,omitempty"`
+	Manual     bool   `json:"manual,omitempty"` // closed by "Mark as fixed"
 	// Reopened: the issue was fixed, then the code came back (a revert, a bad merge, a copy).
 	WasFixedIn  string `json:"wasFixedIn,omitempty"`
 	ReopenedIn  string `json:"reopenedIn,omitempty"`
@@ -50,6 +51,7 @@ type Issue struct {
 	Group       string   `json:"group,omitempty"`
 	GroupRoot   bool     `json:"groupRoot,omitempty"`
 	ReviewLine  int      `json:"reviewLine"` // line in the LastSeen review, used to fix it
+	ReviewEnd   int      `json:"reviewEnd"`
 }
 
 // Fingerprint identifies a finding independently of its line number.
@@ -73,6 +75,9 @@ type Tracker struct {
 	// Rules re-runs the rule checks, so a rule issue whose cause was fixed elsewhere (its line
 	// unchanged) is resolved. Nil disables the re-check.
 	Rules RuleContext
+
+	// Resolved holds issues closed by hand or by a committed fix. Nil disables it.
+	Resolved *Resolutions
 
 	// Stamp adds to the cache key whatever else the issues depend on (the rules' version).
 	Stamp func() string
@@ -99,6 +104,9 @@ func (t *Tracker) key() string {
 	}
 	if t.Stamp != nil {
 		k += "|" + t.Stamp()
+	}
+	if t.Resolved != nil {
+		k += fmt.Sprintf("|%d", t.Resolved.Version())
 	}
 	return k
 }
@@ -186,6 +194,9 @@ func (t *Tracker) compute() []Issue {
 		}
 		for _, fr := range r.Files {
 			for _, f := range fr.Findings {
+				if _, headsUp := notFixable[f.Ref]; headsUp {
+					continue // a reminder shown on its commit, not a defect that stays open
+				}
 				id := Fingerprint(fr.Path, f)
 				is, seen := byID[id]
 				if !seen {
@@ -193,7 +204,7 @@ func (t *Tracker) compute() []Issue {
 					byID[id] = is
 					order = append(order, id)
 				}
-				is.LastSeen, is.ReviewLine = c.SHA, f.Line
+				is.LastSeen, is.ReviewLine, is.ReviewEnd = c.SHA, f.Line, max(f.Line, f.EndLine)
 				is.Commits = append(is.Commits, c.SHA)
 				is.Severity, is.Category, is.Title, is.Detail, is.Suggestion = f.Severity, f.Category, f.Title, f.Detail, f.Suggestion
 				is.Ref, is.Source, is.Snippet, is.Line = f.Ref, f.Source, f.Snippet, f.Line
@@ -209,15 +220,39 @@ func (t *Tracker) compute() []Issue {
 	out := make([]Issue, 0, len(order))
 	for _, id := range order {
 		is := byID[id]
+		t.fillSnippet(is)
+		res, hasRes := Resolution{}, false
+		if t.Resolved != nil {
+			res, hasRes = t.Resolved.Get(id)
+			if c, ok := bySHA[is.LastSeen]; hasRes && ok && res.Commit != is.LastSeen && c.Time > res.At {
+				hasRes = false // reported again after it was closed
+			}
+		}
+		region := ""
+		if is.IgnoreID == "" && !hasRes && is.Source != "rule" {
+			region = t.regionFixedIn(is)
+		}
 		switch {
 		case is.IgnoreID != "":
 			is.State = "ignored"
+		case hasRes:
+			is.State, is.Line, is.FixedIn, is.FixedBy, is.FixedAt, is.Manual = "resolved", 0, res.Commit, res.By, res.At, res.Manual
+			if is.Manual {
+				is.FixedMsg = "Marked as fixed"
+			} else if c, ok := bySHA[res.Commit]; ok {
+				is.FixedMsg = c.Message
+			}
+		case region != "":
+			// The model's line is still there, but the code it was about changed and the review of that
+			// change no longer reports it.
+			is.State, is.Line, is.FixedIn = "resolved", 0, region
+			if c, ok := bySHA[region]; ok {
+				is.FixedBy, is.FixedAt, is.FixedMsg = c.Author, c.Time, c.Message
+			}
 		default:
 			if line := t.locate(is); line > 0 && recheck(is, line) {
 				is.State, is.Line = "open", line
-				if _, headsUp := notFixable[is.Ref]; headsUp {
-					// A reminder about a change, not a defect: its line coming back means nothing.
-				} else if fixed, back := t.reopened(is); back != "" {
+				if fixed, back := t.reopened(is); back != "" {
 					is.WasFixedIn, is.ReopenedIn = fixed, back
 					if c, ok := bySHA[back]; ok {
 						is.ReopenedBy, is.ReopenedAt, is.ReopenedMsg = c.Author, c.Time, c.Message
@@ -341,6 +376,72 @@ func (t *Tracker) locate(is *Issue) int {
 		}
 	}
 	return best
+}
+
+// fillSnippet recovers the flagged line for findings saved without one, from the commit they were
+// reported on; without it nothing could ever tell that the code is gone.
+func (t *Tracker) fillSnippet(is *Issue) {
+	if strings.TrimSpace(is.Snippet) != "" || is.ReviewLine <= 0 {
+		return
+	}
+	if src, ok := t.fileAt(is.LastSeen, is.Path); ok {
+		is.Snippet = strings.TrimSpace(lineAt(strings.Split(src, "\n"), is.ReviewLine))
+	}
+}
+
+// regionFixedIn finds the first later commit that changed the lines a model finding was about and
+// whose review covered the file without reporting it again. The anchor line itself can survive such
+// a fix (the condition stays, the bad statement inside it goes).
+func (t *Tracker) regionFixedIn(is *Issue) string {
+	touching := t.repo.CommitsTouching(is.Path) // newest first
+	want := normalizeCode(is.Snippet)
+	span := max(0, is.ReviewEnd-is.ReviewLine)
+	after := false
+	for i := len(touching) - 1; i >= 0; i-- {
+		sha := touching[i]
+		if !after {
+			after = sha == is.LastSeen
+			continue
+		}
+		src, ok := t.fileAt(sha, is.Path)
+		if !ok || want == "" {
+			return ""
+		}
+		line := lineOf(strings.Split(src, "\n"), is.Snippet)
+		if line == 0 {
+			return "" // the code is gone: the ordinary path reports who removed it
+		}
+		rv, reviewed := t.store.Get(sha)
+		if !reviewed || rv.Status != StatusDone {
+			continue
+		}
+		covered := false
+		for _, fr := range rv.Files {
+			covered = covered || (fr.Path == is.Path && fr.Error == "")
+		}
+		if !covered {
+			continue
+		}
+		c, err := t.repo.Commit(sha)
+		if err != nil {
+			continue
+		}
+		files, err := t.repo.Diff(c)
+		if err != nil {
+			continue
+		}
+		for _, f := range files {
+			if f.NewPath != is.Path {
+				continue
+			}
+			for _, l := range append(append([]int{}, f.AddedLines...), f.DeletedAt...) {
+				if l >= line && l <= line+span+1 {
+					return sha
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // recheck returns a check that a rule issue still fires at line in the current code. Each file is

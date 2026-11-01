@@ -90,6 +90,10 @@ func main() {
 		return javaidx.ProjectContext(gr), reviews.Knowledge(), true
 	}
 	srv.Tracker.Rules = rules
+	srv.Tracker.Resolved = review.NewResolutions(cfg.DataDir, repo.Name())
+	srv.Fixer.OnFixed = func(ids []string, sha string) {
+		_ = srv.Tracker.Resolved.Set(ids, review.Resolution{By: repo.UserName(), Commit: sha})
+	}
 	srv.Tracker.Stamp = reviews.KnowledgeVersion
 	srv.Fixer.Rules = rules
 	srv.Fixer.Busy = reviews.Busy

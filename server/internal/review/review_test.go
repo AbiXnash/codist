@@ -1,6 +1,7 @@
 package review
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -540,7 +541,7 @@ func TestWorkingChangesReviewAndConstructorInjection(t *testing.T) {
 
 	store, _ := NewStore(data, "r")
 	x := &Fixer{repo: repo, store: store, Ignores: ig, Rules: rules, proposals: map[string]*Proposal{}, prefetched: map[string]*Proposal{}}
-	prop, err := x.Propose(WorkingSHA, p, fi.Line, fi.Title)
+	prop, err := x.Propose(context.Background(), WorkingSHA, p, fi.Line, fi.Title)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -613,18 +614,18 @@ func TestGuidedFixOnlyAcceptsSuggestionsAboutTheIssue(t *testing.T) {
 	}
 
 	// Names another class of the project: blocked without asking the model.
-	_, err := x.ProposeGuided(head, p, 4, "Use a logger instead of System.out.println", "also fix the null check in OrderService")
+	_, err := x.ProposeGuided(context.Background(), head, p, 4, "Use a logger instead of System.out.println", "also fix the null check in OrderService")
 	var off ErrOffTopic
 	if !errors.As(err, &off) || !strings.Contains(off.Reason, "OrderService") || len(asked) != 0 {
 		t.Fatalf("a suggestion about another class must be refused before the model runs: %v (asked %d)", err, len(asked))
 	}
 	// Off topic by intent: the model check refuses it.
-	_, err = x.ProposeGuided(head, p, 4, "Use a logger instead of System.out.println", "add a discount code to checkout")
+	_, err = x.ProposeGuided(context.Background(), head, p, 4, "Use a logger instead of System.out.println", "add a discount code to checkout")
 	if !errors.As(err, &off) || !strings.Contains(off.Reason, "discount") {
 		t.Fatalf("an unrelated suggestion must be refused: %v", err)
 	}
 	// On topic: the fix follows it, and the suggestion reaches the fix model.
-	prop, err := x.ProposeGuided(head, p, 4, "Use a logger instead of System.out.println", "log it at debug level")
+	prop, err := x.ProposeGuided(context.Background(), head, p, 4, "Use a logger instead of System.out.println", "log it at debug level")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -771,7 +772,7 @@ func TestFixCoversEveryPlaceAndAnalyserFindingsStayOpen(t *testing.T) {
 	}
 
 	x := &Fixer{repo: repo, store: store, Ignores: ig, Rules: rules, proposals: map[string]*Proposal{}, prefetched: map[string]*Proposal{}}
-	p, err := x.ProposeGuided(c1, a, fa[0].Line, fa[0].Title, "", FixRef{SHA: c2, Path: b, Line: fb[0].Line, Title: fb[0].Title})
+	p, err := x.ProposeGuided(context.Background(), c1, a, fa[0].Line, fa[0].Title, "", FixRef{SHA: c2, Path: b, Line: fb[0].Line, Title: fb[0].Title})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -782,5 +783,96 @@ func TestFixCoversEveryPlaceAndAnalyserFindingsStayOpen(t *testing.T) {
 		if strings.Contains(e.proposed, "System.out") {
 			t.Fatalf("%s still prints:\n%s", e.path, e.proposed)
 		}
+	}
+}
+
+// Issues the developer fixed must close even when the model's anchor line stays.
+func TestFixedIssuesClose(t *testing.T) {
+	dir, data := t.TempDir(), t.TempDir()
+	git := func(args ...string) string {
+		out, err := exec.Command("git", append([]string{"-C", dir, "-c", "user.email=a@b", "-c", "user.name=Dev"}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %s", args, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	p := "src/main/java/x/A.java"
+	os.MkdirAll(filepath.Join(dir, "src/main/java/x"), 0o755)
+	os.WriteFile(filepath.Join(dir, p), []byte("class A {\n    void x(Req req) {\n        if (req.id() == 12) {\n            req = null;\n        }\n        log(req);\n    }\n}\n"), 0o644)
+	git("init", "-q", "-b", "main")
+	git("add", "-A")
+	git("commit", "-qm", "one")
+	c1 := git("rev-parse", "HEAD")
+	os.WriteFile(filepath.Join(dir, p), []byte("class A {\n    void x(Req req) {\n        if (req.id() == 12) {\n            audit(req);\n        }\n    }\n}\n"), 0o644)
+	git("commit", "-qam", "stop nulling the request")
+	c2 := git("rev-parse", "HEAD")
+
+	repo, _ := gitx.Open(config.Config{RepoPath: dir})
+	store, _ := NewStore(data, "r")
+	store.Save(Review{SHA: c1, Status: StatusDone, Files: []FileReview{{Path: p, Findings: []Finding{
+		{Line: 3, EndLine: 3, Severity: "high", Title: "Null assignment", Source: "llm", Ref: "x", Snippet: "if (req.id() == 12) {"}, // anchor survives
+		{Line: 6, EndLine: 6, Severity: "info", Title: "No snippet", Source: "llm"},                                                  // saved without code
+		{Line: 2, EndLine: 2, Severity: "low", Title: "Elsewhere", Source: "llm", Ref: "y", Snippet: "void x(Req req) {"},            // really still open
+		{Line: 1, EndLine: 1, Severity: "medium", Title: "A constant changed", Source: "rule", Ref: "shared-constant-changed", Snippet: "class A {"},
+	}}}})
+	store.Save(Review{SHA: c2, Status: StatusDone, Files: []FileReview{{Path: p, Findings: []Finding{}}}})
+	tr := NewTracker(repo, store, NewIgnores(data, "r", dir))
+	tr.Resolved = NewResolutions(data, "r")
+	state := map[string]Issue{}
+	for _, is := range tr.Issues() {
+		state[is.Title] = is
+	}
+	if s := state["Null assignment"]; s.State != "resolved" || s.FixedIn != c2 {
+		t.Fatalf("anchor survived but the code changed: %+v", s)
+	}
+	if s := state["No snippet"]; s.State != "resolved" {
+		t.Fatalf("a finding saved without a snippet must be able to close: %+v", s)
+	}
+	if _, listed := state["A constant changed"]; listed {
+		t.Fatal("a heads-up is not an open issue")
+	}
+	el := state["Elsewhere"]
+	if el.State != "open" {
+		t.Fatalf("untouched code stays open: %+v", el)
+	}
+	if err := tr.Resolved.Set([]string{el.ID}, Resolution{By: "Dev", Manual: true}); err != nil {
+		t.Fatal(err)
+	}
+	for _, is := range tr.Issues() {
+		if is.ID == el.ID && (is.State != "resolved" || !is.Manual || is.FixedBy != "Dev") {
+			t.Fatalf("mark as fixed: %+v", is)
+		}
+	}
+	tr.Resolved.Remove(el.ID)
+	for _, is := range tr.Issues() {
+		if is.ID == el.ID && is.State != "open" {
+			t.Fatalf("reopen: %+v", is)
+		}
+	}
+}
+
+func TestCancelStopsTheModelRequest(t *testing.T) {
+	started := make(chan struct{})
+	llm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.Copy(io.Discard, r.Body) // the server only notices a disconnect once the body is read
+		close(started)
+		<-r.Context().Done()
+	}))
+	defer llm.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := NewOllama(llm.URL, "m", 2048, time.Minute).With(ctx).ChatText("s", "u")
+		done <- err
+	}()
+	<-started
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("cancel did not stop the request")
 	}
 }

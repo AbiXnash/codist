@@ -1,6 +1,7 @@
 package review
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -70,6 +71,7 @@ type Proposal struct {
 	Branch  string   `json:"branch"`
 	Working bool     `json:"working"` // fixes uncommitted changes: applied to the working tree, not committed
 	edits   []edit
+	fixes   []string // issues this fix closes when committed (model findings; rules re-check themselves)
 	created time.Time
 }
 
@@ -91,10 +93,11 @@ type Fixer struct {
 	prefetched map[string]*Proposal
 	prefetchQ  chan string
 
-	Known   func() map[string]bool // fully qualified names of the project's types
-	Rules   RuleContext            // re-runs the rules, so fixes are not proposed for issues already gone
-	Busy    func() bool            // true while reviews are running; prefetch waits
-	OnReady func(sha, key string)  // a prefetched fix became available
+	Known   func() map[string]bool         // fully qualified names of the project's types
+	Rules   RuleContext                    // re-runs the rules, so fixes are not proposed for issues already gone
+	Busy    func() bool                    // true while reviews are running; prefetch waits
+	OnReady func(sha, key string)          // a prefetched fix became available
+	OnFixed func(ids []string, sha string) // a fix was committed
 }
 
 func NewFixer(repo *gitx.Repo, fix, ask *Ollama, store *Store) *Fixer {
@@ -126,7 +129,7 @@ func (x *Fixer) ready() error {
 // It works on the working tree as it is now: each place is found again by its line of code, and
 // places that no longer exist (already fixed) are skipped. Prefetched and mechanical fixes return
 // immediately; only the rest wait for the model.
-func (x *Fixer) Propose(sha, path string, line int, title string) (*Proposal, error) {
+func (x *Fixer) Propose(ctx context.Context, sha, path string, line int, title string) (*Proposal, error) {
 	if err := x.ready(); err != nil {
 		return nil, err
 	}
@@ -138,6 +141,7 @@ func (x *Fixer) Propose(sha, path string, line int, title string) (*Proposal, er
 	if err != nil {
 		return nil, err
 	}
+	plan.llm = x.llm.With(ctx)
 	if why, ok := notFixable[plan.target.Ref]; ok {
 		return nil, errors.New(why)
 	}
@@ -156,6 +160,7 @@ type fixPlan struct {
 	members  []placed
 	current  map[string]string // working-tree content of each file
 	guidance string            // the developer's suggestion, already checked to be about this issue
+	llm      *Ollama           // stops when the developer cancels
 }
 
 // ErrOffTopic is returned when a suggestion for a fix is not about the issue being fixed.
@@ -205,10 +210,10 @@ func (x *Fixer) addPlaces(p *fixPlan, also []FixRef) {
 // ProposeGuided fixes an issue in all its places, the way the developer suggested if they did. A
 // suggestion must be about this issue: one naming other classes, or that the model judges unrelated,
 // is refused before any fix is generated.
-func (x *Fixer) ProposeGuided(sha, path string, line int, title, guidance string, also ...FixRef) (*Proposal, error) {
+func (x *Fixer) ProposeGuided(ctx context.Context, sha, path string, line int, title, guidance string, also ...FixRef) (*Proposal, error) {
 	guidance = strings.TrimSpace(guidance)
 	if guidance == "" && len(also) == 0 {
-		return x.Propose(sha, path, line, title)
+		return x.Propose(ctx, sha, path, line, title)
 	}
 	if err := x.ready(); err != nil {
 		return nil, err
@@ -220,6 +225,7 @@ func (x *Fixer) ProposeGuided(sha, path string, line int, title, guidance string
 	if err != nil {
 		return nil, err
 	}
+	plan.llm = x.llm.With(ctx)
 	if why, ok := notFixable[plan.target.Ref]; ok {
 		return nil, errors.New(why)
 	}
@@ -265,7 +271,10 @@ func (x *Fixer) offTopic(p *fixPlan, guidance string) string {
 	}
 	user := fmt.Sprintf("## Finding being fixed\n%s (%s, %s)\n%s\n\n## Where\n%s\n## The developer's suggestion\n%s\n",
 		p.target.Title, p.target.Severity, p.target.Category, p.target.Detail, places.String(), guidance)
-	out, err := x.llm.ChatJSON(prompts.Get("fix-guidance-check"), user)
+	out, err := p.llm.ChatJSON(prompts.Get("fix-guidance-check"), user)
+	if errors.Is(err, context.Canceled) {
+		return "Cancelled."
+	}
 	if err != nil {
 		return "Could not check the suggestion (" + err.Error() + "); try again or use Fix without a suggestion."
 	}
@@ -394,8 +403,13 @@ func Instant(f Finding) bool {
 	return mechanical[f.Ref] || f.Ref == "copy-paste-wrong-constant"
 }
 
-func (x *Fixer) build(p *fixPlan) (*Proposal, error) {
+func (x *Fixer) build(p *fixPlan) (out *Proposal, err error) {
+	var fixed []string
 	members, current, target := p.members, p.current, p.target
+	llm := p.llm
+	if llm == nil {
+		llm = x.llm
+	}
 	var files []string
 	byFile := map[string][]Finding{}
 	for _, m := range members {
@@ -446,7 +460,7 @@ func (x *Fixer) build(p *fixPlan) (*Proposal, error) {
 		if done.Len() > 0 {
 			user.WriteString("\n## Changes already made to other files for this issue (stay consistent, e.g. use new names)\n```diff\n" + done.String() + "```\n")
 		}
-		proposed, patch, err := x.generate(prompts.Get("fix"), user.String(), file, cur)
+		proposed, patch, err := x.generate(llm, prompts.Get("fix"), user.String(), file, cur)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", file, err)
 		}
@@ -454,7 +468,7 @@ func (x *Fixer) build(p *fixPlan) (*Proposal, error) {
 		// retry once with the reason, then refuse.
 		if broken := x.brokenReferences(file, cur, proposed, files); len(broken) > 0 {
 			retry := user.String() + "\n" + prompts.Render("retry-broken-references", prompts.Items(broken)) + "\n"
-			if proposed, patch, err = x.generate(prompts.Get("fix"), retry, file, cur); err != nil {
+			if proposed, patch, err = x.generate(llm, prompts.Get("fix"), retry, file, cur); err != nil {
 				return nil, fmt.Errorf("%s: %w", file, err)
 			}
 			if broken = x.brokenReferences(file, cur, proposed, files); len(broken) > 0 {
@@ -463,7 +477,7 @@ func (x *Fixer) build(p *fixPlan) (*Proposal, error) {
 		}
 		if dups := duplicateConstants(cur, proposed); len(dups) > 0 {
 			retry := user.String() + "\n" + prompts.Render("retry-duplicate-constants", prompts.Items(dups)) + "\n"
-			if proposed, patch, err = x.generate(prompts.Get("fix"), retry, file, cur); err != nil {
+			if proposed, patch, err = x.generate(llm, prompts.Get("fix"), retry, file, cur); err != nil {
 				return nil, fmt.Errorf("%s: %w", file, err)
 			}
 			if dups = duplicateConstants(cur, proposed); len(dups) > 0 {
@@ -474,6 +488,16 @@ func (x *Fixer) build(p *fixPlan) (*Proposal, error) {
 		done.WriteString(patch)
 	}
 
+	defer func() { // see Proposal.fixes
+		for _, m := range members {
+			if m.f.Source != "rule" {
+				fixed = append(fixed, Fingerprint(m.path, m.f))
+			}
+		}
+		if out != nil {
+			out.fixes = fixed
+		}
+	}()
 	msg := commitMessage(target, files[0], p.sha)
 	if len(files) > 1 {
 		msg = strings.Replace(msg, "\n\n", fmt.Sprintf("\n\nFixes %d places in %d files.\n", len(members), len(files)), 1)
@@ -575,7 +599,7 @@ func (x *Fixer) Ready(sha string) map[string]string {
 }
 
 // ProposeEdit applies a free-form instruction from the Ask tab to the working-tree file.
-func (x *Fixer) ProposeEdit(path, instruction string) (*Proposal, error) {
+func (x *Fixer) ProposeEdit(ctx context.Context, path, instruction string) (*Proposal, error) {
 	if err := x.ready(); err != nil {
 		return nil, err
 	}
@@ -583,7 +607,7 @@ func (x *Fixer) ProposeEdit(path, instruction string) (*Proposal, error) {
 	if err != nil || !exists {
 		return nil, fmt.Errorf("%s does not exist in the working tree", path)
 	}
-	proposed, _, err := x.generate(prompts.Get("edit"), "## Change requested by the developer\n"+instruction+"\n", path, current)
+	proposed, _, err := x.generate(x.llm.With(ctx), prompts.Get("edit"), "## Change requested by the developer\n"+instruction+"\n", path, current)
 	if err != nil {
 		return nil, err
 	}
@@ -594,8 +618,8 @@ func (x *Fixer) ProposeEdit(path, instruction string) (*Proposal, error) {
 }
 
 // generate asks the model for the whole updated file and checks it before anyone sees it.
-func (x *Fixer) generate(system, task, path, current string) (string, string, error) {
-	answer, err := x.llm.ChatText(system, task+fileBlock(path, current))
+func (x *Fixer) generate(llm *Ollama, system, task, path, current string) (string, string, error) {
+	answer, err := llm.ChatText(system, task+fileBlock(path, current))
 	if err != nil {
 		return "", "", err
 	}
@@ -619,7 +643,7 @@ func (x *Fixer) generate(system, task, path, current string) (string, string, er
 	var bad []string
 	if proposed, bad = x.checkImports(current, proposed); len(bad) > 0 {
 		retry := task + "\n" + prompts.Render("retry-bad-imports", prompts.Items(bad)) + "\n"
-		if answer, err = x.llm.ChatText(system, retry+fileBlock(path, current)); err != nil {
+		if answer, err = llm.ChatText(system, retry+fileBlock(path, current)); err != nil {
 			return "", "", err
 		}
 		if m = fence.FindStringSubmatch(answer); m == nil {
@@ -727,6 +751,9 @@ func (x *Fixer) Apply(id, message string) (string, error) {
 	if err != nil {
 		restore() // leave the tree as it was
 		return "", err
+	}
+	if x.OnFixed != nil && len(p.fixes) > 0 {
+		x.OnFixed(p.fixes, sha)
 	}
 	return sha, nil
 }
@@ -872,7 +899,7 @@ func testProblems(test, forbid string) []string {
 
 // ProposeTest writes a regression test for a defect as a new file, shown as a diff to approve.
 // forbid is the exception the defect throws: a test asserting it would lock the bug in.
-func (x *Fixer) ProposeTest(sourcePath, defect, build string, forbid ...string) (*Proposal, error) {
+func (x *Fixer) ProposeTest(ctx context.Context, sourcePath, defect, build string, forbid ...string) (*Proposal, error) {
 	if err := x.ready(); err != nil {
 		return nil, err
 	}
@@ -900,7 +927,7 @@ func (x *Fixer) ProposeTest(sourcePath, defect, build string, forbid ...string) 
 	}
 	var test string
 	for attempt := 0; attempt < 2; attempt++ {
-		answer, err := x.llm.ChatText(prompts.Get("regression-test"), user.String())
+		answer, err := x.llm.With(ctx).ChatText(prompts.Get("regression-test"), user.String())
 		if err != nil {
 			return nil, err
 		}

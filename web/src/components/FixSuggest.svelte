@@ -1,5 +1,6 @@
 <script lang="ts">
   import { app, proposeGuidedFix } from '../lib/store.svelte';
+  import { cancelAI } from '../lib/api';
   import type { FindingWithPath, FixRef } from '../lib/types';
 
   // A suggestion for how to fix THIS issue. The server refuses anything about other issues or code.
@@ -34,7 +35,7 @@
       <button class="btn sm" onclick={send} disabled={busy || !text.trim()}>
         {#if busy}<span class="spinner"></span>Checking and writing the fix…{:else}Fix with my suggestion{/if}
       </button>
-      <button class="btn secondary sm" onclick={() => { open = false; refused = null; }} disabled={busy}>Cancel</button>
+      <button class="btn secondary sm" onclick={() => { cancelAI(); busy = false; open = false; refused = null; }}>Cancel</button>
       <span class="faint small kbd">⌘↵</span>
     </div>
   </div>

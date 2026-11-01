@@ -4,7 +4,20 @@ const json = (method: string, body?: unknown): RequestInit => ({
   method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body),
 });
 
+// Requests that wait for the model: Cancel aborts them, and the server stops the model too.
+const AI_PATH = /^\/(fix|edit|tests|incidents\/[^/]+\/(fix|test|rule|runbook))$/;
+let aiAbort: AbortController | null = null;
+
+export function cancelAI() {
+  aiAbort?.abort();
+  aiAbort = null;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (AI_PATH.test(path) && init?.method === 'POST') {
+    aiAbort ??= new AbortController();
+    init = { ...init, signal: aiAbort.signal };
+  }
   const res = await fetch('/api' + path, init);
   if (!res.ok) {
     let message = res.statusText;
@@ -20,6 +33,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   status: () => request<Status>('/status'),
+  markFixed: (id: string) => fetch(`/api/issues/${id}/resolve`, { method: 'POST' }),
+  reopenIssue: (id: string) => fetch(`/api/issues/${id}/resolve`, { method: 'DELETE' }),
   graph: () => request<Graph>('/graph'),
   commits: (limit = 80) => request<CommitItem[]>(`/commits?limit=${limit}`),
   commit: (sha: string) => request<Detail>(`/commits/${sha}`),
