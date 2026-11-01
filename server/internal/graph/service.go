@@ -36,7 +36,7 @@ func (s *Service) Reindex() {
 	start := time.Now()
 	var sources map[string][]byte
 	label := "working tree"
-	if s.repo.Remote {
+	if s.repo.Remote || s.repo.Viewing() {
 		head := s.repo.Head()
 		sources = s.repo.JavaFilesAt(head)
 		label = "empty"

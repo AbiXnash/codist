@@ -1112,3 +1112,26 @@ func TestWorkflowStageShowsOnOpenIssuesOnly(t *testing.T) {
 		t.Fatalf("a closed issue has no stage: %+v", is)
 	}
 }
+
+func TestCheckImportsCorrectsWrongPackageAndOffersRealClasses(t *testing.T) {
+	x := &Fixer{Known: func() map[string]bool {
+		return map[string]bool{
+			"com.demo.shop.customer.CustomerService":  true,
+			"com.demo.shop.error.NotFoundException":   true,
+			"com.demo.shop.error.BadRequestException": true,
+		}
+	}}
+	before := "package com.demo.shop.customer;\n\nclass A {}\n"
+	after := "package com.demo.shop.customer;\n\nimport com.demo.shop.common.NotFoundException;\nimport com.demo.shop.common.ConflictException;\n\nclass A {}\n"
+	out, bad := x.checkImports(before, after)
+	if !strings.Contains(out, "import com.demo.shop.error.NotFoundException;") {
+		t.Errorf("a real class in the wrong package should be corrected:\n%s", out)
+	}
+	if len(bad) != 1 || bad[0] != "com.demo.shop.common.ConflictException" {
+		t.Fatalf("bad = %v", bad)
+	}
+	got := x.importCandidates(bad)
+	if len(got) != 2 || got[0] != "com.demo.shop.error.BadRequestException" {
+		t.Errorf("candidates = %v, want the project's exceptions", got)
+	}
+}

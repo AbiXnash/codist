@@ -117,8 +117,8 @@ func (x *Fixer) ready() error {
 	if !x.Enabled() {
 		return errors.New("fixes need a local checkout (CODIST_REPO); this repository is a remote mirror")
 	}
-	if b := x.repo.CurrentBranch(); b != x.repo.Branch {
-		return fmt.Errorf("the working tree is on %q but Codist follows %q; switch back to commit fixes", b, x.repo.Branch)
+	if b := x.repo.CurrentBranch(); b != x.repo.Branch() {
+		return fmt.Errorf("you are viewing %q but %q is checked out; check out %q to fix it, or switch back in Codist", x.repo.Branch(), b, x.repo.Branch())
 	}
 	if op := x.repo.Operation(); op != "" {
 		return fmt.Errorf("a %s is in progress; finish or abort it first (Codist does not change files or commit in the middle of one)", op)
@@ -646,8 +646,14 @@ func (x *Fixer) generate(llm *Ollama, system, task, path, current string) (strin
 		return "", "", errors.New("the model's version dropped most of the file; nothing was changed, try again")
 	}
 	var bad []string
-	if proposed, bad = x.checkImports(current, proposed); len(bad) > 0 {
-		retry := task + "\n" + prompts.Render("retry-bad-imports", prompts.Items(bad)) + "\n"
+	proposed, bad = x.checkImports(current, proposed)
+	// A small model often invents a class, like a ConflictException the project does not have. It gets
+	// told what it may use instead, twice, because a second chance alone rarely changes its mind.
+	for try := 0; len(bad) > 0; try++ {
+		if try == 2 {
+			return "", "", fmt.Errorf("the model kept using classes this project does not have (%s), so nothing was changed. Try again, or say which class to use in the suggestion box, for example IllegalStateException", strings.Join(bad, ", "))
+		}
+		retry := task + "\n" + prompts.Render("retry-bad-imports", map[string]any{"Items": bad, "Candidates": x.importCandidates(bad)}) + "\n"
 		if answer, err = llm.ChatText(system, retry+fileBlock(path, current)); err != nil {
 			return "", "", err
 		}
@@ -658,10 +664,8 @@ func (x *Fixer) generate(llm *Ollama, system, task, path, current string) (strin
 		if strings.HasSuffix(current, "\n") && !strings.HasSuffix(proposed, "\n") {
 			proposed += "\n"
 		}
-		if proposed, bad = x.checkImports(current, proposed); len(bad) > 0 {
-			return "", "", fmt.Errorf("the model's fix imports classes that do not exist (%s); nothing was changed", strings.Join(bad, ", "))
-		}
-		if strings.HasSuffix(path, ".java") && !javaidx.Valid([]byte(proposed)) {
+		proposed, bad = x.checkImports(current, proposed)
+		if len(bad) == 0 && strings.HasSuffix(path, ".java") && !javaidx.Valid([]byte(proposed)) {
 			return "", "", errors.New("the model's version does not parse as Java; nothing was changed, try again")
 		}
 	}
@@ -681,7 +685,7 @@ func (x *Fixer) store_(sha string, f Finding, msg string, edits []edit) (*Propos
 		paths = append(paths, e.path)
 	}
 	p := &Proposal{ID: newID(), SHA: sha, Path: paths[0], Paths: paths, Finding: f, Patch: patch.String(),
-		Message: msg, Branch: x.repo.Branch, edits: edits, created: time.Now()}
+		Message: msg, Branch: x.repo.Branch(), edits: edits, created: time.Now()}
 	x.mu.Lock()
 	for id, old := range x.proposals {
 		if time.Since(old.created) > time.Hour {
@@ -1037,10 +1041,46 @@ func (x *Fixer) checkImports(before, after string) (string, []string) {
 		if parent := name[:strings.LastIndex(name, ".")]; known[parent] {
 			return line // nested type or static member
 		}
+		// The right class in the wrong package is just a wrong import: correct it.
+		var same []string
+		for fqn := range known {
+			if strings.HasSuffix(fqn, "."+simple) {
+				same = append(same, fqn)
+			}
+		}
+		if len(same) == 1 {
+			return strings.Replace(line, name, same[0], 1)
+		}
 		bad = append(bad, name)
 		return line
 	})
 	return out, bad
+}
+
+// importCandidates lists real project classes of the same sort as the invented ones: for an invented
+// ConflictException, the project's exceptions.
+func (x *Fixer) importCandidates(bad []string) []string {
+	if x.Known == nil {
+		return nil
+	}
+	lastWord := regexp.MustCompile(`[A-Z][a-z0-9]*$`)
+	kinds := map[string]bool{}
+	for _, b := range bad {
+		if w := lastWord.FindString(b[strings.LastIndex(b, ".")+1:]); w != "" {
+			kinds[w] = true
+		}
+	}
+	var out []string
+	for fqn := range x.Known() {
+		if kinds[lastWord.FindString(fqn[strings.LastIndex(fqn, ".")+1:])] {
+			out = append(out, fqn)
+		}
+	}
+	slices.Sort(out)
+	if len(out) > 20 {
+		out = out[:20]
+	}
+	return out
 }
 
 // InjectionRegressionTest writes the standard regression test for a dependency that Spring never

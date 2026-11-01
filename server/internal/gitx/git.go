@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"codist/internal/config"
 )
@@ -51,11 +53,12 @@ func (f FileChange) IsJava() bool  { return strings.HasSuffix(f.Path, ".java") }
 func (f FileChange) Deleted() bool { return f.NewPath == "" }
 
 type Repo struct {
-	Root   string
-	Branch string
-	Remote bool // following origin/<branch>
-	auth   string
-	mu     sync.Mutex
+	Root     string
+	branch   atomic.Pointer[string] // the branch being followed; see SwitchBranch
+	checkout atomic.Pointer[checkoutAt]
+	Remote   bool // following origin/<branch>
+	auth     string
+	mu       sync.Mutex
 }
 
 func Open(cfg config.Config) (*Repo, error) {
@@ -99,32 +102,141 @@ func Open(cfg config.Config) (*Repo, error) {
 		return nil, fmt.Errorf("set CODIST_REPO (local checkout) or CODIST_REPO_URL (git URL to clone)")
 	}
 
-	r.Branch = cfg.Branch
-	if r.Branch == "" {
+	branch := cfg.Branch
+	if branch == "" {
 		b, err := r.git("rev-parse", "--abbrev-ref", "HEAD")
 		if err != nil {
 			return nil, err
 		}
-		r.Branch = strings.TrimSpace(b)
+		branch = strings.TrimSpace(b)
 	}
+	r.branch.Store(&branch)
 	r.Remote = cfg.FetchRemote || cfg.RepoURL != ""
 	return r, nil
 }
 
 func (r *Repo) Name() string { return filepath.Base(r.Root) }
 
-func (r *Repo) TrackedRef() string {
-	if r.Remote {
-		return "refs/remotes/origin/" + r.Branch
+// Branch is the branch Codist follows. It can differ from the one checked out: see Viewing.
+func (r *Repo) Branch() string {
+	if b := r.branch.Load(); b != nil {
+		return *b
 	}
-	return "refs/heads/" + r.Branch
+	return ""
+}
+
+func (r *Repo) TrackedRef() string {
+	b := r.Branch()
+	if r.Remote {
+		return "refs/remotes/origin/" + b
+	}
+	if strings.HasPrefix(b, "origin/") {
+		return "refs/remotes/" + b
+	}
+	return "refs/heads/" + b
+}
+
+type checkoutAt struct {
+	branch string
+	at     time.Time
+}
+
+// checkedOut is CurrentBranch, remembered for a moment because file reads ask for every file.
+func (r *Repo) checkedOut() string {
+	if c := r.checkout.Load(); c != nil && time.Since(c.at) < time.Second {
+		return c.branch
+	}
+	b := r.CurrentBranch()
+	r.checkout.Store(&checkoutAt{b, time.Now()})
+	return b
+}
+
+// Viewing says Codist follows a branch that is not checked out. Everything then comes from that
+// branch's commits, never from the working tree, and nothing can be changed.
+func (r *Repo) Viewing() bool {
+	return !r.Remote && r.checkedOut() != r.Branch()
+}
+
+// SwitchBranch follows another branch. Nothing is checked out and no file changes.
+func (r *Repo) SwitchBranch(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" || strings.HasPrefix(name, "-") {
+		return fmt.Errorf("no such branch: %q", name)
+	}
+	prev := r.Branch()
+	r.branch.Store(&name)
+	if r.Head() == "" {
+		r.branch.Store(&prev)
+		return fmt.Errorf("no such branch: %q", name)
+	}
+	return nil
+}
+
+// BranchRef is one branch in the switcher.
+type BranchRef struct {
+	Name       string `json:"name"`
+	Remote     bool   `json:"remote"`
+	SHA        string `json:"sha"`
+	Message    string `json:"message"`
+	By         string `json:"by"`
+	At         int64  `json:"at"`
+	CheckedOut bool   `json:"checkedOut"`
+}
+
+// ListBranches is every branch that can be followed, the most recently changed first.
+func (r *Repo) ListBranches() []BranchRef {
+	out, err := r.git("for-each-ref", "--sort=-committerdate", "--format=%(refname)%1f%(objectname)%1f%(authorname)%1f%(committerdate:unix)%1f%(subject)", "refs/heads", "refs/remotes/origin")
+	if err != nil {
+		return []BranchRef{}
+	}
+	cur := r.checkedOut()
+	local := map[string]bool{}
+	type row struct{ ref, sha, by, at, msg string }
+	var rows []row
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		p := strings.SplitN(l, "\x1f", 5)
+		if len(p) < 5 {
+			continue
+		}
+		rows = append(rows, row{p[0], p[1], p[2], p[3], p[4]})
+		if n, ok := strings.CutPrefix(p[0], "refs/heads/"); ok {
+			local[n] = true
+		}
+	}
+	refs := []BranchRef{}
+	for _, c := range rows {
+		b := BranchRef{SHA: c.sha, By: c.by, Message: c.msg}
+		sec, _ := strconv.ParseInt(c.at, 10, 64)
+		b.At = sec * 1000
+		if n, ok := strings.CutPrefix(c.ref, "refs/heads/"); ok {
+			if r.Remote {
+				continue // a mirror follows origin's branches
+			}
+			b.Name, b.CheckedOut = n, n == cur
+		} else {
+			n := strings.TrimPrefix(c.ref, "refs/remotes/origin/")
+			if n == "HEAD" {
+				continue
+			}
+			if r.Remote {
+				b.Name = n
+			} else if local[n] {
+				continue
+			} else {
+				b.Name = "origin/" + n
+			}
+			b.Remote = true
+		}
+		refs = append(refs, b)
+	}
+	return refs
 }
 
 func (r *Repo) Tracking() string {
 	if r.Remote {
-		return "origin/" + r.Branch
+		return "origin/" + r.Branch()
 	}
-	return r.Branch
+	return r.Branch()
 }
 
 func (r *Repo) git(args ...string) (string, error) {
@@ -446,6 +558,10 @@ func (r *Repo) ReadFile(sha, path string) (string, bool) {
 
 // ReadWorking returns a file from the working tree, refusing paths outside the repository.
 func (r *Repo) ReadWorking(path string) (string, bool, error) {
+	if r.Viewing() {
+		text, ok := r.ReadFile(r.Head(), path)
+		return text, ok, nil
+	}
 	p := filepath.Clean(filepath.Join(r.Root, path))
 	if !strings.HasPrefix(p, r.Root+string(filepath.Separator)) || strings.Contains(p, string(filepath.Separator)+".git"+string(filepath.Separator)) {
 		return "", false, fmt.Errorf("path outside repository: %s", path)
@@ -533,6 +649,9 @@ func (r *Repo) walkJava(fn func(rel string, path string, d fs.DirEntry)) {
 }
 
 func (r *Repo) JavaFilesWorking() map[string][]byte {
+	if r.Viewing() {
+		return r.JavaFilesAt(r.Head())
+	}
 	files := map[string][]byte{}
 	r.walkJava(func(rel, path string, _ fs.DirEntry) {
 		if b, err := os.ReadFile(path); err == nil {
@@ -544,6 +663,9 @@ func (r *Repo) JavaFilesWorking() map[string][]byte {
 
 // Fingerprint is a cheap hash of paths, sizes and mtimes, used to notice edits in the working tree.
 func (r *Repo) Fingerprint() string {
+	if r.Viewing() {
+		return "viewing:" + r.Head()
+	}
 	h := sha1.New()
 	r.walkJava(func(rel, _ string, d fs.DirEntry) {
 		info, err := d.Info()
@@ -559,6 +681,9 @@ func (r *Repo) Fingerprint() string {
 
 // BuildFingerprint covers the build files, which issues can point at too (dependency findings).
 func (r *Repo) BuildFingerprint() string {
+	if r.Viewing() {
+		return "viewing:" + r.Head()
+	}
 	var b strings.Builder
 	for _, p := range []string{"pom.xml", "build.gradle", "build.gradle.kts"} {
 		if info, err := os.Stat(filepath.Join(r.Root, p)); err == nil {
@@ -738,6 +863,9 @@ func (r *Repo) DiffRange(from, to string) ([]FileChange, error) {
 // WorkingChanges is what the working tree changes against the last commit: tracked edits plus new,
 // untracked files (every line counts as added).
 func (r *Repo) WorkingChanges() ([]FileChange, error) {
+	if r.Viewing() {
+		return []FileChange{}, nil // those changes belong to the branch that is checked out
+	}
 	out, err := r.git("diff", "-M", "--no-color", "-U3", "HEAD")
 	if err != nil {
 		return nil, err
@@ -829,8 +957,8 @@ func (r *Repo) Reword(sha, message string) (map[string]string, error) {
 	if r.Remote {
 		return nil, errors.New("this repository is a read-only mirror")
 	}
-	if b, _ := r.git("rev-parse", "--abbrev-ref", "HEAD"); strings.TrimSpace(b) != r.Branch {
-		return nil, fmt.Errorf("switch to %s first", r.Branch)
+	if b, _ := r.git("rev-parse", "--abbrev-ref", "HEAD"); strings.TrimSpace(b) != r.Branch() {
+		return nil, fmt.Errorf("switch to %s first", r.Branch())
 	}
 	head := r.Head()
 	if _, err := r.git("merge-base", "--is-ancestor", sha, head); err != nil {
@@ -890,7 +1018,7 @@ func (r *Repo) Reword(sha, message string) (map[string]string, error) {
 	if newHead == "" {
 		return nil, errors.New("nothing to reword")
 	}
-	if _, err := r.git("update-ref", "-m", "codist: reword "+sha[:7], "refs/heads/"+r.Branch, newHead, head); err != nil {
+	if _, err := r.git("update-ref", "-m", "codist: reword "+sha[:7], "refs/heads/"+r.Branch(), newHead, head); err != nil {
 		return nil, fmt.Errorf("the branch moved meanwhile, nothing was changed: %w", err)
 	}
 	return mapping, nil

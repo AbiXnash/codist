@@ -33,6 +33,8 @@ type Watcher struct {
 	fingerprint string
 	lastFetch   time.Time
 	poke        chan struct{}
+	checkout    string // the branch last seen checked out
+	first       string // the branch Codist started on
 }
 
 func New(cfg config.Config, repo *gitx.Repo, g *graph.Service, reviews *review.Service, hub *events.Hub) *Watcher {
@@ -41,12 +43,14 @@ func New(cfg config.Config, repo *gitx.Repo, g *graph.Service, reviews *review.S
 
 // Start indexes once, catches up on commits made while Codist was stopped, then polls.
 func (w *Watcher) Start() {
+	w.first = w.repo.Branch()
 	w.repo.Fetch()
 	w.lastFetch = time.Now()
 	w.lastHead = w.repo.Head()
 	if !w.repo.Remote {
 		w.fingerprint = w.repo.Fingerprint()
 	}
+	w.checkout = w.repo.CurrentBranch()
 	w.graph.Reindex()
 
 	if w.cfg.AutoReview && w.lastHead != "" {
@@ -104,6 +108,18 @@ func (w *Watcher) tick() {
 		w.lastFetch = time.Now()
 	}
 
+	// git checkout in a terminal: follow it, as anyone would expect.
+	if !w.repo.Remote && w.cfg.Branch == "" {
+		if b := w.repo.CurrentBranch(); b != w.checkout && b != "HEAD" && b != "" {
+			w.checkout = b
+			if b != w.repo.Branch() {
+				if err := w.follow(b); err != nil {
+					slog.Warn("could not follow checkout", "branch", b, "err", err)
+				}
+			}
+		}
+	}
+
 	reindexed := false
 	if head := w.repo.Head(); head != "" && head != w.lastHead {
 		fresh := w.repo.CommitsSince(w.lastHead, head, maxCatchUp)
@@ -136,8 +152,38 @@ func (w *Watcher) tick() {
 	}
 }
 
+// Follow switches to another branch. Nothing is checked out, and its commits are not queued for
+// review just because someone looked at the branch: new commits on it are.
+func (w *Watcher) Follow(branch string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.follow(branch)
+}
+
+func (w *Watcher) follow(branch string) error {
+	if err := w.repo.SwitchBranch(branch); err != nil {
+		return err
+	}
+	w.lastHead = w.repo.Head()
+	w.saveSeen(w.lastHead)
+	w.fingerprint = ""
+	if !w.repo.Remote {
+		w.fingerprint = w.repo.Fingerprint()
+	}
+	w.graph.Reindex()
+	w.hub.Publish("commits", map[string]any{"head": w.lastHead, "new": []string{}})
+	w.hub.Publish("branch", map[string]any{"branch": branch})
+	return nil
+}
+
+// One per branch, so going back to a branch does not re-review what happened on another.
+// The branch Codist started on keeps the file it always had.
 func (w *Watcher) seenFile() string {
-	return filepath.Join(w.cfg.DataDir, w.repo.Name(), "last-seen-head")
+	dir := filepath.Join(w.cfg.DataDir, w.repo.Name())
+	if b := w.repo.Branch(); b != w.first {
+		return filepath.Join(dir, "last-seen-head."+strings.NewReplacer("/", "_", "..", "_").Replace(b))
+	}
+	return filepath.Join(dir, "last-seen-head")
 }
 
 func (w *Watcher) loadSeen() string {

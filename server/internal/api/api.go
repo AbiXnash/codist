@@ -150,6 +150,10 @@ func (s *Server) Handler() http.Handler {
 			writeError(w, http.StatusConflict, "this repository is a read-only mirror")
 			return
 		}
+		if s.Repo.Viewing() {
+			writeError(w, http.StatusConflict, "you are viewing "+s.Repo.Branch()+"; these changes are on "+s.Repo.CurrentBranch())
+			return
+		}
 		if op := s.Repo.Operation(); op != "" {
 			writeError(w, http.StatusConflict, "a "+op+" is in progress; finish or abort it first")
 			return
@@ -280,6 +284,23 @@ func (s *Server) Handler() http.Handler {
 		s.Fixer.Discard(r.PathValue("id"))
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("GET /api/refs", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, s.Repo.ListBranches())
+	})
+	mux.HandleFunc("POST /api/refs/follow", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "a branch name is required")
+			return
+		}
+		if err := s.Watcher.Follow(req.Name); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, map[string]string{"branch": s.Repo.Branch()})
+	})
 	mux.Handle("/", s.web())
 	return mux
 }
@@ -287,10 +308,10 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	g := s.Graph.Graph()
 	writeJSON(w, map[string]any{
-		"repo": s.Repo.Name(), "path": s.Repo.Root, "branch": s.Repo.Branch, "tracking": s.Repo.Tracking(),
+		"repo": s.Repo.Name(), "path": s.Repo.Root, "branch": s.Repo.Branch(), "viewing": s.Repo.Viewing(), "checkedOut": s.Repo.CurrentBranch(), "tracking": s.Repo.Tracking(),
 		"head": s.Repo.Head(), "model": s.LLM.Model, "llmProblem": s.LLM.Problem(),
 		"graphSource": g.Source, "graphBuiltAt": g.BuiltAt,
-		"canFix": s.Fixer.Enabled(), "rules": len(s.Reviews.Knowledge().Rules), "user": s.Repo.UserName(),
+		"canFix": s.Fixer.Enabled() && !s.Repo.Viewing(), "rules": len(s.Reviews.Knowledge().Rules), "user": s.Repo.UserName(),
 		"operation": s.Repo.Operation(), "conflicts": s.Repo.Conflicts(), "analysers": s.analysers(),
 		"models": map[string]string{"review": s.LLM.Model, "summary": firstNonEmpty(s.Cfg.SummaryModel, s.LLM.Model),
 			"fix": firstNonEmpty(s.Cfg.FixModel, s.LLM.Model), "ask": firstNonEmpty(s.Cfg.AskModel, s.LLM.Model)},
