@@ -53,8 +53,11 @@
       const next = list[Math.max(0, Math.min(list.length - 1, i + (e.key === 'j' ? 1 : -1)))];
       if (next) void selectCommit(next.commit.sha, true);
     } else if ('12345'.includes(e.key) && e.key.length === 1) {
-      app.tab = (['issues', 'review', 'diff', 'code', 'ask'] as const)[Number(e.key) - 1];
-      app.showPanel = true;
+      const panels = ['issues', 'commit', 'commit', 'code', 'ask'];
+      if (app.panelOn(panels[Number(e.key) - 1])) {
+        app.tab = (['issues', 'review', 'diff', 'code', 'ask'] as const)[Number(e.key) - 1];
+        app.showPanel = true;
+      }
     }
   }
 </script>

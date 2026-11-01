@@ -12,9 +12,9 @@
   const hot = $derived((app.issueList?.openBySeverity.critical ?? 0) + (app.issueList?.openBySeverity.high ?? 0) > 0);
   // Three places: what is wrong, the commit you picked, the code. Ask stands apart.
   const tabs = $derived<{ id: Tab; label: string; count?: number }[]>([
-    { id: 'issues', label: 'Issues', count: open },
-    { id: 'review', label: 'Commit', count: app.issues.length },
-    { id: 'code', label: 'Code' },
+    ...(app.panelOn('issues') ? [{ id: 'issues' as Tab, label: 'Issues', count: open }] : []),
+    ...(app.panelOn('commit') ? [{ id: 'review' as Tab, label: 'Commit', count: app.issues.length }] : []),
+    ...(app.panelOn('code') ? [{ id: 'code' as Tab, label: 'Code' }] : []),
     ...(app.selectedNode ? [{ id: 'type' as Tab, label: 'Class' }] : []),
   ]);
   const onCommit = $derived(app.tab === 'review' || app.tab === 'diff');
@@ -29,7 +29,7 @@
       </button>
     {/each}
     <span class="spacer"></span>
-    <button class="ask" class:on={app.tab === 'ask'} title="Ask about the code, or describe a change" onclick={() => (app.tab = app.tab === 'ask' ? 'issues' : 'ask')}>Ask AI</button>
+    {#if app.panelOn('ask')}<button class="ask" class:on={app.tab === 'ask'} title="Ask about the code, or describe a change" onclick={() => (app.tab = app.tab === 'ask' ? 'issues' : 'ask')}>Ask AI</button>{/if}
     <button class="icon-btn" title="Hide panel  ]" aria-label="Hide panel" onclick={() => (app.showPanel = false)}>
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m4 4 8 8M12 4l-8 8"/></svg>
     </button>

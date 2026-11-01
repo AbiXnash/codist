@@ -409,3 +409,7 @@ export interface PlannedCommit { message: string; why: string; files: { path: st
 export interface BranchRef { name: string; remote: boolean; sha: string; message: string; by: string; at: number; checkedOut: boolean }
 
 export interface HistoryCommit { sha: string; parents: string[]; author: string; at: number; subject: string; refs: string[]; status: string; issues: number }
+
+export interface Flags { menus: Record<string, boolean>; panels: Record<string, boolean>; features: Record<string, boolean>; problems?: string[]; sources: string[] }
+export interface PersonStats { name: string; commits: number; added: number; removed: number; files: number; owned: number }
+export interface PeopleReport { head: string; people: PersonStats[]; totalLines: number; tookMs: number }

@@ -98,7 +98,7 @@
           <span class="meta"><span>{app.working.changes.length} file{app.working.changes.length === 1 ? '' : 's'} changed</span><span class="time">now</span></span>
           <span class="badges">{#if n}<span class="pill warn">{n} suggestion{n === 1 ? '' : 's'}</span>{:else}<span class="pill good">clean so far</span>{/if}</span>
         </button>
-        {#if app.scope === 'working'}<WorkingPlan />{/if}
+        {#if app.scope === 'working' && app.featureOn('localPlan')}<WorkingPlan />{/if}
       </li>
     {/if}
     {#each shown as c, idx (c.commit.sha)}

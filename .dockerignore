@@ -1,0 +1,7 @@
+**/node_modules
+web/dist
+server/bin
+server/internal/webui/dist/assets
+server/internal/webui/dist/index.html
+dist
+.git

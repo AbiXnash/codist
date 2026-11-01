@@ -7,7 +7,7 @@
 <aside class="dock">
   <div class="tabs" role="tablist">
     <button role="tab" aria-selected={app.left === 'commits'} class:on={app.left === 'commits'} onclick={() => (app.left = 'commits')}>Commits <span class="n">{app.shownCommits.length}</span></button>
-    <button role="tab" aria-selected={app.left === 'explorer'} class:on={app.left === 'explorer'} onclick={() => (app.left = 'explorer')}>Explorer <span class="n">{app.graphView.nodes.length}</span></button>
+    {#if app.featureOn('explorer')}<button role="tab" aria-selected={app.left === 'explorer'} class:on={app.left === 'explorer'} onclick={() => (app.left = 'explorer')}>Explorer <span class="n">{app.graphView.nodes.length}</span></button>{/if}
   </div>
   <div class="body">
     {#if app.left === 'commits'}<CommitsTab />{:else}<GraphPanel />{/if}

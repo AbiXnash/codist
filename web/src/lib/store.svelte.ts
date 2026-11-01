@@ -1,6 +1,6 @@
 import { api, cancelAI } from './api';
 import { cycles, layerViolations, metrics } from './graphAnalysis';
-import type { FixRef, Working, AskMessage, CommitItem, Detail, FindingWithPath, FixProposal, Graph, IgnoreScope, Incident, Issue, IssueList, IncidentRow, Mode, OpenFile, Severity, Status, Tab } from './types';
+import type { FixRef, Working, AskMessage, CommitItem, Detail, FindingWithPath, FixProposal, Graph, IgnoreScope, Incident, Issue, IssueList, IncidentRow, Mode, OpenFile, Severity, Status, Tab, Flags } from './types';
 
 export interface Toast {
   id: number;
@@ -151,6 +151,11 @@ class AppState {
   hiddenEdges = $state<string[]>([]);
   graphQuery = $state('');
   graphQueryMode = $state<'highlight' | 'only'>('highlight');
+  /** What features.json turned on. Until it loads, everything is on. */
+  flags = $state.raw<Flags | null>(null);
+  menuOn = (name: string) => this.flags?.menus[name] !== false;
+  panelOn = (name: string) => this.flags?.panels[name] !== false;
+  featureOn = (name: string) => this.flags?.features[name] !== false;
   /** The centre of Review: how the code connects, or how the branches relate. */
   centre = $state<'code' | 'branches'>(prefStr('centre', ['code', 'branches'] as const, 'code'));
   layoutMode = $state<'natural' | 'layers' | 'services' | 'hubs'>(prefStr('layoutMode', ['natural', 'layers', 'services', 'hubs'] as const, 'natural'));
@@ -281,6 +286,29 @@ export function toast(text: string, tone: Toast['tone'] = 'info', ms = 4000) {
   const id = ++toastId;
   app.toasts = [...app.toasts, { id, text, tone }];
   setTimeout(() => (app.toasts = app.toasts.filter((t) => t.id !== id)), ms);
+}
+
+/** Reads features.json and moves away from anything that was just turned off. */
+export async function loadFlags() {
+  try {
+    const f = await api.features();
+    app.flags = f;
+    for (const p of f.problems ?? []) toast(p, 'warn', 8000);
+    if (!app.menuOn(app.mode)) {
+      const next = (Object.keys(f.menus) as Mode[]).find((m) => f.menus[m]);
+      if (next) app.mode = next;
+    }
+    const tabPanel: Record<string, string> = { issues: 'issues', review: 'commit', diff: 'commit', code: 'code', ask: 'ask' };
+    if (tabPanel[app.tab] && !app.panelOn(tabPanel[app.tab])) {
+      const next = (['issues', 'review', 'code', 'ask'] as const).find((t) => app.panelOn(tabPanel[t]));
+      if (next) app.tab = next;
+      else app.showPanel = false;
+    }
+    if (!app.featureOn('branchGraph')) app.centre = 'code';
+    if (!app.featureOn('explorer')) app.left = 'commits';
+  } catch {
+    /* an older server: everything stays on */
+  }
 }
 
 export async function loadStatus() {
@@ -689,7 +717,7 @@ export function connect() {
 }
 
 export async function boot() {
-  await loadStatus();
+  await Promise.all([loadStatus(), loadFlags()]);
   listScope = app.status?.repo ?? '';
   app.hiddenRoles = prefList('hiddenRoles');
   app.hiddenPkgs = prefList('hiddenPkgs');

@@ -654,7 +654,7 @@
   <div class="toolbar">
     <div class="seg">
       <button class="on">Code graph</button>
-      <button onclick={() => { app.centre = 'branches'; saveStr('centre', 'branches'); }}>Branch graph</button>
+      {#if app.featureOn('branchGraph')}<button onclick={() => { app.centre = 'branches'; saveStr('centre', 'branches'); }}>Branch graph</button>{/if}
     </div>
     <div class="seg icons">
       <button title="Re-run layout" aria-label="Re-run layout" onclick={() => layout(false)}>

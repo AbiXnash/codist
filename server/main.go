@@ -3,7 +3,9 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,6 +31,17 @@ func main() {
 	cfg := config.Load()
 
 	prompts.Configure(filepath.Join(cfg.DataDir, "prompts"), "")
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "help", "-h", "--help":
+			fmt.Print(usage)
+			return
+		case "doctor":
+			os.Exit(doctor(cfg))
+		case "setup":
+			os.Exit(setup(cfg))
+		}
+	}
 	if len(os.Args) > 1 && os.Args[1] == "export-training" {
 		exportTraining(cfg)
 		return
@@ -48,6 +61,10 @@ func main() {
 		return
 	}
 
+	if err := repoFromArgs(&cfg, os.Args[1:]); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	repo, err := gitx.Open(cfg)
 	if err != nil {
 		slog.Error("cannot open repository", "err", err)
@@ -124,13 +141,20 @@ func main() {
 	}
 	srv.SignOffs = review.NewSignOffs(cfg.DataDir, repo.Name())
 	srv.Incidents = incident.NewEngine(repo, g, askLLM, srv.Tracker, reviews, incident.NewStore(cfg.DataDir, repo.Name()), hub)
-	httpServer := &http.Server{Addr: cfg.Addr, Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	httpServer := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
 
 	if p := llm.Problem(); p != "" {
-		slog.Warn(p)
+		slog.Warn(p + ". Rules and analysers still run; see codist doctor")
 	}
-	slog.Info("codist ready", "url", "http://localhost"+cfg.Addr, "model", cfg.Model)
-	if err := httpServer.ListenAndServe(); err != nil {
+	listener, err := listen(cfg.Addr)
+	if err != nil {
+		slog.Error("cannot listen", "addr", cfg.Addr, "err", err)
+		os.Exit(1)
+	}
+	url := fmt.Sprintf("http://localhost:%d", listener.Addr().(*net.TCPAddr).Port)
+	slog.Info("codist ready", "url", url, "model", cfg.Model)
+	openBrowser(url, os.Args[1:])
+	if err := httpServer.Serve(listener); err != nil {
 		slog.Error("server stopped", "err", err)
 		os.Exit(1)
 	}

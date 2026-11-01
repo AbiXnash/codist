@@ -61,9 +61,9 @@
   </div>
 
   <nav class="groups" aria-label="Screens">
-    {#each NAV as g}
+    {#each NAV.filter((g) => g.items.some(([m]) => app.menuOn(m))) as g}
       <div class="group" title={g.title}>
-        {#each g.items as [m, label]}
+        {#each g.items.filter(([m]) => app.menuOn(m)) as [m, label]}
           <button class:on={app.mode === m} onclick={() => (app.mode = m as Mode)}>{label}{#if m === 'incidents' && app.incidents.some((i) => i.status === 'analysing')}<span class="spinner tiny"></span>{/if}</button>
         {/each}
       </div>
@@ -73,7 +73,7 @@
   <span class="sep">/</span>
   <span class="repo" title={app.status?.path}>{app.status?.repo ?? '…'}</span>
   {#if app.status}
-    <BranchPicker />
+    {#if app.featureOn('branchSwitcher')}<BranchPicker />{:else}<span class="branch mono">{app.status.tracking}</span>{/if}
     {#if app.status.head}<span class="sha mono">{app.status.head.slice(0, 7)}</span><CopyButton text={app.status.head} title="Copy the full commit id" />{/if}
   {/if}
 

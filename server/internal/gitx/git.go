@@ -236,6 +236,71 @@ func (r *Repo) History(names []string, limit int) []HistoryCommit {
 	return commits
 }
 
+// AuthorTotal is one author's history on the followed branch.
+type AuthorTotal struct {
+	Author                  string
+	Commits, Added, Removed int
+	Files                   int
+}
+
+// AuthorHistory adds up each author's non-merge commits, counting only lines in files that keep says count.
+func (r *Repo) AuthorHistory(keep func(path string) bool) []AuthorTotal {
+	if r.Head() == "" {
+		return nil
+	}
+	out, err := r.git("log", "--no-merges", "--no-renames", "--numstat", "--format=%x1e%an", r.TrackedRef())
+	if err != nil {
+		return nil
+	}
+	totals := map[string]*AuthorTotal{}
+	files := map[string]map[string]bool{}
+	var cur *AuthorTotal
+	for _, line := range strings.Split(out, "\n") {
+		if name, ok := strings.CutPrefix(line, "\x1e"); ok {
+			if totals[name] == nil {
+				totals[name] = &AuthorTotal{Author: name}
+				files[name] = map[string]bool{}
+			}
+			cur = totals[name]
+			cur.Commits++
+			continue
+		}
+		p := strings.SplitN(line, "\t", 3)
+		if len(p) < 3 || cur == nil || !keep(p[2]) {
+			continue // a blank line, or binary (added and removed are "-" and fail below)
+		}
+		added, errA := strconv.Atoi(p[0])
+		removed, errR := strconv.Atoi(p[1])
+		if errA != nil || errR != nil {
+			continue
+		}
+		cur.Added += added
+		cur.Removed += removed
+		files[cur.Author][p[2]] = true
+	}
+	list := make([]AuthorTotal, 0, len(totals))
+	for name, t := range totals {
+		t.Files = len(files[name])
+		list = append(list, *t)
+	}
+	return list
+}
+
+// BlameCounts is how many lines of a file each author last touched.
+func (r *Repo) BlameCounts(sha, path string) map[string]int {
+	counts := map[string]int{}
+	out, err := r.git("blame", "--line-porcelain", sha, "--", path)
+	if err != nil {
+		return counts
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if name, ok := strings.CutPrefix(line, "author "); ok {
+			counts[name]++
+		}
+	}
+	return counts
+}
+
 // BranchRef is one branch in the switcher.
 type BranchRef struct {
 	Name       string `json:"name"`

@@ -13,6 +13,7 @@ type Config struct {
 	RepoPath      string // local checkout to watch
 	RepoURL       string // or a git URL to clone and follow
 	Branch        string // empty = current branch
+	Features      string // an extra features.json, applied last
 	FetchRemote   bool   // follow origin/<branch> instead of the local branch
 	FetchInterval time.Duration
 	Poll          time.Duration
@@ -44,6 +45,7 @@ func Load() Config {
 		RepoPath:      expandHome(os.Getenv("CODIST_REPO"), home),
 		RepoURL:       os.Getenv("CODIST_REPO_URL"),
 		Branch:        os.Getenv("CODIST_BRANCH"),
+		Features:      expandHome(os.Getenv("CODIST_FEATURES"), home),
 		FetchRemote:   envBool("CODIST_FETCH_REMOTE", false),
 		FetchInterval: 30 * time.Second,
 		Poll:          time.Duration(envInt("CODIST_POLL_MS", 3000)) * time.Millisecond,
@@ -66,7 +68,7 @@ func Load() Config {
 		MaxFileLines: 600,
 
 		Addr:   env("CODIST_ADDR", ":"+env("PORT", "8080")),
-		WebDir: env("CODIST_WEB_DIR", "../web/dist"),
+		WebDir: os.Getenv("CODIST_WEB_DIR"),
 	}
 }
 

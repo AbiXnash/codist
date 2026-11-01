@@ -121,19 +121,19 @@
       </div>
       {/if}
 
-      <div class="flow" aria-label="Workflow">
+      {#if app.featureOn('issueWorkflow')}<div class="flow" aria-label="Workflow">
         {#each ['Open', 'In progress', 'In review', 'Closed'] as st, n}
           {@const at = i.state !== 'open' ? 3 : i.stage === 'in-review' ? 2 : i.stage === 'in-progress' ? 1 : 0}
           <span class="st" class:done={n < at} class:now={n === at}>{n === 3 && i.state === 'ignored' ? "Won't fix" : n === 3 && i.state === 'resolved' ? 'Fixed' : st}</span>
         {/each}
         {#if i.assignee}<span class="who">· {who(i.assignee)}</span>{/if}
-      </div>
+      </div>{/if}
       {#if !isWorking(i)}
         <div class="actions">
           {#if i.state === 'open'}
-            {#if !i.stage}<button class="btn secondary" title="Assign it to yourself" onclick={() => issueAction(g, 'start')}>Start</button>{/if}
-            {#if i.stage === 'in-progress'}<button class="btn secondary" onclick={() => issueAction(g, 'review')}>Send to review</button>{/if}
-            {#if i.stage}<button class="btn secondary" onclick={() => issueAction(g, 'stop')}>Back to open</button>{/if}
+            {#if !i.stage && app.featureOn('issueWorkflow')}<button class="btn secondary" title="Assign it to yourself" onclick={() => issueAction(g, 'start')}>Start</button>{/if}
+            {#if i.stage === 'in-progress' && app.featureOn('issueWorkflow')}<button class="btn secondary" onclick={() => issueAction(g, 'review')}>Send to review</button>{/if}
+            {#if i.stage && app.featureOn('issueWorkflow')}<button class="btn secondary" onclick={() => issueAction(g, 'stop')}>Back to open</button>{/if}
             <button class="btn secondary" title="You already fixed it: close it. It reopens if a later review reports it again." onclick={() => issueAction(g, 'fixed')}>Mark fixed</button>
             <button class="btn secondary" onclick={() => { closing = !closing; }}>Won't fix…</button>
           {:else if i.manual || i.ignoreId}

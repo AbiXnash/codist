@@ -145,14 +145,14 @@
     <section class="card msg">
       <div class="card-head"><span class="label">Commit message</span><span class="spacer"></span>
         <CopyButton text={c.message} title="Copy this commit's message" />
-        <button class="btn secondary sm" disabled={msgBusy} onclick={() => suggest(c.sha)}>{#if msgBusy}<span class="spinner"></span>{/if}{draft ? 'Suggest again' : 'Suggest a better one'}</button>
+        {#if app.featureOn('reword')}<button class="btn secondary sm" disabled={msgBusy} onclick={() => suggest(c.sha)}>{#if msgBusy}<span class="spinner"></span>{/if}{draft ? 'Suggest again' : 'Suggest a better one'}</button>{/if}
       </div>
       {#if r?.messageProblem}<p class="problem">{r.messageProblem}</p>{/if}
       {#if draft}
         <textarea class="mono" rows="3" bind:value={draft} spellcheck="false"></textarea>
         {#if draftWhy}<p class="faint">{draftWhy}</p>{/if}
         <div class="row-actions">
-          <button class="btn sm" disabled={pushed || msgBusy || !draft.trim() || draft.trim() === c.message.trim()} title={pushed ? 'This commit is already pushed; rewriting it would change history for everyone' : 'Rewrites this commit and the ones after it, keeping their code and authors'} onclick={() => reword(c.sha)}>Reword commit</button>
+          <button class="btn sm" style:display={app.featureOn('reword') ? undefined : 'none'} disabled={pushed || msgBusy || !draft.trim() || draft.trim() === c.message.trim()} title={pushed ? 'This commit is already pushed; rewriting it would change history for everyone' : 'Rewrites this commit and the ones after it, keeping their code and authors'} onclick={() => reword(c.sha)}>Reword commit</button>
           <CopyButton text={draft} label="Copy" />
           {#if pushed}<span class="faint">Already pushed, so it cannot be reworded here.</span>{/if}
         </div>

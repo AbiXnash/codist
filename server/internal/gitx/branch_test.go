@@ -87,3 +87,46 @@ func TestFollowingABranchReadsItWithoutTouchingTheCheckout(t *testing.T) {
 		t.Errorf("branches = %v", names)
 	}
 }
+
+func TestAuthorHistoryAndBlameCountLines(t *testing.T) {
+	dir := t.TempDir()
+	git := func(name string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=" + name, "-c", "user.email=t@t"}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %s", args, out)
+		}
+	}
+	file := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git("Ana", "init", "-q", "-b", "main")
+	file("A.java", "one\ntwo\nthree\n")
+	file("logo.png", "binary")
+	git("Ana", "add", ".")
+	git("Ana", "commit", "-qm", "a")
+	file("A.java", "one\nTWO\nthree\nfour\n")
+	git("Ravi", "commit", "-qam", "b")
+
+	r, err := Open(config.Config{RepoPath: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	totals := map[string]AuthorTotal{}
+	for _, a := range r.AuthorHistory(func(p string) bool { return p == "A.java" }) {
+		totals[a.Author] = a
+	}
+	if a := totals["Ana"]; a.Commits != 1 || a.Added != 3 || a.Removed != 0 || a.Files != 1 {
+		t.Errorf("Ana = %+v", a)
+	}
+	if b := totals["Ravi"]; b.Commits != 1 || b.Added != 2 || b.Removed != 1 {
+		t.Errorf("Ravi = %+v", b)
+	}
+	owned := r.BlameCounts(r.Head(), "A.java")
+	if owned["Ana"] != 2 || owned["Ravi"] != 2 {
+		t.Errorf("owned = %v", owned)
+	}
+}

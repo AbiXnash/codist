@@ -5,7 +5,7 @@
 REPO ?= $(HOME)/dev/demo-shop
 export CODIST_REPO ?= $(REPO)
 
-.PHONY: install build run dev test clean
+.PHONY: install build run dev test clean dist install-bin
 
 install:
 	cd web && npm install
@@ -13,10 +13,24 @@ install:
 
 build:
 	cd web && npm run build
+	rm -rf server/internal/webui/dist/assets server/internal/webui/dist/index.html
+	cp -R web/dist/. server/internal/webui/dist/
 	cd server && go build -o bin/codist .
 
 run: build
-	cd server && ./bin/codist
+	cd server && ./bin/codist --no-open
+
+# One file with the UI inside it, for this machine: copy it anywhere and run it.
+dist: build
+	mkdir -p dist
+	cp server/bin/codist dist/codist-$$(go env GOOS)-$$(go env GOARCH)
+	@ls -lh dist/
+
+# Puts codist on your PATH.
+install-bin: build
+	mkdir -p $(HOME)/.local/bin
+	cp server/bin/codist $(HOME)/.local/bin/codist
+	@echo "Installed. If codist is not found, add $(HOME)/.local/bin to your PATH."
 
 dev:
 	@trap 'kill 0' EXIT; \

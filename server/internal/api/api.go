@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,26 +20,31 @@ import (
 
 	"codist/internal/config"
 	"codist/internal/events"
+	"codist/internal/features"
 	"codist/internal/gitx"
 	"codist/internal/graph"
 	"codist/internal/incident"
 	"codist/internal/review"
 	"codist/internal/watch"
+	"codist/internal/webui"
 	"codist/prompts"
 )
 
 type Server struct {
-	Cfg       config.Config
-	Repo      *gitx.Repo
-	Graph     *graph.Service
-	Analyzer  *review.Analyzer
-	Reviews   *review.Service
-	Store     *review.Store
-	LLM       *review.Ollama
-	Hub       *events.Hub
-	Watcher   *watch.Watcher
-	Fixer     *review.Fixer
-	Tracker   *review.Tracker
+	Cfg      config.Config
+	Repo     *gitx.Repo
+	Graph    *graph.Service
+	Analyzer *review.Analyzer
+	Reviews  *review.Service
+	Store    *review.Store
+	LLM      *review.Ollama
+	Hub      *events.Hub
+	Watcher  *watch.Watcher
+	Fixer    *review.Fixer
+	Tracker  *review.Tracker
+
+	peopleMu  sync.Mutex
+	people    *review.PeopleReport
 	Incidents *incident.Engine
 	SignOffs  *review.SignOffs
 	Memory    *review.Memory
@@ -284,6 +290,19 @@ func (s *Server) Handler() http.Handler {
 		s.Fixer.Discard(r.PathValue("id"))
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("GET /api/features", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, s.flags())
+	})
+	mux.HandleFunc("GET /api/people", func(w http.ResponseWriter, r *http.Request) {
+		// Blame is the slow part, and only a new commit changes the answer.
+		s.peopleMu.Lock()
+		defer s.peopleMu.Unlock()
+		if head := s.Repo.Head(); s.people == nil || s.people.Head != head {
+			rep := review.People(s.Repo)
+			s.people = &rep
+		}
+		writeJSON(w, s.people)
+	})
 	mux.HandleFunc("GET /api/history", func(w http.ResponseWriter, r *http.Request) {
 		var names []string
 		if b := r.URL.Query().Get("branches"); b != "" {
@@ -325,7 +344,44 @@ func (s *Server) Handler() http.Handler {
 		writeJSON(w, map[string]string{"branch": s.Repo.Branch()})
 	})
 	mux.Handle("/", s.web())
-	return mux
+	return s.guard(mux)
+}
+
+func (s *Server) flags() features.Flags {
+	return features.Load(features.Paths(s.Cfg.DataDir, s.Repo.Root, s.Cfg.Features)...)
+}
+
+// guard refuses what features.json turned off, so a flag is a real switch and not just a hidden button.
+func (s *Server) guard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/") {
+			path := strings.TrimPrefix(r.URL.Path, "/api")
+			off := func(group map[string]bool, name string) bool { return !group[name] }
+			f := s.flags()
+			blocked := ""
+			switch {
+			case (path == "/fix" || strings.HasPrefix(path, "/fix/") || path == "/edit") && off(f.Features, "fix"):
+				blocked = "features.fix"
+			case path == "/ask" && off(f.Panels, "ask"):
+				blocked = "panels.ask"
+			case strings.HasSuffix(path, "/reword") && off(f.Features, "reword"):
+				blocked = "features.reword"
+			case strings.HasPrefix(path, "/working/") && off(f.Features, "localPlan"):
+				blocked = "features.localPlan"
+			case path == "/refs/follow" && off(f.Features, "branchSwitcher"):
+				blocked = "features.branchSwitcher"
+			case path == "/issues/stage" && off(f.Features, "issueWorkflow"):
+				blocked = "features.issueWorkflow"
+			case strings.HasPrefix(path, "/incidents") && off(f.Menus, "incidents"):
+				blocked = "menus.incidents"
+			}
+			if blocked != "" {
+				writeError(w, http.StatusForbidden, blocked+" is turned off in features.json")
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) status(w http.ResponseWriter, r *http.Request) {
@@ -334,7 +390,7 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		"repo": s.Repo.Name(), "path": s.Repo.Root, "branch": s.Repo.Branch(), "viewing": s.Repo.Viewing(), "checkedOut": s.Repo.CurrentBranch(), "tracking": s.Repo.Tracking(),
 		"head": s.Repo.Head(), "model": s.LLM.Model, "llmProblem": s.LLM.Problem(),
 		"graphSource": g.Source, "graphBuiltAt": g.BuiltAt,
-		"canFix": s.Fixer.Enabled() && !s.Repo.Viewing(), "rules": len(s.Reviews.Knowledge().Rules), "user": s.Repo.UserName(),
+		"canFix": s.Fixer.Enabled() && !s.Repo.Viewing() && s.flags().Features["fix"], "rules": len(s.Reviews.Knowledge().Rules), "user": s.Repo.UserName(),
 		"operation": s.Repo.Operation(), "conflicts": s.Repo.Conflicts(), "analysers": s.analysers(),
 		"models": map[string]string{"review": s.LLM.Model, "summary": firstNonEmpty(s.Cfg.SummaryModel, s.LLM.Model),
 			"fix": firstNonEmpty(s.Cfg.FixModel, s.LLM.Model), "ask": firstNonEmpty(s.Cfg.AskModel, s.LLM.Model)},
@@ -669,16 +725,18 @@ func (s *Server) edit(w http.ResponseWriter, r *http.Request) {
 
 // web serves the built Svelte app, falling back to index.html for client-side routes.
 func (s *Server) web() http.Handler {
-	dir := s.Cfg.WebDir
-	files := http.FileServer(http.Dir(dir))
+	ui := s.uiFiles()
+	if ui == nil {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "UI not built. Run `make build`, or use the Vite dev server (make dev).", http.StatusServiceUnavailable)
+		})
+	}
+	files := http.FileServerFS(ui)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, err := os.Stat(filepath.Join(dir, "index.html")); err != nil {
-			http.Error(w, "UI not built. Run `npm run build` in web/, or use the Vite dev server on :5173.", http.StatusNotFound)
-			return
-		}
-		p := filepath.Join(dir, filepath.Clean("/"+r.URL.Path))
-		if info, err := os.Stat(p); err != nil || info.IsDir() && !strings.HasSuffix(r.URL.Path, "/") {
-			http.ServeFile(w, r, filepath.Join(dir, "index.html"))
+		p := strings.TrimPrefix(filepath.ToSlash(filepath.Clean("/"+r.URL.Path)), "/")
+		info, err := fs.Stat(ui, p)
+		if p == "" || err != nil || (info.IsDir() && !strings.HasSuffix(r.URL.Path, "/")) {
+			http.ServeFileFS(w, r, ui, "index.html") // the app routes on the client
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/assets/") {
@@ -686,6 +744,20 @@ func (s *Server) web() http.Handler {
 		}
 		files.ServeHTTP(w, r)
 	})
+}
+
+// uiFiles picks the UI: CODIST_WEB_DIR if set, then the one in the binary, then a build next door.
+func (s *Server) uiFiles() fs.FS {
+	if s.Cfg.WebDir != "" {
+		return os.DirFS(s.Cfg.WebDir)
+	}
+	if ui := webui.FS(); ui != nil {
+		return ui
+	}
+	if _, err := os.Stat("../web/dist/index.html"); err == nil {
+		return os.DirFS("../web/dist")
+	}
+	return nil
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

@@ -3,3 +3,6 @@ web/node_modules/
 web/dist/
 .DS_Store
 .idea/
+server/internal/webui/dist/*
+!server/internal/webui/dist/.gitkeep
+dist/
