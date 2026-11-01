@@ -415,3 +415,13 @@ export interface PersonStats { name: string; commits: number; added: number; rem
 export interface PeopleReport { head: string; people: PersonStats[]; totalLines: number; tookMs: number }
 
 export interface BranchFix { branch: string; status: 'ready' | 'fixed' | 'conflict' | 'skipped' | 'unaffected' | 'already'; detail?: string; files?: string[]; commit?: string }
+
+export interface DevPoint { title: string; detail: string; advice?: string; issues?: string[] }
+export interface DevShare { name: string; lines: number; commits: number }
+export interface DevProfile {
+  name: string; commits: number; reviewed: number; added: number; removed: number; owned: number; files: number; testShare: number; medianCommit: number; bigCommits: number; badMessages: number;
+  skills: DevShare[]; areas: DevShare[]; introduced: number; openNow: number; serious: number; severity: { name: string; n: number }[]; kinds: { name: string; n: number }[]; rate: number;
+  fixed: number; fixedOwn: number; fixedOthers: number; avgFixDays: number; enoughEvidence: boolean; strengths: DevPoint[]; improve: DevPoint[];
+}
+export interface TeamReport { people: DevProfile[]; teamRate: number }
+export interface DevAdvice { summary: string; strengths: string[]; improve: string[]; advice: string[] }

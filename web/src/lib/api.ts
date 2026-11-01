@@ -1,11 +1,11 @@
-import type { Activity, BranchFix, Flags, PeopleReport, HistoryCommit, BranchRef, BranchReport, MemoryItem, MemoryReport, PlannedCommit, RepoReport, FixRef, Working, CommitItem, DependencyReport, Detail, FixProposal, Graph, Incident, IncidentRow, IssueList, RcaReport, ReleaseReport, SignOff, Status } from './types';
+import type { Activity, DevAdvice, TeamReport, BranchFix, Flags, PeopleReport, HistoryCommit, BranchRef, BranchReport, MemoryItem, MemoryReport, PlannedCommit, RepoReport, FixRef, Working, CommitItem, DependencyReport, Detail, FixProposal, Graph, Incident, IncidentRow, IssueList, RcaReport, ReleaseReport, SignOff, Status } from './types';
 
 const json = (method: string, body?: unknown): RequestInit => ({
   method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body),
 });
 
 // Requests that wait for the model: Cancel aborts them, and the server stops the model too.
-const AI_PATH = /^\/(fix|edit|tests|working\/message|commits\/[^/]+\/message|incidents\/[^/]+\/(fix|test|rule|runbook))$/;
+const AI_PATH = /^\/(fix|edit|tests|team\/advice|working\/message|commits\/[^/]+\/message|incidents\/[^/]+\/(fix|test|rule|runbook))$/;
 let aiAbort: AbortController | null = null;
 
 export function cancelAI() {
@@ -38,6 +38,8 @@ export const api = {
   people: () => request<PeopleReport>('/people'),
   branchFixes: (sha: string) => request<BranchFix[]>(`/commits/${sha}/branch-fix`),
   applyToBranches: (sha: string, branches: string[]) => request<BranchFix[]>(`/commits/${sha}/branch-fix`, json('POST', { branches })),
+  team: () => request<TeamReport>('/team'),
+  devAdvice: (name: string) => request<DevAdvice>('/team/advice', json('POST', { name })),
   refs: () => request<BranchRef[]>('/refs'),
   history: (branches: string[]) => request<HistoryCommit[]>(`/history${branches.length ? `?branches=${encodeURIComponent(branches.join(','))}` : ''}`),
   follow: (name: string) => request<{ branch: string }>('/refs/follow', json('POST', { name })),

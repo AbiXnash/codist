@@ -2,7 +2,8 @@
   import { app, pickIssue, selectCommit } from '../lib/store.svelte';
   import { ago, SEVERITIES } from '../lib/theme';
   import { api } from '../lib/api';
-  import type { Issue, PeopleReport } from '../lib/types';
+  import DevProfileCard from './DevProfile.svelte';
+  import type { DevProfile, Issue, PeopleReport, TeamReport } from '../lib/types';
 
   let { mode }: { mode: 'mine' | 'team' } = $props();
 
@@ -12,6 +13,16 @@
     void app.status?.head;
     api.people().then((r) => (lines = r), () => {});
   });
+  let team = $state.raw<TeamReport | null>(null);
+  let pickedName = $state('');
+  $effect(() => {
+    void app.status?.head;
+    void app.issueList;
+    api.team().then((r) => (team = r), () => {});
+  });
+  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  const myProfile = $derived<DevProfile | undefined>(team?.people.find((x) => same(x.name, app.status?.user ?? '')));
+  const shownProfile = $derived<DevProfile | undefined>(team?.people.find((x) => x.name === pickedName) ?? team?.people[0]);
   const linesOf = (name: string) => lines?.people.find((p) => p.name.trim().toLowerCase() === name.trim().toLowerCase());
   const num = (n?: number) => (n === undefined ? '…' : n.toLocaleString());
   const share = (n?: number) => (n && lines?.totalLines ? ` · ${Math.round((n / lines.totalLines) * 100)}%` : '');
@@ -91,8 +102,9 @@
         {:else}<p class="faint">No commits by you here.</p>{/each}
       </section>
     </div>
+    {#if myProfile}<DevProfileCard p={myProfile} />{/if}
   {:else}
-    <header><h1>Team</h1><p>Who works where, what is open and who has it.</p></header>
+    <header><h1>Team</h1><p>Who works where, what is open and who has it. Pick a person to see their work.</p></header>
     <div class="cards">
       <div class="stat"><b>{people.length}</b><span>people</span></div>
       <div class="stat"><b>{roots.filter((i) => i.state === 'open').length}</b><span>open issues</span></div>
@@ -106,7 +118,7 @@
         <thead><tr><th>Person</th><th>Commits</th><th class="num">Lines written</th><th class="num">Removed</th><th class="num" title="Lines in the code today that git blame gives to them">Lines today</th><th class="num">Files</th><th class="num">Open from their code</th><th class="num">Assigned</th><th class="num">Fixed</th><th>Works mostly in</th><th>Most common issues</th><th>Last commit</th></tr></thead>
         <tbody>
           {#each people as p}
-            <tr>
+            <tr class="pick" class:sel={shownProfile?.name === p.name} onclick={() => (pickedName = p.name)}>
               <td>{p.name}{#if app.isMe(p.name)} <span class="faint">you</span>{/if}</td>
               <td><div class="b"><i style:width="{(p.commits.length / maxCommits) * 100}%"></i><span>{p.commits.length}</span></div></td>
               <td class="num add">+{num(linesOf(p.name)?.added)}</td><td class="num del">−{num(linesOf(p.name)?.removed)}</td>
@@ -120,6 +132,8 @@
         </tbody>
       </table></div>
     </section>
+    {#if shownProfile}<DevProfileCard p={shownProfile} />{/if}
+
     <section class="pcard">
       <h2>Urgent with nobody on it · {unassigned.length}</h2>
       {#each unassigned as i (i.id)}
@@ -140,6 +154,9 @@
   .warn { color: var(--warn); }
   .b { display: flex; align-items: center; gap: 6px; min-width: 90px; }
   .b i { height: 7px; border-radius: 4px; background: var(--accent); }
+  .pick { cursor: pointer; }
+  .pick:hover { background: var(--hover); }
+  .sel { background: var(--accent-soft); }
   .gh { margin: 0 0 7px 4px; font-size: 13px; font-weight: 600; }
   .add { color: var(--added); } .del { color: var(--bad); }
 </style>

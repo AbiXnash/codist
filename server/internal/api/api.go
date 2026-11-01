@@ -295,14 +295,31 @@ func (s *Server) Handler() http.Handler {
 		writeJSON(w, s.flags())
 	})
 	mux.HandleFunc("GET /api/people", func(w http.ResponseWriter, r *http.Request) {
-		// Blame is the slow part, and only a new commit changes the answer.
-		s.peopleMu.Lock()
-		defer s.peopleMu.Unlock()
-		if head := s.Repo.Head(); s.people == nil || s.people.Head != head {
-			rep := review.People(s.Repo)
-			s.people = &rep
+		writeJSON(w, s.peopleReport())
+	})
+	mux.HandleFunc("GET /api/team", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, s.team())
+	})
+	mux.HandleFunc("POST /api/team/advice", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Name string `json:"name"`
 		}
-		writeJSON(w, s.people)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
+			writeError(w, http.StatusBadRequest, "a name is required")
+			return
+		}
+		for _, p := range s.team().People {
+			if p.Name == req.Name {
+				advice, err := s.Fixer.DevAdvice(r.Context(), p)
+				if err != nil {
+					writeError(w, http.StatusBadGateway, err.Error())
+					return
+				}
+				writeJSON(w, advice)
+				return
+			}
+		}
+		writeError(w, http.StatusNotFound, "no commits by "+req.Name+" on this branch")
 	})
 	mux.HandleFunc("GET /api/commits/{sha}/branch-fix", func(w http.ResponseWriter, r *http.Request) {
 		out, err := s.Repo.BranchFixes(r.PathValue("sha"))
@@ -382,6 +399,25 @@ func (s *Server) Handler() http.Handler {
 	return s.guard(mux)
 }
 
+// peopleReport caches because blame is slow, and only a new commit changes the answer.
+func (s *Server) peopleReport() *review.PeopleReport {
+	s.peopleMu.Lock()
+	defer s.peopleMu.Unlock()
+	if head := s.Repo.Head(); s.people == nil || s.people.Head != head {
+		rep := review.People(s.Repo)
+		s.people = &rep
+	}
+	return s.people
+}
+
+func (s *Server) team() review.TeamReport {
+	stereotypes := map[string]string{}
+	for _, n := range s.Graph.Graph().Nodes {
+		stereotypes[n.File] = n.Stereotype
+	}
+	return review.Team(s.Repo.AuthoredCommits(500), s.Tracker.Issues(), s.Store, stereotypes, s.peopleReport())
+}
+
 func (s *Server) flags() features.Flags {
 	return features.Load(features.Paths(s.Cfg.DataDir, s.Repo.Root, s.Cfg.Features)...)
 }
@@ -399,6 +435,8 @@ func (s *Server) guard(next http.Handler) http.Handler {
 				blocked = "features.fix"
 			case path == "/ask" && off(f.Panels, "ask"):
 				blocked = "panels.ask"
+			case strings.HasPrefix(path, "/team/") && off(f.Menus, "team"):
+				blocked = "menus.team"
 			case strings.HasSuffix(path, "/reword") && off(f.Features, "reword"):
 				blocked = "features.reword"
 			case strings.HasPrefix(path, "/working/") && off(f.Features, "localPlan"):

@@ -287,6 +287,52 @@ func (r *Repo) AuthorHistory(keep func(path string) bool) []AuthorTotal {
 	return list
 }
 
+// FileLines is one file in a commit.
+type FileLines struct {
+	Path           string
+	Added, Removed int
+}
+
+// AuthoredCommit is one non-merge commit with the lines it changed.
+type AuthoredCommit struct {
+	SHA, Author, Subject string
+	At                   int64
+	Files                []FileLines
+}
+
+// AuthoredCommits is the followed branch's non-merge commits, newest first.
+func (r *Repo) AuthoredCommits(limit int) []AuthoredCommit {
+	if r.Head() == "" {
+		return nil
+	}
+	out, err := r.git("log", "--no-merges", "--no-renames", "--numstat", "-n", strconv.Itoa(limit), "--format=%x1e%H%x1f%an%x1f%at%x1f%s", r.TrackedRef())
+	if err != nil {
+		return nil
+	}
+	var commits []AuthoredCommit
+	for _, line := range strings.Split(out, "\n") {
+		if head, ok := strings.CutPrefix(line, "\x1e"); ok {
+			p := strings.SplitN(head, "\x1f", 4)
+			if len(p) == 4 {
+				at, _ := strconv.ParseInt(p[2], 10, 64)
+				commits = append(commits, AuthoredCommit{SHA: p[0], Author: p[1], At: at * 1000, Subject: p[3]})
+			}
+			continue
+		}
+		f := strings.SplitN(line, "\t", 3)
+		if len(f) < 3 || len(commits) == 0 {
+			continue
+		}
+		added, errA := strconv.Atoi(f[0])
+		removed, errR := strconv.Atoi(f[1])
+		if errA == nil && errR == nil { // binary files show "-"
+			c := &commits[len(commits)-1]
+			c.Files = append(c.Files, FileLines{Path: f[2], Added: added, Removed: removed})
+		}
+	}
+	return commits
+}
+
 // BlameCounts is how many lines of a file each author last touched.
 func (r *Repo) BlameCounts(sha, path string) map[string]int {
 	counts := map[string]int{}

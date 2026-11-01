@@ -35,6 +35,19 @@ hotspots, costly methods, largest classes and constants.
 **My work** is your to-do list by urgency, your commits, what you fixed, and your lines written, removed and still in the code. **Team** shows per person lines and files as well as what is open,
 assigned and fixed, where they work, and which urgent issues nobody has taken.
 
+### Developer profiles
+
+Pick a person on **Team**, or scroll down on **My work**, for what git and the reviews show about their work on this
+branch: lines, the kind of code they write, where they work, bugs from their commits, fixes and commit habits.
+
+**Does well** and **To work on** come from fixed rules, and each quotes its numbers and links to examples. The same
+problem in two or more commits counts as a habit, and gets the fix suggestion as advice. **Write with AI** turns the numbers
+into a short note using the local model.
+
+With fewer than 5 reviewed commits or 200 reviewed lines, a profile only reports facts and draws no conclusions about
+quality. People are compared with the team average only when at least two have enough evidence. Nobody is scored or
+ranked, because lines do not measure effort and hard code produces more findings.
+
 ## Activity
 
 Every model call as it happens: what was fed to the model section by section, its instructions, its response, tokens,
