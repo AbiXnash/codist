@@ -80,16 +80,15 @@
   {/if}
   {#if app.mode === 'incidents'}
     <IncidentsView />
-  {:else if app.mode === 'release'}
-    <ReleaseView />
-  {:else if app.mode === 'repo'}
-    <RepoView />
-  {:else if app.mode === 'branches'}
-    <BranchesView />
-  {:else if app.mode === 'mine'}
-    <PeopleView mode="mine" />
-  {:else if app.mode === 'team'}
-    <PeopleView mode="team" />
+  {:else if ['repo', 'branches', 'mine', 'team', 'release'].includes(app.mode)}
+    <!-- These describe the followed branch, so they load again when it changes. -->
+    {#key app.status?.branch}
+      {#if app.mode === 'release'}<ReleaseView />
+      {:else if app.mode === 'repo'}<RepoView />
+      {:else if app.mode === 'branches'}<BranchesView />
+      {:else if app.mode === 'mine'}<PeopleView mode="mine" />
+      {:else}<PeopleView mode="team" />{/if}
+    {/key}
   {:else if app.mode === 'activity'}
     <ActivityView />
   {:else if app.mode === 'memory'}
