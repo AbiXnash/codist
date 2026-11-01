@@ -20,6 +20,33 @@ type Ollama struct {
 	NumCtx int
 	HTTP   *http.Client
 	ctx    context.Context
+	label  Label
+}
+
+// For labels the calls of this client for the activity stream.
+func (o *Ollama) For(l Label) *Ollama {
+	if o == nil {
+		return nil
+	}
+	c := *o
+	c.label = l
+	return &c
+}
+
+// record starts an activity entry for a model call; the returned func completes it.
+func (o *Ollama) record(system, user string) func(response string, err error, promptTok, replyTok int) {
+	l := o.label
+	if l.Kind == "" {
+		l.Kind, l.Title = "model", "Model call"
+	}
+	a := Activities.begin(Activity{Kind: l.Kind, Title: l.Title, Model: o.Model, SHA: l.SHA, Path: l.Path, Incident: l.Incident, Knowledge: l.Knowledge, System: system, User: user})
+	return func(response string, err error, promptTok, replyTok int) {
+		text := ""
+		if err != nil {
+			text = err.Error()
+		}
+		Activities.finish(a, response, text, promptTok, replyTok)
+	}
 }
 
 // With returns a client whose requests stop when ctx is cancelled (the developer pressed Cancel).
@@ -62,8 +89,10 @@ func (o *Ollama) chatJSON(system, user string) (map[string]any, error) {
 			{"role": "user", "content": user},
 		},
 	})
+	done := o.record(system, user)
 	resp, err := o.post(body)
 	if err != nil {
+		done("", err, 0, 0)
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -71,10 +100,14 @@ func (o *Ollama) chatJSON(system, user string) (map[string]any, error) {
 		Message struct {
 			Content string `json:"content"`
 		} `json:"message"`
+		PromptEvalCount int `json:"prompt_eval_count"`
+		EvalCount       int `json:"eval_count"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		done("", err, 0, 0)
 		return nil, err
 	}
+	done(out.Message.Content, nil, out.PromptEvalCount, out.EvalCount)
 	content := strings.TrimSpace(out.Message.Content)
 	content = strings.TrimPrefix(strings.TrimPrefix(content, "```json"), "```")
 	content = strings.TrimSpace(strings.TrimSuffix(content, "```"))
@@ -153,8 +186,10 @@ func (o *Ollama) ChatText(system, user string) (string, error) {
 			{"role": "user", "content": user},
 		},
 	})
+	done := o.record(system, user)
 	resp, err := o.post(body)
 	if err != nil {
+		done("", err, 0, 0)
 		return "", err
 	}
 	defer resp.Body.Close()
@@ -162,10 +197,14 @@ func (o *Ollama) ChatText(system, user string) (string, error) {
 		Message struct {
 			Content string `json:"content"`
 		} `json:"message"`
+		PromptEvalCount int `json:"prompt_eval_count"`
+		EvalCount       int `json:"eval_count"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		done("", err, 0, 0)
 		return "", err
 	}
+	done(out.Message.Content, nil, out.PromptEvalCount, out.EvalCount)
 	return out.Message.Content, nil
 }
 

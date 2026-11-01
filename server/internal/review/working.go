@@ -51,6 +51,7 @@ func WorkingReview(repo *gitx.Repo, rules RuleContext, ignores *Ignores) Working
 			for l := f.Line; l <= max(f.Line, f.EndLine); l++ {
 				if changed[l] {
 					f.OnChangedLine = true
+					f.Class = Classify(f, 1)
 					fr.Findings = append(fr.Findings, f)
 					break
 				}

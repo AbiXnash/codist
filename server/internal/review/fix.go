@@ -32,7 +32,7 @@ func (x *Fixer) Ask(path, question, context string) (string, error) {
 		}
 	}
 	user.WriteString("\n## Question\n" + question + "\n")
-	answer, err := x.ask.ChatText(prompts.Get("ask"), user.String())
+	answer, err := x.ask.For(Label{Kind: "ask", Title: "Ask: " + trimTo(question, 70), Path: path}).ChatText(prompts.Get("ask"), user.String())
 	if err != nil {
 		return "", err
 	}
@@ -271,7 +271,7 @@ func (x *Fixer) offTopic(p *fixPlan, guidance string) string {
 	}
 	user := fmt.Sprintf("## Finding being fixed\n%s (%s, %s)\n%s\n\n## Where\n%s\n## The developer's suggestion\n%s\n",
 		p.target.Title, p.target.Severity, p.target.Category, p.target.Detail, places.String(), guidance)
-	out, err := p.llm.ChatJSON(prompts.Get("fix-guidance-check"), user)
+	out, err := p.llm.For(Label{Kind: "fix-check", Title: "Is the suggestion about this issue? " + trimTo(p.target.Title, 50), SHA: p.sha}).ChatJSON(prompts.Get("fix-guidance-check"), user)
 	if errors.Is(err, context.Canceled) {
 		return "Cancelled."
 	}
@@ -460,6 +460,7 @@ func (x *Fixer) build(p *fixPlan) (out *Proposal, err error) {
 		if done.Len() > 0 {
 			user.WriteString("\n## Changes already made to other files for this issue (stay consistent, e.g. use new names)\n```diff\n" + done.String() + "```\n")
 		}
+		llm := llm.For(Label{Kind: "fix", Title: "Fix: " + trimTo(target.Title, 70), SHA: p.sha, Path: file})
 		proposed, patch, err := x.generate(llm, prompts.Get("fix"), user.String(), file, cur)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", file, err)
@@ -607,7 +608,7 @@ func (x *Fixer) ProposeEdit(ctx context.Context, path, instruction string) (*Pro
 	if err != nil || !exists {
 		return nil, fmt.Errorf("%s does not exist in the working tree", path)
 	}
-	proposed, _, err := x.generate(x.llm.With(ctx), prompts.Get("edit"), "## Change requested by the developer\n"+instruction+"\n", path, current)
+	proposed, _, err := x.generate(x.llm.With(ctx).For(Label{Kind: "edit", Title: "Change: " + trimTo(firstLine(instruction), 70), Path: path}), prompts.Get("edit"), "## Change requested by the developer\n"+instruction+"\n", path, current)
 	if err != nil {
 		return nil, err
 	}
@@ -927,7 +928,7 @@ func (x *Fixer) ProposeTest(ctx context.Context, sourcePath, defect, build strin
 	}
 	var test string
 	for attempt := 0; attempt < 2; attempt++ {
-		answer, err := x.llm.With(ctx).ChatText(prompts.Get("regression-test"), user.String())
+		answer, err := x.llm.With(ctx).For(Label{Kind: "test", Title: "Regression test for " + sourcePath[strings.LastIndex(sourcePath, "/")+1:], Path: sourcePath}).ChatText(prompts.Get("regression-test"), user.String())
 		if err != nil {
 			return nil, err
 		}

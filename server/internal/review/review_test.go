@@ -876,3 +876,51 @@ func TestCancelStopsTheModelRequest(t *testing.T) {
 		t.Fatal("cancel did not stop the request")
 	}
 }
+
+func TestActivityRecordsWhatWentInAndOut(t *testing.T) {
+	llm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"message": map[string]string{"content": `{"ok":true}`}, "prompt_eval_count": 11, "eval_count": 4})
+	}))
+	defer llm.Close()
+	dir := t.TempDir()
+	var seen []Activity
+	Activities = NewRecorder(dir, "r", func(a Activity) { seen = append(seen, a) })
+	defer func() { Activities = nil }()
+	if _, err := NewOllama(llm.URL, "m", 2048, time.Minute).For(Label{Kind: "fix", Title: "Fix it", SHA: "abc", Path: "A.java", Knowledge: []string{"k1"}}).ChatJSON("SYSTEM TEXT", "USER TEXT"); err != nil {
+		t.Fatal(err)
+	}
+	list := Activities.List(10)
+	if len(list) != 1 || list[0].Status != "done" || list[0].Kind != "fix" || list[0].User != "" || list[0].PromptTok != 11 || list[0].ReplyTok != 4 {
+		t.Fatalf("list: %+v", list)
+	}
+	full, ok := Activities.Get(list[0].ID)
+	if !ok || full.System != "SYSTEM TEXT" || full.User != "USER TEXT" || full.Response != `{"ok":true}` || full.Knowledge[0] != "k1" {
+		t.Fatalf("detail: %+v", full)
+	}
+	if len(seen) != 2 || seen[0].Status != "running" || seen[0].User != "" {
+		t.Fatalf("published: %+v", seen)
+	}
+	Activities.Step("Rule checks", "abc", "A.java", "2 finding(s)", time.Millisecond)
+	if reloaded := NewRecorder(dir, "r", nil).List(10); len(reloaded) != 2 || reloaded[1].User != "" {
+		t.Fatalf("reload: %+v", reloaded)
+	}
+}
+
+func TestClassify(t *testing.T) {
+	for _, c := range []struct {
+		f    Finding
+		want Class
+	}{
+		{Finding{Ref: "uninjected-dependency", Severity: "critical", Category: "spring"}, Class{"Bug", "Hotfix", "Minor"}},
+		{Finding{Ref: "console-output", Severity: "low", Category: "logging"}, Class{"Better log", "Quick fix", "Minor"}},
+		{Finding{Ref: "query-in-loop", Severity: "high", Category: "performance"}, Class{"Optimization", "Fix soon", "Major"}},
+		{Finding{Ref: "commented-out-code", Severity: "low", Category: "design"}, Class{"Dead code", "Quick fix", "Minor"}},
+		{Finding{Ref: "better-method", Severity: "low", Category: "style"}, Class{"Readability", "Cleanup", "Minor"}},
+		{Finding{Ref: "x", Severity: "high", Category: "security"}, Class{"Security", "Hotfix", "Minor"}},
+		{Finding{Ref: "high-complexity", Severity: "medium", Category: "design"}, Class{"Poor coding", "Fix soon", "Major"}},
+	} {
+		if got := Classify(c.f, 1); got != c.want {
+			t.Errorf("%s: got %+v want %+v", c.f.Ref, got, c.want)
+		}
+	}
+}

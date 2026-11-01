@@ -113,7 +113,7 @@ func Release(repo *gitx.Repo, tracker *Tracker, store *Store, ignores *Ignores, 
 			}
 			is := Issue{ID: Fingerprint(fr.Path, f), State: "open", Severity: f.Severity, Category: f.Category, Title: f.Title,
 				Detail: f.Detail, Suggestion: f.Suggestion, Ref: f.Ref, Source: f.Source, Path: fr.Path, Line: f.Line,
-				Snippet: f.Snippet, Group: f.Group, GroupRoot: f.GroupRoot, Commits: []string{}}
+				Snippet: f.Snippet, Group: f.Group, GroupRoot: f.GroupRoot, Commits: []string{}, Class: Classify(f, 1)}
 			if t, ok := tracked[is.ID]; ok {
 				is.FirstSeen, is.FirstTime, is.FirstBy, is.FirstMsg = t.FirstSeen, t.FirstTime, t.FirstBy, t.FirstMsg
 			} else if blamed < 100 { // untracked: whoever last wrote the line; capped, it is one git call each

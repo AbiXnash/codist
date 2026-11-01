@@ -236,13 +236,19 @@ func (s *Service) run(sha string) {
 	var res *tools.Result
 	for _, f := range targets {
 		slog.Info("reviewing", "file", f.Path, "sha", sha[:7])
+		began := time.Now()
 		fr, in, ok := s.rulePass(a, f, kb, build)
+		Activities.Step("Rule checks on "+filepath.Base(f.Path), sha, f.Path, fmt.Sprintf("%d finding(s) on changed lines", len(fr.Findings)), time.Since(began))
 		if res == nil {
 			r.Files = append(r.Files, fr) // show the first rule findings while the analysers run
 			s.save(r)
 			r.Files = r.Files[:len(r.Files)-1]
+			began := time.Now()
 			got := <-analysis
 			res = &got
+			if len(got.Ran) > 0 || len(got.Problems) > 0 {
+				Activities.Step("Static analysers: "+strings.Join(got.Ran, ", "), sha, "", fmt.Sprintf("%d finding(s) in the commit %s", len(got.Findings), strings.Join(got.Problems, "; ")), time.Since(began))
+			}
 			r.Analysers, r.AnalysisProblems = got.Ran, got.Problems
 		}
 		if ok {
@@ -267,7 +273,7 @@ func (s *Service) run(sha string) {
 	case problem != "":
 		r.Summary = problem + ". Only the static checks ran."
 	default:
-		out, err := s.summaryLLM.ChatJSON(prompts.Get("review-commit"), commitContext(a, r.Files))
+		out, err := s.summaryLLM.For(Label{Kind: "review-commit", Title: "Summarise commit " + sha[:7], SHA: sha}).ChatJSON(prompts.Get("review-commit"), commitContext(a, r.Files))
 		if err != nil {
 			r.Summary = "Per-file reviews finished, but the commit summary failed: " + err.Error()
 			break
@@ -515,7 +521,11 @@ func (s *Service) modelPass(a Analysis, f gitx.FileChange, fr FileReview, in fil
 	out, hit := s.cache.get(key)
 	if !hit {
 		var err error
-		out, err = s.llm.ChatJSON(system, prompt)
+		ids := make([]string, 0, len(known))
+		for _, e := range known {
+			ids = append(ids, e.ID)
+		}
+		out, err = s.llm.For(Label{Kind: "review-file", Title: "Review " + filepath.Base(f.NewPath), SHA: a.Commit.SHA, Path: f.NewPath, Knowledge: ids}).ChatJSON(system, prompt)
 		if err != nil {
 			fr.Error = "LLM review failed: " + err.Error()
 			return fr
@@ -523,6 +533,7 @@ func (s *Service) modelPass(a Analysis, f gitx.FileChange, fr FileReview, in fil
 		s.cache.put(key, out)
 	} else {
 		fr.Skipped = "model answer reused from cache (same code and context)"
+		Activities.Step("Reused the cached review of "+filepath.Base(f.NewPath), a.Commit.SHA, f.NewPath, "same code and context, so the model was not asked", 0)
 	}
 
 	fr.Summary = str(out["summary"])

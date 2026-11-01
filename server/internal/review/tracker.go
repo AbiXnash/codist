@@ -38,6 +38,7 @@ type Issue struct {
 	FixedAt    int64  `json:"fixedAt,omitempty"`
 	FixedMsg   string `json:"fixedMsg,omitempty"`
 	Manual     bool   `json:"manual,omitempty"` // closed by "Mark as fixed"
+	Class             // what kind of issue, how urgent, how big a change
 	// Reopened: the issue was fixed, then the code came back (a revert, a bad merge, a copy).
 	WasFixedIn  string `json:"wasFixedIn,omitempty"`
 	ReopenedIn  string `json:"reopenedIn,omitempty"`
@@ -333,6 +334,18 @@ func (t *Tracker) compute() []Issue {
 		}
 	}
 
+	// Triage: what it is, how urgent, how big, counting the places of its group.
+	places := map[string]int{}
+	for _, is := range out {
+		if is.Group != "" {
+			places[is.Group]++
+		}
+	}
+	for i := range out {
+		is := &out[i]
+		is.Class = Classify(Finding{Ref: is.Ref, Category: is.Category, Severity: is.Severity}, max(1, places[is.Group]))
+	}
+
 	sort.SliceStable(out, func(a, b int) bool {
 		sa, sb := stateRank[out[a].State], stateRank[out[b].State]
 		if sa != sb {
@@ -583,7 +596,9 @@ func (t *Tracker) Annotate(r Review, issues []Issue) Review {
 	for i := range r.Files {
 		for j := range r.Files[i].Findings {
 			f := &r.Files[i].Findings[j]
+			f.Class = Classify(*f, 1)
 			if is, ok := byID[Fingerprint(r.Files[i].Path, *f)]; ok {
+				f.Class = is.Class
 				f.FirstSeen, f.State, f.FixedIn = is.FirstSeen, is.State, is.FixedIn
 				f.FixedBy, f.FixedAt, f.FixedMsg, f.Uncommitted = is.FixedBy, is.FixedAt, is.FixedMsg, is.Uncommitted
 			}

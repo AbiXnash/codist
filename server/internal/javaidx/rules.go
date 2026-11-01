@@ -70,7 +70,12 @@ func ProjectContext(g *Graph) Context {
 	}
 	ctx.Unused = map[string]bool{}
 	for _, n := range g.Nodes {
-		if !linked[n.ID] && (n.Stereotype == "other" || n.Stereotype == "dto" || n.Stereotype == "exception") && n.Kind != "annotation" && !strings.Contains(n.File, "src/test/") {
+		// A holder of nested types (CustomerDto.Request) is in use when one of them is.
+		nested := false
+		for id := range linked {
+			nested = nested || strings.HasPrefix(id, n.ID+".")
+		}
+		if !nested && !linked[n.ID] && (n.Stereotype == "other" || n.Stereotype == "dto" || n.Stereotype == "exception") && n.Kind != "annotation" && !strings.Contains(n.File, "src/test/") {
 			ctx.Unused[n.Name] = true
 		}
 	}

@@ -60,6 +60,7 @@ type FileReview struct {
 
 // Finding Source is "rule" for deterministic checks and "llm" for the model.
 type Finding struct {
+	Class                // what kind of issue, how urgent, how big a change
 	Line          int    `json:"line"`
 	EndLine       int    `json:"endLine"`
 	Severity      string `json:"severity"`

@@ -80,6 +80,15 @@ func (s *Server) Handler() http.Handler {
 		s.Hub.Publish("ignores", map[string]string{"changed": "resolutions"})
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("GET /api/activity", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, review.Activities.List(300)) })
+	mux.HandleFunc("GET /api/activity/{id}", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := review.Activities.Get(r.PathValue("id"))
+		if !ok {
+			writeError(w, http.StatusNotFound, "no such activity")
+			return
+		}
+		writeJSON(w, a)
+	})
 	mux.HandleFunc("GET /api/prompts", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, prompts.All()) })
 	mux.HandleFunc("GET /api/working", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, review.WorkingReview(s.Repo, s.Fixer.Rules, s.Reviews.Ignores))

@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"codist/internal/knowledge"
+	"codist/internal/review"
 	"codist/prompts"
 )
 
@@ -104,7 +105,7 @@ func (e *Engine) explain(in *Incident) error {
 		}
 	}
 
-	out, err := e.llm.ChatJSON(prompts.Get("incident-rca"), trim(b.String(), 40000))
+	out, err := e.llm.For(review.Label{Kind: "rca", Title: "Root cause: " + in.Title, Incident: in.ID}).ChatJSON(prompts.Get("incident-rca"), trim(b.String(), 40000))
 	if err != nil {
 		return err
 	}
@@ -187,7 +188,7 @@ func (e *Engine) RuleFor(in *Incident, idx int) (string, error) {
 	for _, ev := range c.Evidence {
 		fmt.Fprintf(&b, "- %s: %s\n", ev.Kind, ev.Text)
 	}
-	out, err := e.llm.ChatJSON(prompts.Get("incident-rule"), b.String())
+	out, err := e.llm.For(review.Label{Kind: "rule", Title: "Rule from incident: " + in.Title, Incident: in.ID}).ChatJSON(prompts.Get("incident-rule"), b.String())
 	if err != nil {
 		return "", err
 	}
@@ -258,7 +259,7 @@ func (e *Engine) Runbook(in *Incident) (string, error) {
 		c := in.Causes[in.Confirmed]
 		fmt.Fprintf(&b, "\nConfirmed cause: %s. %s\n", c.Title, c.Explanation)
 	}
-	md, err := e.llm.ChatText(prompts.Get("incident-runbook"), b.String())
+	md, err := e.llm.For(review.Label{Kind: "runbook", Title: "Runbook: " + in.Title, Incident: in.ID}).ChatText(prompts.Get("incident-runbook"), b.String())
 	if err != nil {
 		return "", err
 	}

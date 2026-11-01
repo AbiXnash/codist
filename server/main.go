@@ -57,6 +57,7 @@ func main() {
 	prompts.Configure(filepath.Join(cfg.DataDir, "prompts"), filepath.Join(repo.Root, ".codist", "prompts"))
 
 	hub := events.NewHub()
+	review.Activities = review.NewRecorder(cfg.DataDir, repo.Name(), func(a review.Activity) { hub.Publish("activity", a) })
 	g := graph.New(repo, hub)
 	store, err := review.NewStore(cfg.DataDir, repo.Name())
 	if err != nil {
