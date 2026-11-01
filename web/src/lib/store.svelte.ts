@@ -151,6 +151,8 @@ class AppState {
   hiddenEdges = $state<string[]>([]);
   graphQuery = $state('');
   graphQueryMode = $state<'highlight' | 'only'>('highlight');
+  /** The centre of Review: how the code connects, or how the branches relate. */
+  centre = $state<'code' | 'branches'>(prefStr('centre', ['code', 'branches'] as const, 'code'));
   layoutMode = $state<'natural' | 'layers' | 'services' | 'hubs'>(prefStr('layoutMode', ['natural', 'layers', 'services', 'hubs'] as const, 'natural'));
   sizeBy = $state<'links' | 'lines' | 'issues'>(prefStr('sizeBy', ['links', 'lines', 'issues'] as const, 'links'));
   showLabels = $state(pref('labels', true));

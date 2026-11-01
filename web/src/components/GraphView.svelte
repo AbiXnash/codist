@@ -3,7 +3,7 @@
   import { arrange, clusterLayout, type Cluster } from '../lib/clusterLayout';
   import cytoscape, { type Core, type ElementDefinition, type StylesheetJson } from 'cytoscape';
   import fcose from 'cytoscape-fcose';
-  import { app, isTestNode as isTest, nodeFor, nodeMatches, openFile, saveList, selectNode, toast } from '../lib/store.svelte';
+  import { app, isTestNode as isTest, nodeFor, nodeMatches, openFile, saveList, saveStr, selectNode, toast } from '../lib/store.svelte';
   import { cssVar, SEVERITY_COLOR, STATE_COLOR, STEREOTYPE, stereo, worst } from '../lib/theme';
   import { dependencies, dependents, layeredPositions, path, type Metrics } from '../lib/graphAnalysis';
   import Glyph from './Glyph.svelte';
@@ -649,6 +649,10 @@
   <div class="canvas" bind:this={container}></div>
 
   <div class="toolbar">
+    <div class="seg">
+      <button class="on">Code graph</button>
+      <button onclick={() => { app.centre = 'branches'; saveStr('centre', 'branches'); }}>Branch graph</button>
+    </div>
     <div class="seg icons">
       <button title="Re-run layout" aria-label="Re-run layout" onclick={() => layout(false)}>
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M16 10a6 6 0 1 1-1.8-4.3M16 3v3.5h-3.5"/></svg>

@@ -4,6 +4,7 @@
   import { preload } from './lib/highlight';
   import TopBar from './components/TopBar.svelte';
   import LeftDock from './components/LeftDock.svelte';
+  import BranchGraph from './components/BranchGraph.svelte';
   import RepoView from './components/RepoView.svelte';
   import BranchesView from './components/BranchesView.svelte';
   import PeopleView from './components/PeopleView.svelte';
@@ -93,7 +94,7 @@
     class:no-panel={!app.showPanel}
   >
     {#if app.showCommits}<LeftDock />{/if}
-    <GraphView />
+    {#if app.centre === 'branches'}<BranchGraph />{:else}<GraphView />{/if}
     {#if app.showPanel}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="resizer" onpointerdown={startResize} onpointermove={resize} onpointerup={() => (dragging = false)}></div>

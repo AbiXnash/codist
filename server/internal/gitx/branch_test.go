@@ -66,6 +66,16 @@ func TestFollowingABranchReadsItWithoutTouchingTheCheckout(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(dir, "A.java")); string(b) != "class Local {}\n" {
 		t.Errorf("the working tree changed: %q", b)
 	}
+	all := r.History(nil, 50)
+	if len(all) != 2 || len(all[0].Parents) != 1 || all[0].Subject != "two" || len(all[0].Refs) != 1 || all[0].Refs[0] != "other" {
+		t.Errorf("all branches: %+v", all)
+	}
+	if only := r.History([]string{"main"}, 50); len(only) != 1 || only[0].Subject != "one" {
+		t.Errorf("one branch: %+v", only)
+	}
+	if evil := r.History([]string{"--all", "nope"}, 50); len(evil) != 2 {
+		t.Errorf("an unknown name must be ignored: %+v", evil)
+	}
 	names := map[string]bool{}
 	for _, b := range r.ListBranches() {
 		names[b.Name] = b.CheckedOut

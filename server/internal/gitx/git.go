@@ -172,6 +172,70 @@ func (r *Repo) SwitchBranch(name string) error {
 	return nil
 }
 
+// HistoryCommit is one commit in the branch graph.
+type HistoryCommit struct {
+	SHA     string   `json:"sha"`
+	Parents []string `json:"parents"`
+	Author  string   `json:"author"`
+	At      int64    `json:"at"`
+	Subject string   `json:"subject"`
+	Refs    []string `json:"refs"`
+}
+
+// History is the commits of the named branches, or of all of them, children before parents.
+// Names that are not real branches are ignored, so nothing else reaches the git command line.
+func (r *Repo) History(names []string, limit int) []HistoryCommit {
+	known := map[string]bool{}
+	for _, b := range r.ListBranches() {
+		known[b.Name] = true
+	}
+	args := []string{"log", "--topo-order", "-n", strconv.Itoa(limit), "--format=%H%x1f%P%x1f%an%x1f%at%x1f%s%x1f%D%x1e"}
+	picked := 0
+	for _, n := range names {
+		if !known[n] {
+			continue
+		}
+		picked++
+		if r.Remote {
+			args = append(args, "refs/remotes/origin/"+n)
+		} else if strings.HasPrefix(n, "origin/") {
+			args = append(args, "refs/remotes/"+n)
+		} else {
+			args = append(args, "refs/heads/"+n)
+		}
+	}
+	if picked == 0 {
+		args = append(args, "--branches", "--remotes=origin")
+	}
+	out, err := r.git(args...)
+	commits := []HistoryCommit{}
+	if err != nil {
+		return commits
+	}
+	for _, rec := range strings.Split(out, "\x1e") {
+		p := strings.SplitN(strings.TrimSpace(rec), "\x1f", 6)
+		if len(p) < 6 {
+			continue
+		}
+		at, _ := strconv.ParseInt(p[3], 10, 64)
+		c := HistoryCommit{SHA: p[0], Parents: strings.Fields(p[1]), Author: p[2], At: at * 1000, Subject: p[4], Refs: []string{}}
+		for _, d := range strings.Split(p[5], ",") {
+			d = strings.TrimSpace(d)
+			if i := strings.Index(d, " -> "); i >= 0 {
+				d = d[i+4:]
+			}
+			if r.Remote {
+				d = strings.TrimPrefix(d, "origin/")
+			}
+			if d != "" && d != "HEAD" && d != "origin/HEAD" && !strings.HasPrefix(d, "tag: ") {
+				c.Refs = append(c.Refs, d)
+			}
+		}
+		commits = append(commits, c)
+	}
+	return commits
+}
+
 // BranchRef is one branch in the switcher.
 type BranchRef struct {
 	Name       string `json:"name"`

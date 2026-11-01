@@ -284,6 +284,29 @@ func (s *Server) Handler() http.Handler {
 		s.Fixer.Discard(r.PathValue("id"))
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("GET /api/history", func(w http.ResponseWriter, r *http.Request) {
+		var names []string
+		if b := r.URL.Query().Get("branches"); b != "" {
+			names = strings.Split(b, ",")
+		}
+		type item struct {
+			gitx.HistoryCommit
+			Status string `json:"status"` // the review's, empty when not reviewed
+			Issues int    `json:"issues"`
+		}
+		history := s.Repo.History(names, 300)
+		out := make([]item, len(history))
+		for i, c := range history {
+			out[i].HistoryCommit = c
+			if rv, ok := s.Store.Get(c.SHA); ok {
+				out[i].Status = rv.Status
+				for _, f := range rv.Files {
+					out[i].Issues += len(f.Findings)
+				}
+			}
+		}
+		writeJSON(w, out)
+	})
 	mux.HandleFunc("GET /api/refs", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, s.Repo.ListBranches())
 	})

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { app, followBranch } from '../lib/store.svelte';
+  import { app, followBranch, saveStr } from '../lib/store.svelte';
   import { api } from '../lib/api';
   import { ago } from '../lib/theme';
   import type { BranchRef } from '../lib/types';
@@ -49,6 +49,7 @@
           </li>
         {:else}<li class="none">No branches.</li>{/each}
       </ul>
+      <button class="allb" onclick={() => { open = false; app.mode = 'review'; app.centre = 'branches'; saveStr('centre', 'branches'); }}>See all branches as a graph</button>
     </div>
   {/if}
 </div>
@@ -70,5 +71,7 @@
   em { font: 500 10px var(--font); font-style: normal; color: var(--good); margin-left: 4px; }
   .m { font-size: 11.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .w { font-size: 10.5px; color: var(--text-3); }
+  .allb { width: 100%; margin-top: 5px; padding: 7px 8px; border: 0; border-top: 1px solid var(--border); background: none; color: var(--accent-text); font-size: 12px; text-align: left; }
+  .allb:hover { background: var(--hover); }
   .none { padding: 8px; color: var(--text-3); }
 </style>

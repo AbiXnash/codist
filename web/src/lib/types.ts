@@ -407,3 +407,5 @@ export interface MemoryReport {
 export interface PlannedCommit { message: string; why: string; files: { path: string; change: string; added: number; removed: number; issues: number }[] }
 
 export interface BranchRef { name: string; remote: boolean; sha: string; message: string; by: string; at: number; checkedOut: boolean }
+
+export interface HistoryCommit { sha: string; parents: string[]; author: string; at: number; subject: string; refs: string[]; status: string; issues: number }

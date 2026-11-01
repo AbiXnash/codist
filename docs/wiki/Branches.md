@@ -10,6 +10,12 @@ A `git checkout` in your terminal is followed automatically, unless `CODIST_BRAN
 
 The server returns to the checked-out branch when it restarts.
 
+## Branch graph
+
+In Review, the centre switches between **Code graph** and **Branch graph**. The branch graph draws every branch, or the
+ones you pick, as lanes with their merges. A filled dot is a reviewed commit. Click a commit to review it, even if it
+is on another branch. Click a branch name to make commits, code graph and issues follow it.
+
 ## Branches screen
 
 Every branch against the tracked one and against each other, in parallel, using `git merge-tree`, so nothing is touched.
