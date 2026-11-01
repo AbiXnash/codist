@@ -37,7 +37,9 @@ type Issue struct {
 	FixedBy    string `json:"fixedBy,omitempty"`
 	FixedAt    int64  `json:"fixedAt,omitempty"`
 	FixedMsg   string `json:"fixedMsg,omitempty"`
-	Manual     bool   `json:"manual,omitempty"` // closed by "Mark as fixed"
+	Manual     bool   `json:"manual,omitempty"`   // closed by "Mark as fixed"
+	Stage      string `json:"stage,omitempty"`    // in-progress, in-review (open issues)
+	Assignee   string `json:"assignee,omitempty"` // who has it
 	Class             // what kind of issue, how urgent, how big a change
 	// Reopened: the issue was fixed, then the code came back (a revert, a bad merge, a copy).
 	WasFixedIn  string `json:"wasFixedIn,omitempty"`
@@ -77,6 +79,9 @@ type Tracker struct {
 	// unchanged) is resolved. Nil disables the re-check.
 	Rules RuleContext
 
+	// Work holds the workflow stage and assignee of open issues. Nil disables it.
+	Work *Workflow
+
 	// Resolved holds issues closed by hand or by a committed fix. Nil disables it.
 	Resolved *Resolutions
 
@@ -108,6 +113,9 @@ func (t *Tracker) key() string {
 	}
 	if t.Resolved != nil {
 		k += fmt.Sprintf("|%d", t.Resolved.Version())
+	}
+	if t.Work != nil {
+		k += fmt.Sprintf("|w%d", t.Work.Version())
 	}
 	return k
 }
@@ -331,6 +339,14 @@ func (t *Tracker) compute() []Issue {
 		for k, f := range fr.Findings {
 			i := idx[fr.Path][k]
 			out[i].Group, out[i].GroupRoot = f.Group, f.GroupRoot
+		}
+	}
+
+	if t.Work != nil {
+		for i := range out {
+			if w, ok := t.Work.Get(out[i].ID); ok && out[i].State == "open" {
+				out[i].Stage, out[i].Assignee = w.Stage, w.Assignee
+			}
 		}
 	}
 

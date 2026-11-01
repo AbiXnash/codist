@@ -94,6 +94,7 @@ func main() {
 	reviews.Memory, srv.Fixer.Memory = srv.Memory, srv.Memory
 	srv.Tracker.Rules = rules
 	srv.Tracker.Resolved = review.NewResolutions(cfg.DataDir, repo.Name())
+	srv.Tracker.Work = review.NewWorkflow(cfg.DataDir, repo.Name())
 	srv.Fixer.OnFixed = func(ids []string, sha string) {
 		_ = srv.Tracker.Resolved.Set(ids, review.Resolution{By: repo.UserName(), Commit: sha})
 	}

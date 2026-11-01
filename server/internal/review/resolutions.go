@@ -75,3 +75,58 @@ func (r *Resolutions) persist() error {
 	b, _ := json.MarshalIndent(r.items, "", "  ")
 	return os.WriteFile(r.path, b, 0o644)
 }
+
+// Work is where an open issue stands in the team's workflow: who has it and how far along it is.
+type Work struct {
+	Stage    string `json:"stage"` // in-progress, in-review; empty means nobody started it
+	Assignee string `json:"assignee,omitempty"`
+	At       int64  `json:"at"`
+}
+
+// Workflow is stored at <data-dir>/<repo>/workflow.json.
+type Workflow struct {
+	path  string
+	mu    sync.Mutex
+	items map[string]Work
+	edits int
+}
+
+func NewWorkflow(dataDir, repo string) *Workflow {
+	w := &Workflow{path: filepath.Join(dataDir, repo, "workflow.json"), items: map[string]Work{}}
+	if b, err := os.ReadFile(w.path); err == nil {
+		_ = json.Unmarshal(b, &w.items)
+	}
+	return w
+}
+
+func (w *Workflow) Get(id string) (Work, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	v, ok := w.items[id]
+	return v, ok
+}
+
+// Set records the stage of some issues; an empty stage and assignee clears them.
+func (w *Workflow) Set(ids []string, stage, assignee string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, id := range ids {
+		if stage == "" && assignee == "" {
+			delete(w.items, id)
+		} else {
+			w.items[id] = Work{Stage: stage, Assignee: assignee, At: time.Now().UnixMilli()}
+		}
+	}
+	w.edits++
+	if err := os.MkdirAll(filepath.Dir(w.path), 0o755); err != nil {
+		return err
+	}
+	b, _ := json.MarshalIndent(w.items, "", "  ")
+	return os.WriteFile(w.path, b, 0o644)
+}
+
+func (w *Workflow) Version() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.edits
+}

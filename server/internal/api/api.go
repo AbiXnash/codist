@@ -249,6 +249,29 @@ func (s *Server) Handler() http.Handler {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("POST /api/issues/stage", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			IDs      []string `json:"ids"`
+			Stage    string   `json:"stage"`
+			Assignee string   `json:"assignee"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
+			writeError(w, http.StatusBadRequest, "which issues?")
+			return
+		}
+		switch req.Stage {
+		case "", "in-progress", "in-review":
+		default:
+			writeError(w, http.StatusBadRequest, "unknown stage")
+			return
+		}
+		if err := s.Tracker.Work.Set(req.IDs, req.Stage, req.Assignee); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		s.Hub.Publish("ignores", map[string]string{"changed": "workflow"})
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("GET /api/prompts", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, prompts.All()) })
 	mux.HandleFunc("GET /api/working", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, review.WorkingReview(s.Repo, s.Fixer.Rules, s.Reviews.Ignores))
