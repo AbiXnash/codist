@@ -1,0 +1,28 @@
+{
+  "menus": {
+    "review": true,
+    "repo": true,
+    "branches": true,
+    "mine": true,
+    "team": true,
+    "release": true,
+    "incidents": true,
+    "activity": true,
+    "memory": true
+  },
+  "panels": {
+    "issues": true,
+    "commit": true,
+    "code": true,
+    "ask": true
+  },
+  "features": {
+    "explorer": true,
+    "branchGraph": true,
+    "branchSwitcher": true,
+    "fix": true,
+    "reword": true,
+    "localPlan": true,
+    "issueWorkflow": true
+  }
+}
