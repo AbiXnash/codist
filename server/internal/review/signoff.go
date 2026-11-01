@@ -51,8 +51,8 @@ func itemID(text string) string {
 var shaOnly = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
 
 func (s *SignOffs) path(to string) (string, error) {
-	if !shaOnly.MatchString(to) {
-		return "", errors.New("release target must be a commit id")
+	if to != RepoSignOff && !shaOnly.MatchString(to) {
+		return "", errors.New("unknown release target")
 	}
 	return filepath.Join(s.dir, to+".json"), nil
 }
@@ -166,4 +166,21 @@ func (s *SignOffs) Remove(to, id string) error {
 	}
 	delete(items, id)
 	return s.save(to, items, order)
+}
+
+// RepoSignOff is the one sign-off of the repository: releases are about the code as a whole.
+const RepoSignOff = "repo"
+
+// Reset clears the sign-off, for the next release.
+func (s *SignOffs) Reset(to string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, err := s.path(to)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }

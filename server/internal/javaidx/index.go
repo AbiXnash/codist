@@ -16,7 +16,7 @@ var mappingAnnotations = map[string]bool{
 
 var repoBase = regexp.MustCompile(`^((Jpa|Crud|PagingAndSorting|ListCrud|ListPagingAndSorting|Mongo|Reactive\w*|R2dbc)Repository|Repository)$`)
 
-var edgeRank = map[string]int{"extends": 0, "implements": 1, "injects": 2, "uses": 3}
+var edgeRank = map[string]int{"feign": -1, "extends": 0, "implements": 1, "injects": 2, "uses": 3}
 
 type typeDecl struct {
 	node *sitter.Node
@@ -134,6 +134,29 @@ func Index(sources map[string][]byte, label string) Graph {
 		})
 	}
 
+	// Feign clients reach the controllers of the service they name.
+	for _, c := range g.Nodes {
+		if c.FeignTarget == "" {
+			continue
+		}
+		for _, t := range g.Nodes {
+			if t.Stereotype != "controller" || !sameService(t.Module, c.FeignTarget) {
+				continue
+			}
+			var via []string
+			for _, ce := range c.Endpoints {
+				for _, te := range t.Endpoints {
+					if routeOf(ce) == routeOf(te) {
+						via = append(via, routeOf(ce))
+					}
+				}
+			}
+			if len(via) > 0 {
+				edges[c.ID+"->"+t.ID] = Edge{Source: c.ID, Target: t.ID, Kind: "feign", Via: dedupe(via)}
+			}
+		}
+	}
+
 	keys := make([]string, 0, len(edges))
 	for k := range edges {
 		keys = append(keys, k)
@@ -143,6 +166,20 @@ func Index(sources map[string][]byte, label string) Graph {
 		g.Edges = append(g.Edges, edges[k])
 	}
 	return g
+}
+
+// sameService matches a Feign client's service name to a module directory.
+func sameService(module, name string) bool {
+	module = module[strings.LastIndex(module, "/")+1:]
+	return module != "" && strings.EqualFold(module, name)
+}
+
+var pathVar = regexp.MustCompile(`\{[^}]*\}`)
+
+// routeOf reduces an endpoint ("GET /customers/{id}  → get()") to its route, ignoring variable names.
+func routeOf(endpoint string) string {
+	route, _, _ := strings.Cut(endpoint, "  →")
+	return pathVar.ReplaceAllString(strings.TrimSpace(route), "{}")
 }
 
 func declKey(d typeDecl) string { return d.unit.path + "\x00" + d.fqn }
@@ -372,6 +409,9 @@ func (u *unit) node(d typeDecl) Node {
 	}
 	n.Stereotype = u.stereotype(d)
 	n.Endpoints = u.endpoints(d.node)
+	if a, ok := f.annotations(d.node)["FeignClient"]; ok {
+		n.FeignTarget = strings.Trim(f.text(f.annotationValue(a, "name", "value")), `"`)
+	}
 	return n
 }
 
@@ -426,6 +466,8 @@ func (u *unit) stereotype(d typeDecl) string {
 			return "controller"
 		case "RestControllerAdvice", "ControllerAdvice":
 			return "advice"
+		case "FeignClient":
+			return "client"
 		case "Service":
 			return "service"
 		case "Repository":
@@ -492,6 +534,9 @@ func (u *unit) endpoints(decl *sitter.Node) []string {
 	base := ""
 	if a, ok := f.annotations(decl)["RequestMapping"]; ok {
 		base = f.annotationPath(a)
+	}
+	if a, ok := f.annotations(decl)["FeignClient"]; ok {
+		base = strings.Trim(f.text(f.annotationValue(a, "path")), `"`)
 	}
 	out := []string{}
 	for _, m := range membersOfType(decl, "method_declaration") {

@@ -89,6 +89,9 @@ func (s *Server) Handler() http.Handler {
 		}
 		writeJSON(w, a)
 	})
+	mux.HandleFunc("GET /api/repo", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, review.Repo(s.Repo, s.Graph.Graph(), s.Tracker.Issues()))
+	})
 	mux.HandleFunc("GET /api/prompts", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, prompts.All()) })
 	mux.HandleFunc("GET /api/working", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, review.WorkingReview(s.Repo, s.Fixer.Rules, s.Reviews.Ignores))

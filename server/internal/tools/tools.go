@@ -201,13 +201,28 @@ func (r *Runner) pmd(work, src string) ([]Finding, error) {
 	if err := os.WriteFile(filepath.Join(runner, "ruleset.xml"), []byte(pmdRuleset), 0o644); err != nil {
 		return nil, err
 	}
-	var roots strings.Builder
-	for _, d := range sourceRoots(src, "test") {
-		roots.WriteString("<testSourceRoot>" + xmlEscape(d) + "</testSourceRoot>")
-	}
 	main := sourceRoots(src, "main")
+	tests := sourceRoots(src, "test")
 	if len(main) == 0 {
 		return []Finding{}, nil
+	}
+	// One run per module: the plugin takes a single source directory.
+	var out []Finding
+	for _, root := range main {
+		found, err := r.pmdRoot(runner, src, root, tests)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, found...)
+		tests = nil
+	}
+	return out, nil
+}
+
+func (r *Runner) pmdRoot(runner, src, root string, tests []string) ([]Finding, error) {
+	var roots strings.Builder
+	for _, d := range tests {
+		roots.WriteString("<testSourceRoot>" + xmlEscape(d) + "</testSourceRoot>")
 	}
 	pom := fmt.Sprintf(`<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
 <groupId>codist</groupId><artifactId>pmd-runner</artifactId><version>1</version><packaging>jar</packaging>
@@ -215,7 +230,7 @@ func (r *Runner) pmd(work, src string) ([]Finding, error) {
 <groupId>org.apache.maven.plugins</groupId><artifactId>maven-pmd-plugin</artifactId><version>%s</version>
 <configuration><rulesets><ruleset>%s</ruleset></rulesets><format>xml</format><targetJdk>%s</targetJdk>
 <linkXRef>false</linkXRef><includeTests>true</includeTests><testSourceRoots>%s</testSourceRoots></configuration>
-</plugin></plugins></build></project>`, xmlEscape(main[0]), strings.Split(pmdPlugin, ":")[2],
+</plugin></plugins></build></project>`, xmlEscape(root), strings.Split(pmdPlugin, ":")[2],
 		xmlEscape(filepath.Join(runner, "ruleset.xml")), javaVersion(src), roots.String())
 	if err := os.WriteFile(filepath.Join(runner, "pom.xml"), []byte(pom), 0o644); err != nil {
 		return nil, err

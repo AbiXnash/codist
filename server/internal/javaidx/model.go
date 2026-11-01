@@ -8,6 +8,7 @@ type Node struct {
 	ID          string   `json:"id"`
 	FQN         string   `json:"fqn"`
 	Module      string   `json:"module,omitempty"` // Maven/Gradle module directory; empty at the repo root
+	FeignTarget string `json:"feignTarget,omitempty"` // service a @FeignClient calls
 	Name        string   `json:"name"`
 	Pkg         string   `json:"pkg"`
 	Kind        string   `json:"kind"`       // class, abstract, interface, enum, record, annotation
@@ -32,11 +33,12 @@ type Member struct {
 	Cost      *Cost  `json:"cost,omitempty"`  // methods: what it costs to run and maintain
 }
 
-// Edge kinds: extends, implements, injects, uses.
+// Edge kinds: extends, implements, injects, uses, feign (a client to the controller it calls).
 type Edge struct {
 	Source string `json:"source"`
 	Target string `json:"target"`
 	Kind   string `json:"kind"`
+	Via    []string `json:"via,omitempty"` // feign: the routes it calls
 }
 
 type Graph struct {

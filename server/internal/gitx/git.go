@@ -764,6 +764,52 @@ func (r *Repo) WorkingChanges() ([]FileChange, error) {
 	return files, nil
 }
 
+// Contributor is one author's share of the history.
+type Contributor struct {
+	Name    string `json:"name"`
+	Commits int    `json:"commits"`
+}
+
+// Contributors lists the authors of the tracked branch, most commits first.
+func (r *Repo) Contributors() []Contributor {
+	out, err := r.git("shortlog", "-sn", "--no-merges", r.TrackedRef())
+	if err != nil {
+		return nil
+	}
+	var cs []Contributor
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		if f := strings.SplitN(strings.TrimSpace(l), "\t", 2); len(f) == 2 {
+			n, _ := strconv.Atoi(strings.TrimSpace(f[0]))
+			cs = append(cs, Contributor{Name: f[1], Commits: n})
+		}
+	}
+	return cs
+}
+
+// Churn counts, per file, how many commits changed it.
+func (r *Repo) Churn() map[string]int {
+	out, err := r.git("log", "--no-merges", "--name-only", "--format=", r.TrackedRef())
+	if err != nil {
+		return nil
+	}
+	c := map[string]int{}
+	for _, l := range strings.Split(out, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			c[l]++
+		}
+	}
+	return c
+}
+
+// TrackedFiles lists the files at the tracked branch.
+func (r *Repo) TrackedFiles() []string {
+	out, err := r.git("ls-tree", "-r", "--name-only", r.TrackedRef())
+	if err != nil {
+		return nil
+	}
+	return strings.Fields(out)
+}
+
 // UserName is the git user.name configured for the repository (who signs off).
 func (r *Repo) UserName() string {
 	out, err := r.git("config", "user.name")
