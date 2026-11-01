@@ -203,7 +203,7 @@
   header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
   h1 { margin: 0 0 4px; font-size: 20px; font-weight: 600; }
   header p { margin: 0; }
-  h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
+  h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--text-2); }
   h2.sub { margin-top: 14px; }
   .pick { display: flex; align-items: center; gap: 8px; }
   select { max-width: 340px; height: 28px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: var(--r); background: var(--surface); color: var(--text); font: inherit; font-size: 12.5px; }
@@ -219,7 +219,7 @@
   .row { display: flex; align-items: center; gap: 8px; padding: 4px 0; min-width: 0; font-size: 12.5px; }
   .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ok { color: var(--good); }
-  .kind { font-size: 10.5px; padding: 0 5px; border-radius: 3px; background: var(--surface-3); color: var(--text-2); text-transform: uppercase; }
+  .kind { font-size: 10.5px; padding: 0 5px; border-radius: 3px; background: var(--surface-3); color: var(--text-2); }
   .so-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .so-head h2 { margin: 0; }
   .progress { font-size: 12px; font-weight: 600; color: var(--warn); }
@@ -249,7 +249,7 @@
   .deps .table { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); }
   table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
-  th { font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; background: var(--surface-2); }
+  th { font-size: 11px; font-weight: 600; color: var(--text-3); background: var(--surface-2); }
   tr:last-child td { border-bottom: 0; }
   .st { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 4px; }
   .st.ok { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }

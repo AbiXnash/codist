@@ -21,13 +21,15 @@
 </script>
 
 <section class="panel">
-  <div class="tabs" role="tablist">
+  <div class="tabs">
+    <div class="pills" role="tablist">
     {#each tabs as t, i (t.id)}
       <button role="tab" aria-selected={app.tab === t.id} class:active={app.tab === t.id || (t.id === 'review' && onCommit)} onclick={() => (app.tab = t.id)} title="{t.label}  {i + 1}">
         {t.label}
         {#if t.count}<span class="count" class:hot={t.id === 'issues' && hot}>{t.count}</span>{/if}
       </button>
     {/each}
+    </div>
     <span class="spacer"></span>
     {#if app.panelOn('ask')}<button class="ask" class:on={app.tab === 'ask'} title="Ask about the code, or describe a change" onclick={() => (app.tab = app.tab === 'ask' ? 'issues' : 'ask')}>Ask AI</button>{/if}
     <button class="icon-btn" title="Hide panel  ]" aria-label="Hide panel" onclick={() => (app.showPanel = false)}>
@@ -55,32 +57,19 @@
 
 <style>
   .panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface); }
-  .tabs { display: flex; align-items: center; gap: 2px; height: 40px; padding: 0 6px 0 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .tabs > button:not(.icon-btn) {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    height: 40px;
-    padding: 0 10px;
-    border: 0;
-    background: none;
-    color: var(--text-3);
-    font-weight: 500;
-  }
-  .tabs > button:not(.icon-btn):hover { color: var(--text); }
-  .tabs > button.active { color: var(--text); }
-  .tabs > button.active::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); }
+  .tabs { display: flex; align-items: center; gap: 6px; height: 48px; padding: 0 8px 0 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .pills { display: flex; padding: 2px; border-radius: var(--r); background: var(--surface-3); }
+  .pills button { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 11px; border: 0; border-radius: 5px; background: none; color: var(--text); font-size: 12.5px; }
+  .pills button.active { background: var(--surface-2); box-shadow: var(--raised); font-weight: 500; }
   .count { min-width: 18px; padding: 0 5px; border-radius: 9px; font-size: 11px; line-height: 17px; text-align: center; background: var(--surface-3); color: var(--text-2); }
   .count.hot { background: color-mix(in srgb, var(--sev-critical) 18%, transparent); color: var(--sev-critical); }
   .spacer { flex: 1; }
-  .tabs > button.ask { height: 26px; margin-right: 4px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--r); color: var(--text-2); font-size: 12px; }
-  .tabs > button.ask.on { color: var(--accent-text); border-color: var(--accent); background: var(--accent-soft); }
-  .tabs > button.ask.on::after { display: none; }
+  .ask { height: 28px; margin-right: 4px; padding: 0 10px; border: 0; border-radius: var(--r); background: var(--surface-3); color: var(--text); font-size: 12.5px; }
+  .ask.on { color: #fff; background: var(--accent); }
   .sub { padding: 7px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .seg { display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
   .seg button { height: 24px; padding: 0 12px; border: 0; border-radius: var(--r); background: none; font-size: 12px; color: var(--text-3); }
-  .seg button.on { color: var(--text); background: var(--surface-3); box-shadow: 0 0 0 1px var(--border-strong); }
+  .seg button.on { color: var(--text); background: var(--surface-3); box-shadow: var(--raised); }
   .body { flex: 1; min-height: 0; overflow: auto; }
   @media (max-width: 1000px) { .panel { min-height: 70vh; border-top: 1px solid var(--border); } }
 </style>

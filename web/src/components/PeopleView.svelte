@@ -50,17 +50,24 @@
 
 <div class="page"><div class="page-in">
   {#if mode === 'mine'}
-    <header><h1>Mine</h1><p>{app.status?.user || 'You'}: what you should do next, and what your commits did.</p></header>
-    <div class="cards">
-      <div class="stat"><b>{me.open.length}</b><span>open from your commits</span></div>
-      <div class="stat"><b>{me.assigned.length}</b><span>assigned to you</span></div>
-      <div class="stat"><b>{me.fixed.length}</b><span>fixed by you</span></div>
-      <div class="stat"><b>{me.commits.length}</b><span>commits</span></div>
-      <div class="stat"><b>{num(mineLines?.added)}</b><span>lines written</span></div>
-      <div class="stat"><b>{num(mineLines?.removed)}</b><span>lines removed</span></div>
-      <div class="stat" title="Lines in the code today that git blame gives to you"><b>{num(mineLines?.owned)}</b><span>lines of code today{share(mineLines?.owned)}</span></div>
-      <div class="stat"><b>{num(mineLines?.files)}</b><span>files changed</span></div>
-      <div class="stat"><b>{me.badMessages}</b><span>commit messages to improve</span></div>
+    <header><h1>My work</h1><p>{app.status?.user || 'You'}: what to do next, and what your commits did.</p></header>
+    <div>
+      <h2 class="gh">Issues</h2>
+      <div class="cards">
+        <div class="stat"><b>{me.open.length}</b><span>open from your commits</span></div>
+        <div class="stat"><b>{me.assigned.length}</b><span>assigned to you</span></div>
+        <div class="stat"><b>{me.fixed.length}</b><span>fixed by you</span></div>
+      </div>
+    </div>
+    <div>
+      <h2 class="gh">Code</h2>
+      <div class="cards">
+        <div class="stat"><b>{me.commits.length}</b><span>commits{#if me.badMessages}, {me.badMessages} to reword{/if}</span></div>
+        <div class="stat"><b>{num(mineLines?.added)}</b><span>lines written</span></div>
+        <div class="stat"><b>{num(mineLines?.removed)}</b><span>lines removed</span></div>
+        <div class="stat" title="Lines in the code today that git blame gives to you"><b>{num(mineLines?.owned)}</b><span>lines in the code today{#if share(mineLines?.owned)} ({share(mineLines?.owned).replace(' · ', '')}){/if}</span></div>
+        <div class="stat"><b>{num(mineLines?.files)}</b><span>files changed</span></div>
+      </div>
     </div>
     <div class="split">
       <section class="pcard">
@@ -133,5 +140,6 @@
   .warn { color: var(--warn); }
   .b { display: flex; align-items: center; gap: 6px; min-width: 90px; }
   .b i { height: 7px; border-radius: 4px; background: var(--accent); }
+  .gh { margin: 0 0 7px 4px; font-size: 13px; font-weight: 600; }
   .add { color: var(--added); } .del { color: var(--bad); }
 </style>

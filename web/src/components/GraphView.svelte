@@ -670,7 +670,6 @@
     {#if hidden > 0}<span class="hid" title="Hidden by the Explorer filters">{hidden} hidden</span>{/if}
     {#if app.overlay !== 'none'}<span class="ov">{app.overlay}</span>{/if}
     {#if app.layoutMode !== 'natural'}<span class="ov">{app.layoutMode}</span>{/if}
-    <span class="tiphint faint">Click a class · double-click expands it · right-click for actions · drag to move</span>
   </div>
 
   {#if hover && hm}
@@ -746,7 +745,7 @@
   .seg button { height: 24px; padding: 0 10px; border: 0; border-radius: var(--r); background: none; font-size: 12px; color: var(--text-3); transition: background 0.15s, color 0.15s; }
   .seg.icons button { width: 26px; padding: 0; display: grid; place-items: center; }
   .seg button:hover { color: var(--text); }
-  .seg button.on { color: var(--text); background: var(--surface-3); box-shadow: 0 0 0 1px var(--border-strong); }
+  .seg button.on { color: var(--text); background: var(--surface-3); box-shadow: var(--raised); }
   .tiphint { margin-left: auto; font-size: 11px; align-self: center; }
   .controls { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); color: var(--text-2); font-size: 12px; font-weight: 500; }
   .controls:hover, .controls.on { color: var(--text); border-color: var(--border-strong); background: var(--surface-3); }

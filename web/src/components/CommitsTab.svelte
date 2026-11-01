@@ -172,7 +172,7 @@
   .row { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
   .seg { display: flex; flex: 1; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
   .seg button { flex: 1; height: 24px; border: 0; border-radius: var(--r); background: none; color: var(--text-3); font-weight: 500; font-size: 12px; }
-  .seg button.on { color: var(--text); background: var(--surface-3); box-shadow: 0 0 0 1px var(--border-strong); }
+  .seg button.on { color: var(--text); background: var(--surface-3); box-shadow: var(--raised); }
   .seg button:disabled { opacity: 0.4; cursor: default; }
   .q { height: 30px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); color: var(--text); font: inherit; font-size: 12.5px; }
   .q:focus { outline: none; border-color: var(--accent); }
@@ -202,7 +202,7 @@
   .pill.good { --c: var(--good); } .pill.warn { --c: var(--warn); } .pill.bad { --c: var(--bad); }
   .pill.faint { font-weight: 500; }
   .related { padding: 0 10px 8px; display: grid; gap: 3px; }
-  .h { margin-top: 4px; font-size: 10.5px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
+  .h { margin-top: 4px; font-size: 10.5px; font-weight: 600; color: var(--text-3); }
   .iss { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 1px 6px; align-items: center; padding: 5px 6px; border: 0; border-radius: var(--r); background: var(--surface-2); text-align: left; font-size: 12px; }
   .iss:hover { background: var(--surface-3); }
   .iss .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -171,7 +171,7 @@
   header p { margin: 6px 0 0; }
   .seg { display: flex; align-self: flex-start; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
   .seg button { height: 26px; padding: 0 10px; border: 0; border-radius: var(--r); background: none; font-size: 12px; color: var(--text-3); }
-  .seg button.on { color: var(--text); background: var(--surface-3); box-shadow: 0 0 0 1px var(--border-strong); }
+  .seg button.on { color: var(--text); background: var(--surface-3); box-shadow: var(--raised); }
   .tabsrow { display: flex; align-items: center; gap: 8px; }
   .cp { justify-self: start; }
   .content { display: grid; gap: 6px; min-width: 0; }

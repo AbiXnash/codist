@@ -3,6 +3,7 @@
   import { app, boot, savePref, selectCommit } from './lib/store.svelte';
   import { preload } from './lib/highlight';
   import TopBar from './components/TopBar.svelte';
+  import Sidebar from './components/Sidebar.svelte';
   import LeftDock from './components/LeftDock.svelte';
   import BranchGraph from './components/BranchGraph.svelte';
   import RepoView from './components/RepoView.svelte';
@@ -45,7 +46,8 @@
 
   function keys(e: KeyboardEvent) {
     if ((e.target as Element | null)?.closest?.('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey || app.fix || app.mode !== 'review') return;
-    if (e.key === '[') app.showCommits = !app.showCommits;
+    if (e.key === '\\') app.showSidebar = !app.showSidebar;
+    else if (e.key === '[') app.showCommits = !app.showCommits;
     else if (e.key === ']') app.showPanel = !app.showPanel;
     else if (e.key === 'j' || e.key === 'k') {
       const list = app.shownCommits;
@@ -64,6 +66,8 @@
 
 <svelte:window onkeydown={keys} />
 
+<div class="window">
+<Sidebar />
 <div class="shell">
   <TopBar />
   {#if app.status?.operation}
@@ -106,12 +110,14 @@
   </main>
   {/if}
 </div>
+</div>
 
 <FixDialog />
 <Toasts />
 
 <style>
-  .shell { height: 100%; display: flex; flex-direction: column; }
+  .window { height: 100%; display: flex; }
+  .shell { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; }
   .op { padding: 7px 16px; font-size: 12.5px; color: var(--text); background: color-mix(in srgb, var(--warn) 14%, var(--surface)); border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); }
   .op .mono { font-size: 11.5px; }
   .layout {
@@ -131,6 +137,7 @@
 
   @media (max-width: 1000px) {
     :global(body) { overflow: auto; }
+    .window { height: auto; min-height: 100%; }
     .shell { height: auto; min-height: 100%; }
     .layout, .layout.no-side, .layout.no-panel, .layout.no-side.no-panel { grid-template-columns: 1fr; }
     .resizer { display: none; }

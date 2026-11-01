@@ -10,7 +10,7 @@
   // Every branch, or the ones picked, as lanes. Click a commit to review it; click a branch name to
   // make the whole of Review follow that branch.
   const ROW = 32, LANE = 15, PAD = 12;
-  const COLORS = ['#6366f1', '#06b6d4', '#22c55e', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6', '#ef4444'];
+  const COLORS = ['#0a84ff', '#30b0c7', '#30d158', '#ff9f0a', '#ff375f', '#bf5af2', '#64d2ff', '#ff453a'];
   const color = (lane: number) => COLORS[lane % COLORS.length];
 
   let refs = $state.raw<BranchRef[]>([]);
@@ -115,7 +115,7 @@
   header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; border-bottom: 1px solid var(--border); }
   .seg { display: flex; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
   .seg button { height: 24px; padding: 0 10px; border: 0; border-radius: var(--r); background: none; font-size: 12px; color: var(--text-3); }
-  .seg button.on { color: var(--text); background: var(--surface-3); box-shadow: 0 0 0 1px var(--border-strong); }
+  .seg button.on { color: var(--text); background: var(--surface-3); box-shadow: var(--raised); }
   .chips { display: flex; flex-wrap: wrap; gap: 4px; }
   .chip { height: 24px; padding: 0 9px; border: 1px solid var(--border); border-radius: 12px; background: none; color: var(--text-3); font-size: 11.5px; }
   .chip.on { color: var(--accent-text); border-color: var(--accent); background: var(--accent-soft); }

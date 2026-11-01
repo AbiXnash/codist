@@ -25,11 +25,11 @@ export const NOT_FIXABLE = new Set(['shared-constant-changed']);
 export const SEVERITIES: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 
 export const SEVERITY_COLOR: Record<Severity, string> = {
-  critical: '#dc2626',
-  high: '#ea580c',
-  medium: '#ca8a04',
-  low: '#64748b',
-  info: '#94a3b8',
+  critical: '#ff453a',
+  high: '#ff9f0a',
+  medium: '#e6b800',
+  low: '#8e8e93',
+  info: '#aeaeb2',
 };
 
 export const STATE_COLOR = { changed: '#d97706', added: '#16a34a', impacted: '#ea580c', accent: '#2563eb', issue: '#dc2626' };

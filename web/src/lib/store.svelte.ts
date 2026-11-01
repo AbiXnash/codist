@@ -171,7 +171,8 @@ class AppState {
   // Layout: which areas are visible. Persisted per browser.
   showCommits = $state(pref('commits', true));
   showPanel = $state(pref('panel', true));
-  showLegend = $state(pref('legend', true));
+  showLegend = $state(pref('legend', false));
+  showSidebar = $state(pref('sidebar', typeof window === 'undefined' || window.innerWidth >= 1280));
 
   me = $derived((this.status?.user ?? '').trim().toLowerCase());
   isMe = (name?: string) => !!this.me && (name ?? '').trim().toLowerCase() === this.me;

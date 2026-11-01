@@ -1,13 +1,15 @@
 # Screens
 
-The top bar groups the screens by what you are doing.
+The sidebar groups the screens by what you are doing. Collapse it to icons with `\` or the logo.
 
 | Group | Screens |
 |---|---|
-| Code | **Review**, **Repo**, **Branches** |
-| People | **Mine**, **Team** |
+| Code | **Review**, **Repository**, **Branches** |
+| People | **My work**, **Team** |
 | Ship | **Release**, **Incidents** |
 | AI | **Activity**, **Memory** |
+
+The model's status and the appearance switch sit at the bottom of the sidebar.
 
 ## Review
 
@@ -28,10 +30,10 @@ module, the boxes are its top-level packages instead.
 The repository as it is: services with ports, tests, endpoints and who calls whom, API endpoints, Feign calls, people,
 hotspots, costly methods, largest classes and constants.
 
-## Mine and Team
+## My work and Team
 
-**Mine** is your to-do list by urgency, your commits and what you fixed. **Team** shows per person what is open, assigned
-and fixed, where they work, and which urgent issues nobody has taken.
+**My work** is your to-do list by urgency, your commits, what you fixed, and your lines written, removed and still in the code. **Team** shows per person lines and files as well as what is open,
+assigned and fixed, where they work, and which urgent issues nobody has taken.
 
 ## Activity
 
@@ -43,7 +45,8 @@ time, and the commit, file and knowledge entries it relates to. Calls saved by r
 | Key | Action |
 |---|---|
 | `/` or `⌘K` | Go to class |
-| `[` / `]` | Hide or show the history / right panel |
+| `\` | Collapse or expand the sidebar |
+| `[` / `]` | Hide or show the left dock / right panel |
 | `j` / `k` | Next / previous commit |
 | `1`–`5` | Issues, commit review, commit changes, Code, Ask |
 | `⌘↵` | Commit the fix in the fix dialog; "change code" in the Ask tab |

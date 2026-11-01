@@ -109,7 +109,7 @@
   .x { margin-left: auto; border: 0; background: none; font-size: 18px; color: var(--text-3); }
   .cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; padding: 16px 18px 20px; }
   @media (max-width: 1000px) { .cols { grid-template-columns: 1fr; } }
-  h3 { margin: 12px 0 8px; font-size: 11.5px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.4; }
+  h3 { margin: 12px 0 8px; font-size: 11.5px; font-weight: 600; color: var(--text-2); line-height: 1.4; }
   section > h3:first-child { margin-top: 0; }
   .r { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 4px 8px; padding: 4px 0; font-size: 12.5px; }
   .r .faint { grid-column: 1 / -1; padding-left: 0; font-size: 11.5px; margin-top: -2px; }

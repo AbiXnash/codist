@@ -248,7 +248,7 @@
   .detail { max-width: 1080px; margin: 0 auto; padding: 22px 24px 72px; display: grid; gap: 22px; }
   .eyebrow { font-size: 11.5px; color: var(--text-3); }
   h1 { margin: 4px 0 8px; font-size: 20px; font-weight: 600; }
-  h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
+  h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--text-2); }
   h3 { margin: 0; font-size: 15px; font-weight: 600; flex: 1; min-width: 0; }
   .status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-2); }
   .spacer { flex: 1; }

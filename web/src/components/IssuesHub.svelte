@@ -6,6 +6,12 @@
   import FixSuggest from './FixSuggest.svelte';
   import type { FindingWithPath, FixRef, Issue, Severity } from '../lib/types';
 
+  let filtersOpen = $state(false);
+  const activeFilters = $derived((app.scope !== 'all' ? 1 : 0) + [app.stage, app.kind, app.urgency, app.change].filter(Boolean).length);
+  function clearFilters() {
+    setScope('all');
+    app.stage = app.kind = app.urgency = app.change = null;
+  }
   let closing = $state(false);
   let reason = $state('');
   const LEVELS: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
@@ -168,6 +174,24 @@
     </div>
   {:else}
     <div class="top">
+      <div class="row2">
+        <div class="seg states">
+          {#each states as s}
+            <button class:on={app.issueState === s.id} onclick={() => setState(s.id)}>{s.label} <span class="n">{stateCount(s.id)}</span></button>
+          {/each}
+        </div>
+        <input class="q" bind:value={app.hubQuery} placeholder="Search issues, files, rules…" spellcheck="false" />
+      </div>
+      <div class="row3">
+        <button class="fbtn" class:on={filtersOpen || activeFilters > 0} aria-expanded={filtersOpen} onclick={() => (filtersOpen = !filtersOpen)}>
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h12M4.5 8h7M7 12h2"/></svg>
+          Filter{#if activeFilters} ({activeFilters}){/if}
+        </button>
+        {#if app.scope !== 'all'}<span class="scoped">{app.scope === 'commit' ? 'This commit' : app.scope === 'mine' ? 'Mine' : 'Uncommitted'}</span>{/if}
+        {#if activeFilters}<button class="clear" onclick={clearFilters}>Clear</button>{/if}
+      </div>
+      {#if filtersOpen}
+        <div class="filters">
       <div class="scope seg" role="tablist" aria-label="Scope">
         <button class:on={app.scope === 'all'} onclick={() => setScope('all')} title="Every issue in the codebase">All code</button>
         <button class:on={app.scope === 'commit'} disabled={!app.selectedSha} onclick={() => setScope('commit')} title="Introduced or fixed in the selected commit">
@@ -180,17 +204,6 @@
           </button>
         {/if}
       </div>
-
-      <div class="levels">
-        {#each LEVELS as l}
-          {@const n = perLevel[l] ?? 0}
-          <button class="level {l}" class:fx={app.issueState === 'resolved'} class:on={app.level === l} class:off={app.level && app.level !== l} class:zero={!n}
-            onclick={() => (app.level = app.level === l ? null : l)} title="Show only {l}">
-            <b>{n}</b><span>{l}</span>
-          </button>
-        {/each}
-      </div>
-
       <div class="triage">
         <select aria-label="Workflow" value={app.stage ?? ''} class:on={!!app.stage} onchange={(e) => (app.stage = e.currentTarget.value || null)}>
           <option value="">Stage: all</option><option value="unassigned">Unassigned</option><option value="mine">Assigned to me</option><option value="in-progress">In progress</option><option value="in-review">In review</option>
@@ -202,15 +215,18 @@
           </select>
         {/each}
       </div>
-
-      <div class="row2">
-        <div class="seg states">
-          {#each states as s}
-            <button class:on={app.issueState === s.id} onclick={() => setState(s.id)}>{s.label} <span class="n">{stateCount(s.id)}</span></button>
-          {/each}
         </div>
-        <input class="q" bind:value={app.hubQuery} placeholder="Search issues, files, rules…" spellcheck="false" />
+      {/if}
+      <div class="levels">
+        {#each LEVELS as l}
+          {@const n = perLevel[l] ?? 0}
+          <button class="level {l}" class:fx={app.issueState === 'resolved'} class:on={app.level === l} class:off={app.level && app.level !== l} class:zero={!n}
+            onclick={() => (app.level = app.level === l ? null : l)} title="Show only {l}">
+            <b>{n}</b><span>{l}</span>
+          </button>
+        {/each}
       </div>
+
     </div>
 
     <div class="list">
@@ -271,7 +287,7 @@
   .seg { display: flex; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
   .seg button { flex: 1; height: 26px; padding: 0 8px; border: 0; border-radius: var(--r); background: none; color: var(--text-3); font-weight: 500; font-size: 12px; white-space: nowrap; }
   .seg button:hover:not(:disabled) { color: var(--text); }
-  .seg button.on { color: var(--text); background: var(--surface-3); box-shadow: 0 0 0 1px var(--border-strong); }
+  .seg button.on { color: var(--text); background: var(--surface-3); box-shadow: var(--raised); }
   .seg button:disabled { opacity: 0.4; cursor: default; }
   .seg .mono { font-size: 10.5px; }
   .seg .sha { margin-left: 5px; }
@@ -280,8 +296,14 @@
   .note { margin: 0; padding: 8px 10px; border-radius: var(--r-lg); background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--text-2); font-size: 12px; }
   .n { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 
+  .row3 { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+  .fbtn { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 0; border-radius: var(--r); background: var(--surface-3); color: var(--text); font-size: 12.5px; }
+  .fbtn.on { color: #fff; background: var(--accent); }
+  .scoped { color: var(--text-2); }
+  .clear { border: 0; background: none; padding: 0; color: var(--accent-text); font-size: 12.5px; }
+  .filters { display: grid; gap: 8px; padding: 10px; border-radius: var(--r-lg); background: var(--surface-2); }
   .levels { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
-  .level { --c: var(--sev-low); position: relative; display: grid; gap: 0; padding: 7px 8px 6px 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); text-align: left; overflow: hidden; transition: border-color 0.15s, opacity 0.15s; }
+  .level { --c: var(--sev-low); position: relative; overflow: hidden; display: grid; gap: 0; padding: 6px 8px 5px 10px; border: 1px solid transparent; border-radius: var(--r-lg); background: var(--surface-2); text-align: left; overflow: hidden; transition: border-color 0.15s, opacity 0.15s; }
   .level::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c); }
   .level b { font-size: 20px; line-height: 1.15; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--c); }
   .level span { font-size: 11px; color: var(--text-3); text-transform: capitalize; }
@@ -307,7 +329,7 @@
   .level.info { --c: var(--sev-info); }
   :global(:root[data-theme='dark']) .level.low { --c: #94a3b8; }
 
-  .triage { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+  .triage { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; font-size: 11.5px; }
   .flow .st { padding: 2px 9px; border-radius: 10px; color: var(--text-3); background: var(--surface-2); border: 1px solid var(--border); }
   .flow .st.done { color: var(--good); }

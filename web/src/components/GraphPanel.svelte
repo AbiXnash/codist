@@ -220,7 +220,7 @@
   </section>
 
   <section>
-    {@render head('roles', 'Categories', 'click hides · double-click isolates')}
+    {@render head('roles', 'Categories', 'click to hide')}
     {#if open.roles}
       <div class="chips">
         {#each roles as r}
@@ -339,10 +339,10 @@
 
 <style>
   .explorer { display: flex; flex-direction: column; min-height: 0; flex: 1; overflow: auto; background: var(--surface); font-size: 12.5px; }
-  header { position: sticky; top: 0; z-index: 1; display: grid; gap: 1px; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  header { display: grid; gap: 1px; padding: 0 16px 8px; }
   header .faint { font-size: 11px; }
-  section { padding: 8px 12px 10px; border-bottom: 1px solid var(--border); display: grid; gap: 7px; min-width: 0; }
-  .sh { display: inline-flex; align-items: center; gap: 5px; justify-self: start; border: 0; background: none; padding: 0; font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
+  section { margin: 0 10px 10px; padding: 10px 12px; border-radius: var(--r-lg); background: var(--surface-2); display: grid; gap: 8px; min-width: 0; }
+  .sh { display: inline-flex; align-items: center; gap: 5px; justify-self: start; border: 0; background: none; padding: 0; font-size: 13px; font-weight: 600; color: var(--text); }
   .sh:hover { color: var(--text); }
   .sh svg { transition: transform 0.15s; }
   .sh svg.closed { transform: rotate(-90deg); }
@@ -358,7 +358,7 @@
   .seg { display: flex; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
   .seg.wide button { flex: 1; padding: 0 3px; }
   .seg button { height: 24px; padding: 0 8px; border: 0; border-radius: var(--r); background: none; font-size: 11.5px; color: var(--text-3); white-space: nowrap; }
-  .seg button.on, .grid3 button.on { color: var(--text); background: var(--surface-3); box-shadow: 0 0 0 1px var(--border-strong); }
+  .seg button.on, .grid3 button.on { color: var(--text); background: var(--surface-3); box-shadow: var(--raised); }
   .grid3 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
   .grid3 button { height: 24px; border: 0; border-radius: var(--r); background: none; font-size: 11.5px; color: var(--text-3); }
   .chips { display: flex; flex-wrap: wrap; gap: 4px; }

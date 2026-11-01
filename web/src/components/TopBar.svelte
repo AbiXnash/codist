@@ -1,17 +1,10 @@
 <script lang="ts">
-  import { app, selectNode, setTheme } from '../lib/store.svelte';
+  import { app, selectNode } from '../lib/store.svelte';
   import Glyph from './Glyph.svelte';
   import BranchPicker from './BranchPicker.svelte';
   import CopyButton from './CopyButton.svelte';
-  import type { Mode } from '../lib/types';
 
-  // Tools grouped by what you are doing: the code, the people, shipping, and the AI itself.
-  const NAV = [
-    { title: 'Code', items: [['review', 'Review'], ['repo', 'Repo'], ['branches', 'Branches']] },
-    { title: 'People', items: [['mine', 'Mine'], ['team', 'Team']] },
-    { title: 'Ship', items: [['release', 'Release'], ['incidents', 'Incidents']] },
-    { title: 'AI', items: [['activity', 'Activity'], ['memory', 'Memory']] },
-  ];
+  const TITLES: Record<string, string> = { review: 'Review', repo: 'Repository', branches: 'Branches', mine: 'My work', team: 'Team', release: 'Release', incidents: 'Incidents', activity: 'Activity', memory: 'Memory' };
   let input: HTMLInputElement;
   let focused = $state(false);
   let active = $state(0);
@@ -55,22 +48,8 @@
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M5.5 2.5v11"/>{#if app.showCommits}<path d="M2.5 5h2M2.5 7h2" stroke-linecap="round"/>{/if}</svg>
   </button>
 
-  <div class="brand">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="6" cy="7" r="2.5"/><circle cx="18" cy="9" r="2.5"/><circle cx="10" cy="18" r="2.5"/><path d="M8.4 7.4 15.6 8.6M16.6 11.2l-4.9 5M7 9.3l2.2 6.3" stroke-opacity=".6"/></svg>
-    Codist
-  </div>
+  {#if app.mode === 'review' || app.mode === 'incidents'}<h1 class="title">{TITLES[app.mode]}</h1>{/if}
 
-  <nav class="groups" aria-label="Screens">
-    {#each NAV.filter((g) => g.items.some(([m]) => app.menuOn(m))) as g}
-      <div class="group" title={g.title}>
-        {#each g.items.filter(([m]) => app.menuOn(m)) as [m, label]}
-          <button class:on={app.mode === m} onclick={() => (app.mode = m as Mode)}>{label}{#if m === 'incidents' && app.incidents.some((i) => i.status === 'analysing')}<span class="spinner tiny"></span>{/if}</button>
-        {/each}
-      </div>
-    {/each}
-  </nav>
-
-  <span class="sep">/</span>
   <span class="repo" title={app.status?.path}>{app.status?.repo ?? '…'}</span>
   {#if app.status}
     {#if app.featureOn('branchSwitcher')}<BranchPicker />{:else}<span class="branch mono">{app.status.tracking}</span>{/if}
@@ -87,7 +66,7 @@
         onblur={() => setTimeout(() => (focused = false), 120)}
         oninput={() => (active = 0)}
         onkeydown={onKey}
-        placeholder="Go to class…"
+        placeholder="Search for a class"
         spellcheck="false"
         autocomplete="off"
       />
@@ -108,23 +87,7 @@
     {/if}
   </div>
 
-  <span class="status" title={app.status?.llmProblem || `Ollama ready · review ${app.status?.models?.review} · summary ${app.status?.models?.summary} · fix ${app.status?.models?.fix} · ask ${app.status?.models?.ask} · ${app.status?.rules} rules`}>
-    <span class="dot" style:background={app.status?.llmProblem ? 'var(--bad)' : 'var(--good)'}></span>
-    <span class="mono">{app.status?.model ?? 'model'}</span>
-  </span>
-  <span class="status" title={app.live ? 'Receiving live updates' : 'Disconnected, retrying'}>
-    <span class="dot" style:background={app.live ? 'var(--good)' : 'var(--bad)'}></span>
-    {app.live ? 'Live' : 'Offline'}
-  </span>
-
-  <button class="icon-btn" title="Switch to {app.theme === 'dark' ? 'light' : 'dark'} theme" aria-label="Toggle theme" onclick={() => setTheme(app.theme === 'dark' ? 'light' : 'dark')}>
-    {#if app.theme === 'dark'}
-      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="3.5"/><path d="M10 1.5v2M10 16.5v2M1.5 10h2M16.5 10h2M4 4l1.4 1.4M14.6 14.6 16 16M4 16l1.4-1.4M14.6 5.4 16 4"/></svg>
-    {:else}
-      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M16.5 12.5A7 7 0 0 1 7.5 3.5a7 7 0 1 0 9 9Z"/></svg>
-    {/if}
-  </button>
-  <button class="icon-btn" class:on={app.showPanel} title="Toggle details panel  ]" aria-label="Toggle details panel" onclick={() => (app.showPanel = !app.showPanel)}>
+<button class="icon-btn" class:on={app.showPanel} title="Toggle details panel  ]" aria-label="Toggle details panel" onclick={() => (app.showPanel = !app.showPanel)}>
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M9.5 2.5v11"/></svg>
   </button>
 </header>
@@ -136,20 +99,15 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    height: 44px;
-    padding: 0 8px;
+    height: 48px;
+    padding: 0 10px;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
     flex-shrink: 0;
     white-space: nowrap;
   }
-  .groups { display: flex; gap: 6px; margin-left: 4px; }
-  .group { display: flex; gap: 1px; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
-  .group button { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border: 0; border-radius: var(--r); background: none; color: var(--text-3); font-size: 12px; font-weight: 500; white-space: nowrap; }
-  .group button:hover { color: var(--text); }
-  .group button.on { color: var(--text); background: var(--surface-3); box-shadow: 0 0 0 1px var(--border-strong); }
+  .title { margin: 0 4px 0 2px; font-size: 15px; font-weight: 600; letter-spacing: -0.005em; }
   .tiny { width: 9px; height: 9px; }
-  .brand { display: flex; align-items: center; gap: 7px; font-weight: 600; letter-spacing: -0.01em; }
   .sep { color: var(--text-3); }
   .repo { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
   .branch { color: var(--accent-text); }
@@ -163,14 +121,14 @@
     width: min(380px, 100%);
     height: 28px;
     padding: 0 6px 0 10px;
-    border: 1px solid var(--border);
+    border: 0;
     border-radius: var(--r);
-    background: var(--surface-2);
-    color: var(--text-3);
+    background: var(--surface-3);
+    color: var(--text-2);
   }
   .field.focused { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   .field input { flex: 1; min-width: 0; border: 0; outline: none; background: none; color: var(--text); font: inherit; }
-  .field input::placeholder { color: var(--text-3); }
+  .field input::placeholder { color: var(--text-2); }
 
   .results {
     position: absolute;
@@ -193,6 +151,6 @@
   .status .dot { width: 7px; height: 7px; }
 
   @media (max-width: 1000px) {
-    .sep, .repo, .branch, .sha, .status { display: none; }
+    .repo, .sha { display: none; }
   }
 </style>
