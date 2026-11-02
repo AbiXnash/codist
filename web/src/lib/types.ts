@@ -419,3 +419,7 @@ export interface DevProfile {
   fixed: number; fixedOwn: number; fixedOthers: number; avgFixDays: number; enoughEvidence: boolean; strengths: DevPoint[]; improve: DevPoint[];
 }
 export interface TeamReport { people: DevProfile[]; teamRate: number }
+
+export interface ImpactPlace { class: string; method: string; file: string; line: number; depth: number; confirmed: boolean }
+export interface ChangedMethod { class: string; method: string; file: string; line: number; status: 'added' | 'modified' | 'signature' | 'removed'; callers: number; tests: number }
+export interface ImpactReport { sha: string; changed: ChangedMethod[]; callers: ImpactPlace[]; callerCount: number; possible: number; routes: (ImpactPlace & { route: string })[]; tests: ImpactPlace[]; classes: number; untestedRisk: number }

@@ -10,6 +10,7 @@ Think like the engineer who will be paged when this breaks. Read the code for wh
 how objects are created and wired, what happens with null, empty and concurrent input, which transaction and
 thread each line runs in, what crosses the network or the database, and what reaches logs, users or other systems.
 Compare names, constants, messages and keys with the class and domain they live in.
+Use "What the changed methods reach": do the callers, routes and tests listed there still work with this change?
 
 The "Knowledge" section holds bug patterns retrieved because they resemble this code. They are reference
 material, not a checklist: use them to recognise a real problem in THIS code, and ignore those that do not apply.

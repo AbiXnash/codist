@@ -4,6 +4,7 @@
   import FindingCard from './FindingCard.svelte';
   import CommitRef from './CommitRef.svelte';
   import CopyButton from './CopyButton.svelte';
+  import ImpactCard from './ImpactCard.svelte';
   import { api } from '../lib/api';
 
   const d = $derived(app.detail);
@@ -115,7 +116,7 @@
       </p>
     {/if}
 
-    {#if d.analysis.changed.length || d.analysis.impacted.length}
+    {#if d.analysis.changed.length}
       <section class="types">
         {#if d.analysis.changed.length}
           <div class="line">
@@ -129,18 +130,10 @@
             </div>
           </div>
         {/if}
-        {#if d.analysis.impacted.length}
-          <div class="line">
-            <span class="label" title="Types that depend on what changed">Impacted</span>
-            <div class="chips">
-              {#each d.analysis.impacted as id (id)}
-                <button class="chip" title={id} onclick={() => focus(id)}><span class="dot" style:background="var(--impacted)"></span>{shortName(id)}</button>
-              {/each}
-            </div>
-          </div>
-        {/if}
       </section>
     {/if}
+
+    <ImpactCard sha={c.sha} />
 
     <section class="card msg">
       <div class="card-head"><span class="label">Commit message</span><span class="spacer"></span>

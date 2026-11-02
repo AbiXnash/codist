@@ -2,6 +2,7 @@
 
 | Page | What it covers |
 |---|---|
+| [Roadmap](Roadmap.md) | Direction, decisions and what comes next |
 | [Setup](Setup.md) | Requirements, models, running, troubleshooting |
 | [Configuration](Configuration.md) | Environment variables, GitHub webhook |
 | [Feature flags](Feature-flags.md) | Show or hide menus and features with a JSON file |

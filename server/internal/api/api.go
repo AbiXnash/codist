@@ -276,6 +276,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/team", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, s.team())
 	})
+	mux.HandleFunc("GET /api/commits/{sha}/impact", func(w http.ResponseWriter, r *http.Request) {
+		a, err := s.Analyzer.Analyze(r.PathValue("sha"))
+		if err != nil {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeJSON(w, review.ImpactFor(s.Repo, a))
+	})
 	mux.HandleFunc("GET /api/history", func(w http.ResponseWriter, r *http.Request) {
 		var names []string
 		if b := r.URL.Query().Get("branches"); b != "" {

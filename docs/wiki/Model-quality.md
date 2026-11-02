@@ -35,6 +35,13 @@ the model trace each method by hand with concrete values. Neither found them. In
 **In short, the rules do most of the work here, and these small models rarely find logic bugs.** A clean review is not
 evidence that the logic is right.
 
+Tested later on six files, with the "does it do what it claims" prompt:
+
+| Model | Result | Time per file |
+|---|---|---|
+| `qwen3:8b`, reasoning on | Found the `==` bug and the commented-out line, no false alarms on 2 clean files. Timed out or ran out of output on the 2 files with the hardest bugs. | 1 to 5 min |
+| `qwen2.5-coder:14b` | Found the commented-out line, no false alarms. | 3 to 24 s |
+
 ## Faster reviews
 
 - Files holding only fields and getters no longer go to the model.

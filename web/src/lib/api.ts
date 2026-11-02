@@ -1,4 +1,4 @@
-import type { Activity, TeamReport, Flags, PeopleReport, HistoryCommit, BranchRef, BranchReport, MemoryItem, MemoryReport, PlannedCommit, RepoReport, FixRef, Working, CommitItem, DependencyReport, Detail, FixProposal, Graph, Incident, IncidentRow, IssueList, RcaReport, ReleaseReport, Status } from './types';
+import type { ImpactReport, Activity, TeamReport, Flags, PeopleReport, HistoryCommit, BranchRef, BranchReport, MemoryItem, MemoryReport, PlannedCommit, RepoReport, FixRef, Working, CommitItem, DependencyReport, Detail, FixProposal, Graph, Incident, IncidentRow, IssueList, RcaReport, ReleaseReport, Status } from './types';
 
 const json = (method: string, body?: unknown): RequestInit => ({
   method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body),
@@ -36,6 +36,7 @@ export const api = {
   features: () => request<Flags>('/features'),
   people: () => request<PeopleReport>('/people'),
   team: () => request<TeamReport>('/team'),
+  impact: (sha: string) => request<ImpactReport>(`/commits/${sha}/impact`),
   refs: () => request<BranchRef[]>('/refs'),
   history: (branches: string[]) => request<HistoryCommit[]>(`/history${branches.length ? `?branches=${encodeURIComponent(branches.join(','))}` : ''}`),
   follow: (name: string) => request<{ branch: string }>('/refs/follow', json('POST', { name })),

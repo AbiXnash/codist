@@ -25,6 +25,16 @@ The model's status and the appearance switch sit at the bottom of the sidebar.
 dashed links. Distance shows relation: more calls between two services brings them closer. In a repository with one
 module, the boxes are its top-level packages instead.
 
+## What a change can affect
+
+The **Commit** tab lists each changed method and what depends on it, following method calls through interfaces and Feign
+clients, across services: callers, the API routes they serve, and the tests to run. It warns when a method's signature
+changed, when a method was removed, and when no test reaches a changed method. The same facts go to the model, so it
+checks whether those callers still work.
+
+A caller is **possible** when it matched by method name only. It comes from the code alone, so reflection, events and
+configuration can add callers it cannot see.
+
 ## Repo
 
 The repository as it is: services with ports, tests, endpoints and who calls whom, API endpoints, Feign calls, people,

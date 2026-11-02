@@ -709,6 +709,11 @@ func (s *Service) fileContext(a Analysis, f gitx.FileChange, in fileInput, known
 		add("## Types that depend on this file (may break)", strings.Join(deps, ", ")+"\n", 5, 0)
 	}
 
+	// Verified facts about what the change reaches, so the model reasons over them rather than guessing.
+	if a.Commit.SHA != "" && a.Commit.SHA != WorkingSHA && strings.HasSuffix(f.NewPath, ".java") {
+		add("## What the changed methods reach (measured from the code; \"possible\" means matched by name only)", impactSection(ImpactFor(s.repo, a), f.NewPath), 3, 600)
+	}
+
 	if told := s.Memory.ForPrompt(f.NewPath, ""); told != "" {
 		add("## What the developers of this repository told you (follow it; do not suggest what they rejected)", told, 1, 500)
 	}
