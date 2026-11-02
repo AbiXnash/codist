@@ -117,7 +117,7 @@ def run(config, labels):
 
 def main():
     labels = json.load(open(os.path.join(HERE, "labels.json")))
-    configs = sys.argv[1:] or [os.environ.get("CODIST_MODEL", "qwen2.5-coder:7b")]
+    configs = sys.argv[1:] or [os.environ.get("CODIST_MODEL", "qwen2.5-coder:14b")]
     all_results = []
     for c in configs:
         print(f"running {c} …", flush=True)

@@ -19,10 +19,10 @@ Linux, macOS (Apple Silicon and Intel) and Windows (WSL recommended) work.
 ## Models
 
 Codist talks to a local [Ollama](https://ollama.com) server. The default is
-**`qwen2.5-coder:7b`**, a good balance of review quality, speed and memory on a laptop.
+**`qwen2.5-coder:14b`**, which needs about 10 GB free while it runs, so 16 GB of memory is its practical minimum. On smaller machines, `codist setup` picks a smaller model.
 
 ```bash
-ollama pull qwen2.5-coder:7b
+ollama pull qwen2.5-coder:14b
 ```
 
 Use any Ollama model that follows instructions and returns JSON reasonably well — Codist asks for
@@ -33,7 +33,7 @@ Different jobs can use different models, which is useful on machines that can on
 
 | Env var | Used for | Suggested |
 |---|---|---|
-| `CODIST_MODEL` | file review and analysis | `qwen2.5-coder:7b` (default) |
+| `CODIST_MODEL` | file review and analysis | `qwen2.5-coder:14b` (default) |
 | `CODIST_SUMMARY_MODEL` | commit summaries | a smaller model, e.g. `qwen2.5-coder:3b` |
 | `CODIST_FIX_MODEL` | suggested fixes and code changes | a stronger model if you have RAM, e.g. `qwen2.5-coder:14b` |
 | `CODIST_ASK_MODEL` | Ask tab and incident root-cause explanations | same as `CODIST_FIX_MODEL` |
@@ -43,7 +43,7 @@ time. See [Speed](#speed) for memory tuning.
 
 ## Alternatives
 
-**Another Qwen2.5-Coder size.** `qwen2.5-coder:3b` on a low-memory laptop, or `:14b` / `:32b` when you
+**Another Qwen2.5-Coder size.** `qwen2.5-coder:7b` or `:3b` on a low-memory laptop, or / `:32b` when you
 have the RAM. Larger models find more, but reviews take longer.
 
 **Another Ollama model.** Coder or instruct models such as DeepSeek-Coder-V2, Granite Code or CodeLlama
@@ -78,7 +78,7 @@ git clone https://github.com/AbiXnash/codist.git
 cd codist
 
 make install                        # npm install + go mod download
-ollama pull qwen2.5-coder:7b        # in another terminal if Ollama is not running
+ollama pull qwen2.5-coder:14b        # in another terminal if Ollama is not running
 make run REPO=~/dev/your-spring-app # builds the UI and server, then serves http://localhost:8080
 ```
 
@@ -129,7 +129,7 @@ make test      # Go unit tests + svelte-check
 
 - **`undefined: Node`** while building — cgo is disabled or no C compiler is installed. Install one and
   run `go env -w CGO_ENABLED=1`.
-- **"Model … is not pulled"** in the UI — run `ollama pull qwen2.5-coder:7b`, or set `CODIST_MODEL` to a
+- **"Model … is not pulled"** in the UI — run `ollama pull qwen2.5-coder:14b`, or set `CODIST_MODEL` to a
   model you already have (`ollama list`).
 - **Ollama is not reachable** — start it with `ollama serve`, or set `OLLAMA_URL` if it runs elsewhere.
 - **Out of memory with several models** — set `OLLAMA_MAX_LOADED_MODELS=1` so Ollama swaps models

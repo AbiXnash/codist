@@ -12,7 +12,7 @@ All settings are environment variables:
 | `CODIST_REPO_URL` | – | Git URL to clone into `~/.codist/repos` and follow (`origin/<branch>`) |
 | `CODIST_BRANCH` | current branch | Branch to follow |
 | `CODIST_FETCH_REMOTE` | `false` | With `CODIST_REPO`: follow `origin/<branch>` instead of the local branch |
-| `CODIST_MODEL` | `qwen2.5-coder:7b` | Ollama model for review |
+| `CODIST_MODEL` | `qwen2.5-coder:14b` | Ollama model for review |
 | `CODIST_SUMMARY_MODEL` | same as `CODIST_MODEL` | Optional model for commit summaries |
 | `CODIST_FIX_MODEL` | same as `CODIST_MODEL` | Optional model for fixes and code changes |
 | `CODIST_ASK_MODEL` | same as `CODIST_MODEL` | Optional model for Ask and incident explanations |

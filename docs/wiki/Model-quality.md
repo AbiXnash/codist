@@ -46,6 +46,8 @@ A sceptical second model call on each finding was also tried, as some cloud revi
 
 ## Current score
 
+The default model is now `qwen2.5-coder:14b`, chosen by the project owner. **It has not had the full evaluation yet**, so the `7b` score below is the last measured one.
+
 With facts in the prompt and answers checked, on 16 labelled bugs. The same result repeated across two runs.
 
 | Setup | Bugs found | Logic bugs | Noise | Time |

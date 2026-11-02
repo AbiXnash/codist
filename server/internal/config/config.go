@@ -56,7 +56,7 @@ func Load() Config {
 		RulesDir:      expandHome(os.Getenv("CODIST_RULES_DIR"), home),
 
 		OllamaURL:    strings.TrimRight(env("OLLAMA_URL", "http://localhost:11434"), "/"),
-		Model:        env("CODIST_MODEL", "qwen2.5-coder:7b"),
+		Model:        env("CODIST_MODEL", "qwen2.5-coder:14b"),
 		SummaryModel: os.Getenv("CODIST_SUMMARY_MODEL"),
 		FixModel:     os.Getenv("CODIST_FIX_MODEL"),
 		AskModel:     os.Getenv("CODIST_ASK_MODEL"),

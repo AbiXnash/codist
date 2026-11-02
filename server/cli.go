@@ -115,13 +115,17 @@ func memoryGB() int {
 	return int(kb >> 20)
 }
 
-// recommendedModel fits the machine: the 7B model needs about 6 GB free while it runs.
+// recommendedModel fits the machine: the 14B model needs about 10 GB free while it runs, and 16 GB is
+// its practical minimum. Smaller machines get smaller models.
 func recommendedModel(cfg config.Config) string {
 	if os.Getenv("CODIST_MODEL") != "" {
 		return cfg.Model
 	}
-	if gb := memoryGB(); gb > 0 && gb < 12 {
+	switch gb := memoryGB(); {
+	case gb > 0 && gb < 12:
 		return "qwen2.5-coder:3b"
+	case gb > 0 && gb < 15:
+		return "qwen2.5-coder:7b"
 	}
 	return cfg.Model
 }
