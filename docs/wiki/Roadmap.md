@@ -1,5 +1,7 @@
 # Direction and roadmap
 
+Codist is being rebuilt on the `rebuild` branch. See the [rebuild plan](Rebuild-plan.md), which takes over from the numbered list below as work moves across.
+
 Codist makes a developer's work easier with an AI that runs locally. Code stays on the machine. Rules and analysers
 teach the model the standards and give it verified facts. The model reads the code and recent commits, reasons over
 those facts and prepares actions, and the developer approves them.

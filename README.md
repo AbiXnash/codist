@@ -4,6 +4,10 @@ A local code reviewer for Java and Spring Boot repositories. It watches a git re
 and services, reviews every commit with rules, static analysers and a local LLM, tracks issues across commits, and
 proposes fixes you approve. Nothing leaves your machine.
 
+## Status
+
+Codist is being rebuilt from the ground up on the `rebuild` branch. See the [rebuild plan](docs/wiki/Rebuild-plan.md) for the architecture, milestones and current status, and the [research](docs/research/rebuild-research.md) behind it. The steps below describe the current version.
+
 ## Run
 
 **One binary.** Build it once, then run it from inside any git repository. The browser opens by itself.
@@ -36,4 +40,8 @@ Everything else is in the [wiki](docs/wiki/Home.md): [setup](docs/wiki/Setup.md)
 [screens](docs/wiki/Screens.md), [issues](docs/wiki/Issues.md), [fixing](docs/wiki/Fixing.md),
 [branches](docs/wiki/Branches.md), [knowledge and memory](docs/wiki/Knowledge.md), [release](docs/wiki/Release.md),
 [incidents](docs/wiki/Incidents.md), [configuration](docs/wiki/Configuration.md), [feature flags](docs/wiki/Feature-flags.md) and
-[architecture](docs/wiki/Architecture.md).
+[architecture](docs/wiki/Architecture.md), [model quality](docs/wiki/Model-quality.md) and the [rebuild plan](docs/wiki/Rebuild-plan.md).
+
+## Listening address
+
+Codist listens on `127.0.0.1` only, because it has no login yet. Set `CODIST_ADDR` only if you understand who can then reach it.

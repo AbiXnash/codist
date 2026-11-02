@@ -8,11 +8,26 @@ python3 eval/run.py --rules-only                         # no model
 python3 eval/run.py qwen2.5-coder:7b                     # one model
 python3 eval/run.py qwen2.5-coder:7b qwen2.5-coder:3b    # compare
 python3 eval/run.py qwen2.5-coder:7b@8192                # with a context size
+python3 eval/run.py MODEL --no-rules --no-filters        # what the model finds alone
+python3 eval/run.py MODEL --no-rag                       # what retrieval earns; also --no-facts
+python3 eval/run.py MODEL --repeat 3                     # several runs of each
+python3 eval/run.py MODEL --default-settings             # the settings users get, not the eval's
+python3 eval/run.py --compare A.json B.json              # paired test between two results
 ```
 
 It reviews `eval/project`, a small Spring application with known bugs listed in `eval/labels.json`, on a temporary copy.
 It reports bugs found, logic bugs found, findings that match nothing (noise), false alarms on clean files, model calls
 and time. Add bugs from your own code to `eval/` to make it reflect your work.
+
+Each result file records what is needed to reproduce it: the commit, binary, prompt, label and project hashes, the
+model digest, the machine and the settings. It also records the time of every model call and every model finding the
+filters dropped, with the reason. Scores print with a 95% range, because a test this small can't separate close
+results. A model run in which the model was never called exits with an error instead of giving a score.
+
+`noise` counts findings that match no label. `excuse` counts findings that match no label but are on the `alsoTrue`
+list, which earlier versions left out of the report. **This test is 16 hand-seeded bugs in one small project, written
+alongside some of the rules it scores, so use it as a smoke test.** Don't quote it as accuracy. A larger test set is
+milestone 1 of the [rebuild plan](Rebuild-plan.md).
 
 ## What was measured
 

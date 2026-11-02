@@ -2,6 +2,7 @@
 
 | Page | What it covers |
 |---|---|
+| [Rebuild plan](Rebuild-plan.md) | The ground-up rebuild: architecture, decisions, milestones and status |
 | [Roadmap](Roadmap.md) | Direction, decisions and what comes next |
 | [Setup](Setup.md) | Requirements, models, running, troubleshooting |
 | [Configuration](Configuration.md) | Environment variables, GitHub webhook |

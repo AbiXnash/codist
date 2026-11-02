@@ -26,7 +26,8 @@ All settings are environment variables:
 | `CODIST_AUTO_REVIEW` | `true` | Review new commits automatically |
 | `CODIST_POLL_MS` | `3000` | How often the watcher checks for changes |
 | `PORT` | `8080` | HTTP port |
-| `CODIST_ADDR` | `:$PORT` | Full listen address, overrides `PORT` |
+| `CODIST_ADDR` | `127.0.0.1:$PORT` | Full listen address, overrides `PORT`. Codist has no login, so `:8080` or another open address lets anyone who can reach this machine read your code and trigger commits. A webhook reaches it through a tunnel, which works with the default. |
+| `CODIST_NO_RULES`, `CODIST_NO_RAG`, `CODIST_NO_FACTS`, `CODIST_NO_FILTERS` | `false` | For measuring only, see [Model quality](Model-quality.md). They switch off rule findings, retrieved patterns, code facts and the filters on model findings. |
 | `CODIST_WEB_DIR` | `../web/dist` | Static UI directory |
 | `CODIST_RULES_DIR` | – | Extra knowledge-base folder |
 | `GITHUB_TOKEN` | – | For private repositories |
