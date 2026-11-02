@@ -9,6 +9,8 @@
   const target = $derived(askTarget());
   const examples = [
     'Explain what this class does and who calls it',
+    'What happens if I change this method? Which APIs and tests does it reach?',
+    'What happens if I change this method? Which APIs and tests does it reach?',
     'Is there a race condition here?',
     'Add retry with exponential backoff to the external call',
     'Replace System.out with SLF4J logging',

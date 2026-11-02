@@ -1,5 +1,5 @@
 {
-  "description": "Known problems in eval/project. A label is found when a finding is in the file, within 5 lines of the text, and matches the pattern. alsoTrue names other real problems, which are neither credit nor noise. Clean files should have nothing above info.",
+  "description": "Known problems in eval/project. A label is found when a finding is in the file, within 5 lines of the text, and matches the pattern. alsoTrue names other real problems, which are neither credit nor noise. Clean files should have nothing above info. Any other finding counts as noise, because it takes a reader's time.",
   "bugs": [
     {
       "id": "never-injected",

@@ -42,6 +42,8 @@ Tested later on six files, with the "does it do what it claims" prompt:
 | `qwen3:8b`, reasoning on | Found the `==` bug and the commented-out line, no false alarms on 2 clean files. Timed out or ran out of output on the 2 files with the hardest bugs. | 1 to 5 min |
 | `qwen2.5-coder:14b` | Found the commented-out line, no false alarms. | 3 to 24 s |
 
+A sceptical second model call on each finding was also tried, as some cloud reviewers do. It dropped every model finding, including a real race, and doubled the time, so it was removed. Plain checks replaced it: a finding must quote a line that is in the file, and advice that starts "Consider…" is dropped.
+
 ## Faster reviews
 
 - Files holding only fields and getters no longer go to the model.

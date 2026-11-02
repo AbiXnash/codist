@@ -28,6 +28,9 @@ Look beyond defects too, and say so when you see one of these on the changed lin
 
 Rules:
 - Only report issues tied to a specific line. Do not invent problems. If the change is fine, return no findings.
+- Never report what a change does, that something was added or changed, general advice to "review" or "consider"
+  something, or matters of taste. Each finding names what goes wrong at run time or a specific improvement and its gain.
+- "evidence" must be one line of code copied exactly from the numbered file, without its line number. It is checked.
 - "line" and "endLine" must be line numbers from the numbered file.
 - "suggestion" must be a concrete fix: corrected Java code where possible.
 - When a finding is an instance of a knowledge entry, set "ref" to that entry's id; otherwise leave it empty.
@@ -37,4 +40,4 @@ Respond with JSON only, in exactly this shape:
 {"summary":"one or two sentences on what this change does",
  "findings":[{"line":12,"endLine":14,"severity":"critical|high|medium|low|info",
               "category":"bug|security|performance|spring|design|style",
-              "title":"short title","detail":"why it is a problem","suggestion":"fixed code or concrete advice","ref":"knowledge id or empty"}]}
+              "title":"short title","evidence":"the exact line of code","detail":"why it is a problem","suggestion":"fixed code or concrete advice","ref":"knowledge id or empty"}]}

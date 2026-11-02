@@ -12,7 +12,7 @@ and changes nothing in this repository. Results are also written to eval/results
 import json, os, re, shutil, socket, subprocess, sys, tempfile, time, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BIN = os.path.join(HERE, "..", "server", "bin", "codist")
+BIN = os.environ.get("CODIST_BIN") or os.path.join(HERE, "..", "server", "bin", "codist")
 JAVA = "src/main/java/com/demo/library/"
 RANK = ["info", "low", "medium", "high", "critical"]
 
@@ -48,7 +48,7 @@ def score(findings, labels, repo):
         results[bug["id"]] = {"kind": bug["kind"], "found": bool(hits), "by": sorted({findings[i].get("source", "") for i in hits})}
         used.update(hits)
     also = re.compile(labels["alsoTrue"], re.I)
-    noise = [f for i, f in enumerate(findings) if i not in used and not also.search(f["title"]) and RANK.index(f["severity"]) >= RANK.index("low")]
+    noise = [f for i, f in enumerate(findings) if i not in used and not also.search(f["title"])]
     clean_paths = {JAVA + c for c in labels["clean"]}
     false_alarms = [f for f in findings if f["path"] in clean_paths and RANK.index(f["severity"]) >= RANK.index("low")]
     return results, noise, false_alarms
@@ -105,6 +105,7 @@ def run(config, labels):
         results, noise, false_alarms = score(findings, labels, repo)
         return {"config": config, "seconds": round(took), "calls": len(calls), "tokensIn": sum(a.get("promptTokens") or 0 for a in calls),
                 "tokensOut": sum(a.get("replyTokens") or 0 for a in calls), "findings": len(findings), "bugs": results,
+                "all": [f"{f['severity']} [{f.get('source', '')}] {f['title']} ({os.path.basename(f['path'])}:{f['line']})" for f in findings],
                 "noise": [f"{f['severity']} {f['title']} ({os.path.basename(f['path'])})" for f in noise],
                 "falseAlarms": [f"{f['severity']} {f['title']} ({os.path.basename(f['path'])})" for f in false_alarms],
                 "skipped": sum(1 for f in review.get("files") or [] if f.get("skipped"))}

@@ -558,6 +558,14 @@ func (s *Service) modelPass(a Analysis, f gitx.FileChange, fr FileReview, in fil
 			continue
 		}
 		end = max(end, line)
+		// A model that cannot quote the code it is talking about has usually made the problem up.
+		if ev := str(x["evidence"]); ev != "" && !quotesCode(in.lines, ev) {
+			Activities.Step("Dropped a finding that quotes code not in the file", a.Commit.SHA, f.NewPath, str(x["title"]), 0)
+			continue
+		}
+		if vagueAdvice(str(x["title"])) {
+			continue
+		}
 		// Rules are authoritative for what they check: if the model claims one of those problems
 		// and the rule did not fire, the model is wrong.
 		if k := ruleCovered(str(x["ref"]), str(x["title"])); k != "" && !slices.ContainsFunc(fr.Findings, func(r Finding) bool { return r.Ref == k }) {
@@ -712,6 +720,10 @@ func (s *Service) fileContext(a Analysis, f gitx.FileChange, in fileInput, known
 	// Verified facts about what the change reaches, so the model reasons over them rather than guessing.
 	if a.Commit.SHA != "" && a.Commit.SHA != WorkingSHA && strings.HasSuffix(f.NewPath, ".java") {
 		add("## What the changed methods reach (measured from the code; \"possible\" means matched by name only)", impactSection(ImpactFor(s.repo, a), f.NewPath), 3, 600)
+	}
+
+	if rules := s.repoStandards(); rules != "" {
+		add("## This repository's own standards (follow them)", rules, 3, 800)
 	}
 
 	if told := s.Memory.ForPrompt(f.NewPath, ""); told != "" {

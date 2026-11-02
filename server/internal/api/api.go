@@ -24,6 +24,7 @@ import (
 	"codist/internal/gitx"
 	"codist/internal/graph"
 	"codist/internal/incident"
+	"codist/internal/javaidx"
 	"codist/internal/review"
 	"codist/internal/watch"
 	"codist/internal/webui"
@@ -42,6 +43,9 @@ type Server struct {
 	Watcher  *watch.Watcher
 	Fixer    *review.Fixer
 	Tracker  *review.Tracker
+	callsMu  sync.Mutex
+	calls    *javaidx.CallGraph
+	callsAt  int64
 
 	peopleMu  sync.Mutex
 	people    *review.PeopleReport
@@ -345,6 +349,17 @@ func (s *Server) team() review.TeamReport {
 		stereotypes[n.File] = n.Stereotype
 	}
 	return review.Team(s.Repo.AuthoredCommits(500), s.Tracker.Issues(), s.Store, stereotypes, s.peopleReport())
+}
+
+// callGraph is rebuilt only when the graph was: a question should not re-parse the code.
+func (s *Server) callGraph() *javaidx.CallGraph {
+	g := s.Graph.Graph()
+	s.callsMu.Lock()
+	defer s.callsMu.Unlock()
+	if s.calls == nil || s.callsAt != g.BuiltAt {
+		s.calls, s.callsAt = javaidx.BuildCallGraph(s.Repo.JavaFilesWorking(), g), g.BuiltAt
+	}
+	return s.calls
 }
 
 func (s *Server) flags() features.Flags {
@@ -696,6 +711,10 @@ func (s *Server) ask(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if rules := review.Standards(s.Repo); rules != "" {
+		ctx.WriteString("\n## This repository's own standards\n" + rules)
+	}
+	ctx.WriteString("\n" + review.CodeFacts(req.Question, req.Path, s.Graph.Graph(), s.callGraph()))
 	answer, err := s.Fixer.Ask(req.Path, req.Question, ctx.String())
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
