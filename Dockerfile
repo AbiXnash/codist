@@ -2,6 +2,7 @@
 FROM node:22-slim AS ui
 WORKDIR /web
 COPY web/package*.json ./
+COPY web/vendor ./vendor
 RUN npm ci
 COPY web/ ./
 RUN npm run build
