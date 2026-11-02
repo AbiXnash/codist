@@ -32,7 +32,7 @@ Two other ways of asking were tried on the logic bugs alone: asking whether each
 the model trace each method by hand with concrete values. Neither found them. In the trace, the model wrote down a
 "result" that matched what the method should do, without really working it out.
 
-**In short, the rules do most of the work here, and these small models rarely find logic bugs.** A clean review is not
+**In those first runs, the rules did most of the work and the small models rarely found logic bugs.** A clean review is not
 evidence that the logic is right.
 
 Tested later on six files, with the "does it do what it claims" prompt:
@@ -43,6 +43,17 @@ Tested later on six files, with the "does it do what it claims" prompt:
 | `qwen2.5-coder:14b` | Found the commented-out line, no false alarms. | 3 to 24 s |
 
 A sceptical second model call on each finding was also tried, as some cloud reviewers do. It dropped every model finding, including a real race, and doubled the time, so it was removed. Plain checks replaced it: a finding must quote a line that is in the file, and advice that starts "Consider…" is dropped.
+
+## Current score
+
+With facts in the prompt and answers checked, on 16 labelled bugs. The same result repeated across two runs.
+
+| Setup | Bugs found | Logic bugs | Noise | Time |
+|---|---|---|---|---|
+| Rules only | 10 | 1 of 7 | 1 | 2 s |
+| `7b`, current | 12 | 3 of 7 | 1 | 3.5 to 4.3 min |
+
+Noise counts every finding the labels do not cover, including info. Still missed: an inverted condition, a wrong boolean, and two ISBN validation bugs.
 
 ## Faster reviews
 
