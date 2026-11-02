@@ -7,3 +7,5 @@ server/internal/webui/dist/*
 !server/internal/webui/dist/.gitkeep
 dist/
 eval/results/
+__pycache__/
+research_notes/

@@ -16,7 +16,7 @@ services:
     build: .
     depends_on: [ollama]
     ports:
-      - "${PORT:-8080}:8080"
+      - "127.0.0.1:${PORT:-8080}:8080"
     environment:
       OLLAMA_URL: http://ollama:11434
       CODIST_MODEL: ${CODIST_MODEL:-qwen2.5-coder:14b}

@@ -20,5 +20,6 @@ RUN git config --system --add safe.directory '*'
 COPY --from=server /codist /usr/local/bin/codist
 ENV CODIST_REPO=/repo CODIST_DATA_DIR=/data
 VOLUME /data
+ENV CODIST_ADDR=:8080
 EXPOSE 8080
 ENTRYPOINT ["codist", "--no-open"]

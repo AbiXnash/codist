@@ -30,7 +30,10 @@ type Config struct {
 	NumCtx       int
 	LLMTimeout   time.Duration
 
-	AutoReview   bool
+	AutoReview bool
+	// Switches for measuring what each part earns; see eval/run.py. All off in normal use.
+	NoRules, NoRAG, NoFacts, NoFilters bool
+
 	ModelReview  bool // false: reviews run rules and analysers only; fixes and Ask still use the model
 	MaxFiles     int
 	Tools        string // static analysers: auto (PMD + SpotBugs when Maven is available), off, or a list
@@ -65,11 +68,15 @@ func Load() Config {
 
 		AutoReview:   envBool("CODIST_AUTO_REVIEW", true),
 		ModelReview:  envBool("CODIST_MODEL_REVIEW", true),
+		NoRules:      envBool("CODIST_NO_RULES", false),
+		NoRAG:        envBool("CODIST_NO_RAG", false),
+		NoFacts:      envBool("CODIST_NO_FACTS", false),
+		NoFilters:    envBool("CODIST_NO_FILTERS", false),
 		MaxFiles:     envInt("CODIST_MAX_FILES", 8),
 		Tools:        env("CODIST_TOOLS", "auto"),
 		MaxFileLines: 600,
 
-		Addr:   env("CODIST_ADDR", ":"+env("PORT", "8080")),
+		Addr:   env("CODIST_ADDR", "127.0.0.1:"+env("PORT", "8080")),
 		WebDir: os.Getenv("CODIST_WEB_DIR"),
 	}
 }

@@ -506,21 +506,27 @@ func (s *Service) rulePass(a Analysis, f gitx.FileChange, kb *knowledge.Base, bu
 			fr.Findings[i].Snippet = lineAt(in.lines, fr.Findings[i].Line)
 		}
 	}
+	if s.cfg.NoRules {
+		fr.Findings = []Finding{}
+	}
 	return fr, in, true
 }
 
 // modelPass asks the model for what rules cannot see, with a prompt that fits the context window.
 func (s *Service) modelPass(a Analysis, f gitx.FileChange, fr FileReview, in fileInput, kb *knowledge.Base, build Build) FileReview {
 	fr.Pending = false
-	if trivial(in.lines, f.AddedLines) {
+	if !s.cfg.NoFilters && trivial(in.lines, f.AddedLines) {
 		fr.Skipped = "only imports, comments or formatting changed"
 		return fr
 	}
-	if strings.HasSuffix(f.NewPath, ".java") && javaidx.DataOnly([]byte(in.src)) {
+	if !s.cfg.NoFilters && strings.HasSuffix(f.NewPath, ".java") && javaidx.DataOnly([]byte(in.src)) {
 		fr.Skipped = "only data: fields, getters and setters, which the rules cover"
 		return fr
 	}
-	known := kb.Retrieve(f.NewPath, in.src, in.added, 6) // RAG: the bug patterns most like this code
+	var known []knowledge.Entry
+	if !s.cfg.NoRAG {
+		known = kb.Retrieve(f.NewPath, in.src, in.added, 6) // RAG: the bug patterns most like this code
+	}
 	prompt := s.fileContext(a, f, in, fr.Findings, known, build)
 
 	system := prompts.Get("review-file") // part of the cache key, so editing the prompt re-reviews
@@ -552,31 +558,10 @@ func (s *Service) modelPass(a Analysis, f gitx.FileChange, fr FileReview, in fil
 		}
 		line := clamp(num(x["line"], 1), len(in.lines))
 		end := clamp(max(line, num(x["endLine"], line)), len(in.lines))
-		// Findings on blank or brace-only lines are usually hallucinated positions: snap to the
-		// nearest real code within two lines, or drop.
-		if line = snapToCode(in.lines, line); line == 0 {
-			continue
-		}
+		line = snapToCode(in.lines, line)
 		end = max(end, line)
-		// A model that cannot quote the code it is talking about has usually made the problem up.
-		if ev := str(x["evidence"]); ev != "" && !quotesCode(in.lines, ev) {
-			Activities.Step("Dropped a finding that quotes code not in the file", a.Commit.SHA, f.NewPath, str(x["title"]), 0)
-			continue
-		}
-		if vagueAdvice(str(x["title"])) {
-			continue
-		}
-		// Rules are authoritative for what they check: if the model claims one of those problems
-		// and the rule did not fire, the model is wrong.
-		if k := ruleCovered(str(x["ref"]), str(x["title"])); k != "" && !slices.ContainsFunc(fr.Findings, func(r Finding) bool { return r.Ref == k }) {
-			continue
-		}
-		// A rule already explains this precisely (same lines, or the same rule anywhere in the
-		// file, since the model is often a line or two off); drop the model's echo of it.
-		ref := str(x["ref"])
-		if slices.ContainsFunc(fr.Findings, func(r Finding) bool {
-			return r.Source == "rule" && ((r.Line <= end+1 && r.EndLine >= line-1) || (ref != "" && r.Ref == ref))
-		}) {
+		if why := dropReason(x, line, end, in.lines, fr.Findings, s.cfg.NoFilters); why != "" {
+			Activities.Step("Dropped a model finding: "+why, a.Commit.SHA, f.NewPath, str(x["title"]), 0)
 			continue
 		}
 		onChange := false
@@ -604,9 +589,42 @@ func (s *Service) modelPass(a Analysis, f gitx.FileChange, fr FileReview, in fil
 	return fr
 }
 
+// dropReason says why a model finding is not reported, or "" to keep it. Every drop is logged, so a
+// measurement can show what the filters cost. line is 0 when no real code is near the claimed line;
+// that has nowhere to be shown, so it is dropped even with the filters off.
+func dropReason(x map[string]any, line, end int, lines []string, existing []Finding, filtersOff bool) string {
+	if line == 0 {
+		return "no code near the line it names"
+	}
+	if filtersOff {
+		return ""
+	}
+	// A model that cannot quote the code it is talking about has usually made the problem up.
+	if ev := str(x["evidence"]); ev != "" && !quotesCode(lines, ev) {
+		return "quotes code not in the file"
+	}
+	title, ref := str(x["title"]), str(x["ref"])
+	if vagueAdvice(title) {
+		return "vague advice"
+	}
+	// Rules are authoritative for what they check: if the model claims one of those problems and the
+	// rule did not fire, the model is wrong.
+	if k := ruleCovered(ref, title); k != "" && !slices.ContainsFunc(existing, func(r Finding) bool { return r.Ref == k }) {
+		return "claims rule " + k + ", which did not fire"
+	}
+	// A rule already explains this precisely (same lines, or the same rule anywhere in the file, since
+	// the model is often a line or two off).
+	if slices.ContainsFunc(existing, func(r Finding) bool {
+		return r.Source == "rule" && ((r.Line <= end+1 && r.EndLine >= line-1) || (ref != "" && r.Ref == ref))
+	}) {
+		return "repeats a rule finding"
+	}
+	return ""
+}
+
 // deterministic lists the rule ids whose checks are exhaustive for their pattern.
 var deterministic = map[string]string{
-	"uninjected-dependency": "inject", "console-output": "system.out", "optional-get-unchecked": "optional.get",
+	"uninjected-dependency": "uninjected", "console-output": "system.out", "optional-get-unchecked": "optional.get",
 	"sql-injection": "concatenat", "bigdecimal-double": "bigdecimal(double", "swallowed-exception": "empty catch",
 	"tx-self-invocation": "self-invocation", "field-injection": "field injection", "literal-instead-of-constant": "duplicates constant",
 }
@@ -618,7 +636,7 @@ func ruleCovered(ref, title string) string {
 	}
 	t := strings.ToLower(title)
 	for id, kw := range deterministic {
-		if strings.Contains(t, kw) || (id == "uninjected-dependency" && strings.Contains(t, "uninjected")) {
+		if strings.Contains(t, kw) {
 			return id
 		}
 	}
@@ -665,7 +683,7 @@ func (s *Service) fileContext(a Analysis, f gitx.FileChange, in fileInput, known
 	add("## Project overview", overview, 7, 300)
 	add("## Commit", strings.TrimSpace(a.Commit.FullMessage)+"\n", 6, 200)
 
-	if len(in.types) > 0 {
+	if len(in.types) > 0 && !s.cfg.NoFacts {
 		own := map[string]bool{}
 		for _, t := range in.types {
 			own[t.ID] = true
@@ -718,7 +736,7 @@ func (s *Service) fileContext(a Analysis, f gitx.FileChange, in fileInput, known
 	}
 
 	// Verified facts about what the change reaches, so the model reasons over them rather than guessing.
-	if a.Commit.SHA != "" && a.Commit.SHA != WorkingSHA && strings.HasSuffix(f.NewPath, ".java") {
+	if !s.cfg.NoFacts && a.Commit.SHA != "" && a.Commit.SHA != WorkingSHA && strings.HasSuffix(f.NewPath, ".java") {
 		add("## What the changed methods reach (measured from the code; \"possible\" means matched by name only)", impactSection(ImpactFor(s.repo, a), f.NewPath), 3, 600)
 	}
 
@@ -729,7 +747,7 @@ func (s *Service) fileContext(a Analysis, f gitx.FileChange, in fileInput, known
 	if told := s.Memory.ForPrompt(f.NewPath, ""); told != "" {
 		add("## What the developers of this repository told you (follow it; do not suggest what they rejected)", told, 1, 500)
 	}
-	if costs := methodCosts(in); costs != "" {
+	if costs := methodCosts(in); costs != "" && !s.cfg.NoFacts {
 		add("## What the changed methods cost (measured, not guessed)", costs, 2, 300)
 	}
 	if len(guidelines) > 0 {
