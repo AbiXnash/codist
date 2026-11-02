@@ -31,6 +31,7 @@ type Config struct {
 	LLMTimeout   time.Duration
 
 	AutoReview   bool
+	ModelReview  bool // false: reviews run rules and analysers only; fixes and Ask still use the model
 	MaxFiles     int
 	Tools        string // static analysers: auto (PMD + SpotBugs when Maven is available), off, or a list
 	MaxFileLines int
@@ -59,10 +60,11 @@ func Load() Config {
 		SummaryModel: os.Getenv("CODIST_SUMMARY_MODEL"),
 		FixModel:     os.Getenv("CODIST_FIX_MODEL"),
 		AskModel:     os.Getenv("CODIST_ASK_MODEL"),
-		NumCtx:       envInt("CODIST_NUM_CTX", 16384),
+		NumCtx:       envInt("CODIST_NUM_CTX", 8192),
 		LLMTimeout:   10 * time.Minute,
 
 		AutoReview:   envBool("CODIST_AUTO_REVIEW", true),
+		ModelReview:  envBool("CODIST_MODEL_REVIEW", true),
 		MaxFiles:     envInt("CODIST_MAX_FILES", 8),
 		Tools:        env("CODIST_TOOLS", "auto"),
 		MaxFileLines: 600,

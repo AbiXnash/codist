@@ -105,6 +105,13 @@
       "file": "book/IsbnValidator.java",
       "near": "charAt(i) - '0'",
       "match": "digit|numeric|non|letter|character|invalid"
+    },
+    {
+      "id": "join-race",
+      "kind": "logic",
+      "file": "member/MemberService.java",
+      "near": "members.findByEmail(email).isPresent()",
+      "match": "race|concurren|check-then|duplicate|unique"
     }
   ],
   "clean": [

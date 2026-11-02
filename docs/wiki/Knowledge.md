@@ -1,5 +1,7 @@
 # Knowledge, prompts and memory
 
+To see how much all of this helps, measure it: [Model quality](Model-quality.md).
+
 ## Memory screen
 
 **Memory** lists what this repository has added on top of the base knowledge: what people taught it, rejected fixes,

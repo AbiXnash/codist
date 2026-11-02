@@ -136,7 +136,9 @@ func main() {
 	}
 	go learn()
 	reviews.OnDone = func(sha string) {
-		srv.Fixer.Prefetch(sha)
+		if cfg.ModelReview {
+			srv.Fixer.Prefetch(sha)
+		}
 		go learn() // fixes and dismissals become knowledge for the next review
 	}
 	srv.SignOffs = review.NewSignOffs(cfg.DataDir, repo.Name())

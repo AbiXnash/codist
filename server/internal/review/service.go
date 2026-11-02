@@ -255,7 +255,7 @@ func (s *Service) run(sha string) {
 		if ok {
 			fr.Findings = mergeAnalysis(fr.Findings, res.Findings, f.NewPath, in)
 		}
-		fr.Pending = ok && problem == ""
+		fr.Pending = ok && problem == "" && s.cfg.ModelReview
 		if ok && problem != "" {
 			fr.Error = problem
 		}
@@ -271,6 +271,8 @@ func (s *Service) run(sha string) {
 	switch {
 	case len(targets) == 0:
 		r.Summary = "No reviewable source changes in this commit."
+	case !s.cfg.ModelReview:
+		r.Summary = "Only the static checks ran: model review is off (CODIST_MODEL_REVIEW)."
 	case problem != "":
 		r.Summary = problem + ". Only the static checks ran."
 	default:

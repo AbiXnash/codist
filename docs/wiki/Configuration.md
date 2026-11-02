@@ -17,7 +17,9 @@ All settings are environment variables:
 | `CODIST_FIX_MODEL` | same as `CODIST_MODEL` | Optional model for fixes and code changes |
 | `CODIST_ASK_MODEL` | same as `CODIST_MODEL` | Optional model for Ask and incident explanations |
 | `OLLAMA_URL` | `http://localhost:11434` | Ollama-compatible endpoint |
-| `CODIST_NUM_CTX` | `16384` | Context window requested from the model |
+| `CODIST_NUM_CTX` | `8192` | Context window requested from the model |
+| `CODIST_MODEL_REVIEW` | `true` | `false` makes reviews use rules and analysers only, in seconds. Fixes and Ask still use the model. |
+| `CODIST_FEATURES` | | An extra [features.json](Feature-flags.md), applied last |
 | `CODIST_DATA_DIR` | `~/.codist` | Reviews, caches, prompts, incidents and ignores |
 | `CODIST_TOOLS` | `auto` | `auto`, `off`, or a list of static analysers |
 | `CODIST_MAX_FILES` | `8` | Maximum files reviewed per commit |

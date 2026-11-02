@@ -27,7 +27,7 @@ ollama pull qwen2.5-coder:7b
 
 Use any Ollama model that follows instructions and returns JSON reasonably well — Codist asks for
 strict JSON and retries once on malformed output, but small or chat-only models produce weaker findings.
-The model gets a 16k-token context by default (`CODIST_NUM_CTX`).
+The model gets an 8k-token context by default (`CODIST_NUM_CTX`).
 
 Different jobs can use different models, which is useful on machines that can only keep one model in memory:
 
