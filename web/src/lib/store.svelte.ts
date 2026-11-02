@@ -1,6 +1,6 @@
 import { api, cancelAI } from './api';
 import { cycles, layerViolations, metrics } from './graphAnalysis';
-import type { BranchFix, FixRef, Working, AskMessage, CommitItem, Detail, FindingWithPath, FixProposal, Graph, IgnoreScope, Incident, Issue, IssueList, IncidentRow, Mode, OpenFile, Severity, Status, Tab, Flags } from './types';
+import type { FixRef, Working, AskMessage, CommitItem, Detail, FindingWithPath, FixProposal, Graph, IgnoreScope, Incident, Issue, IssueList, IncidentRow, Mode, OpenFile, Severity, Status, Tab, Flags } from './types';
 
 export interface Toast {
   id: number;
@@ -129,7 +129,6 @@ class AppState {
   kind = $state<string | null>(null);
   urgency = $state<string | null>(null);
   change = $state<string | null>(null);
-  stage = $state<string | null>(null);
   hubQuery = $state('');
   /** The issue open in the hub's detail view (id of its root). */
   picked = $state<string | null>(null);
@@ -151,8 +150,6 @@ class AppState {
   hiddenEdges = $state<string[]>([]);
   graphQuery = $state('');
   graphQueryMode = $state<'highlight' | 'only'>('highlight');
-  /** The fix-in-all-branches dialog. */
-  branchFix = $state.raw<{ commit: string; title: string; targets: BranchFix[] } | null>(null);
   /** What features.json turned on. Until it loads, everything is on. */
   flags = $state.raw<Flags | null>(null);
   menuOn = (name: string) => this.flags?.menus[name] !== false;
@@ -160,7 +157,7 @@ class AppState {
   featureOn = (name: string) => this.flags?.features[name] !== false;
   /** The centre of Review: how the code connects, or how the branches relate. */
   centre = $state<'code' | 'branches'>(prefStr('centre', ['code', 'branches'] as const, 'code'));
-  layoutMode = $state<'natural' | 'layers' | 'services' | 'hubs'>(prefStr('layoutMode', ['natural', 'layers', 'services', 'hubs'] as const, 'natural'));
+  layoutMode = $state<'natural' | 'layers' | 'services'>(prefStr('layoutMode', ['natural', 'layers', 'services'] as const, 'natural'));
   sizeBy = $state<'links' | 'lines' | 'issues'>(prefStr('sizeBy', ['links', 'lines', 'issues'] as const, 'links'));
   showLabels = $state(pref('labels', true));
   /** Analysis drawn over the graph. */
@@ -203,8 +200,7 @@ class AppState {
   scoped: Issue[][] = $derived(this.groupsIn(this.issueState));
   /** What the hub lists and the graph highlights. */
   hub: Issue[][] = $derived(this.scoped.filter((g) => (!this.level || g[0].severity === this.level) && (!this.kind || g[0].kind === this.kind) &&
-    (!this.urgency || g[0].urgency === this.urgency) && (!this.change || g[0].change === this.change) &&
-    (!this.stage || (this.stage === 'unassigned' ? !g[0].assignee : this.stage === 'mine' ? this.isMe(g[0].assignee) : g[0].stage === this.stage))));
+    (!this.urgency || g[0].urgency === this.urgency) && (!this.change || g[0].change === this.change)))
 
   /** The types and links that pass the graph filters. */
   graphView = $derived.by(() => {
@@ -340,27 +336,15 @@ export async function loadIssues() {
 }
 
 /**
- * Moves an issue through its workflow, and does what the move means:
- * start assigns it to you, fix opens the fix, won't fix ignores it and remembers why, and so on.
+ * Closes or reopens an issue. Won't fix ignores it and remembers why.
  */
-export async function issueAction(group: Issue[], action: 'start' | 'review' | 'stop' | 'fixed' | 'wontfix' | 'reopen', reason = '') {
+export async function issueAction(group: Issue[], action: 'fixed' | 'wontfix' | 'reopen', reason = '') {
   const ids = group.map((i) => i.id);
   const lead = group[0];
   try {
     switch (action) {
-      case 'start':
-        await api.setStage(ids, 'in-progress', app.status?.user ?? '');
-        toast(`In progress, assigned to ${app.status?.user || 'you'}`, 'good', 2000);
-        break;
-      case 'review':
-        await api.setStage(ids, 'in-review', lead.assignee || (app.status?.user ?? ''));
-        break;
-      case 'stop':
-        await api.setStage(ids, '', '');
-        break;
       case 'fixed':
         for (const id of ids) await api.markFixed(id);
-        await api.setStage(ids, '', '');
         toast(group.length > 1 ? `Closed ${group.length} places` : 'Closed as fixed', 'good', 2000);
         app.picked = null;
         break;
@@ -368,7 +352,6 @@ export async function issueAction(group: Issue[], action: 'start' | 'review' | '
         for (const i of group) {
           await api.ignore({ scope: 'code', sha: i.lastSeen, path: i.path, line: i.reviewLine, title: i.title, team: false });
         }
-        await api.setStage(ids, '', '');
         // The reason teaches later reviews, so the same suggestion is not made again.
         if (reason.trim()) await api.addMemory({ text: reason.trim(), kind: 'rejected-fix', title: lead.title, ref: lead.ref, path: lead.path, snippet: lead.snippet });
         toast(reason.trim() ? 'Closed as won\'t fix; Codist will remember why' : 'Closed as won\'t fix', 'good', 2500);
@@ -573,27 +556,12 @@ export async function applyFix(message: string) {
     app.fix = null;
     if (commit) {
       toast(`Committed ${commit.slice(0, 7)} · reviewing the fix`, 'good', 5000);
-      void offerBranchFix(commit, f.finding.title, true);
     }
     else toast('Applied to your working tree · commit it with your changes', 'good', 5000);
     void loadIssues();
     void loadWorking();
   } catch (e) {
     app.fix = { ...f, busy: null, error: (e as Error).message };
-  }
-}
-
-/**
- * Looks for the same code on other branches. After a fix it stays quiet when nothing else needs it;
- * asked for directly, it says so.
- */
-export async function offerBranchFix(commit: string, title: string, quiet = false) {
-  try {
-    const targets = await api.branchFixes(commit);
-    if (quiet && !targets.some((t) => t.status === 'ready' || t.status === 'conflict' || t.status === 'skipped')) return;
-    app.branchFix = { commit, title, targets };
-  } catch (e) {
-    if (!quiet) toast((e as Error).message, 'bad');
   }
 }
 
@@ -706,8 +674,7 @@ export function connect() {
 
   es.addEventListener('activity', (e) => window.dispatchEvent(new CustomEvent('codist:activity', { detail: JSON.parse((e as MessageEvent).data) })));
 
-  // The release screen reloads its checklist when anyone ticks an item.
-  es.addEventListener('signoff', (e) => window.dispatchEvent(new CustomEvent('codist:signoff', { detail: JSON.parse((e as MessageEvent).data) })));
+  // when anyone ticks an item.
 
   es.addEventListener('incident', async (e) => {
     const d = JSON.parse((e as MessageEvent).data) as { id: string; status: string };

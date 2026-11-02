@@ -38,26 +38,22 @@ func TestClosedIssuesStayOnTheirBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	tr := &Tracker{repo: repo}
-	if _, here := tr.closedHere(Resolution{Commit: fix}); !here {
+	if !tr.closedHere(Resolution{Commit: fix}) {
 		t.Error("closed by a commit on this branch")
 	}
-	if _, here := tr.closedHere(Resolution{Manual: true, Branch: "main"}); !here {
+	if !tr.closedHere(Resolution{Manual: true, Branch: "main"}) {
 		t.Error("marked fixed on this branch")
 	}
 	if err := repo.SwitchBranch("other"); err != nil {
 		t.Fatal(err)
 	}
-	if _, here := tr.closedHere(Resolution{Commit: fix}); here {
+	if tr.closedHere(Resolution{Commit: fix}) {
 		t.Error("the fix is not on this branch, so it still has the bug")
 	}
-	if _, here := tr.closedHere(Resolution{Manual: true, Branch: "main"}); here {
+	if tr.closedHere(Resolution{Manual: true, Branch: "main"}) {
 		t.Error("marked fixed on another branch")
 	}
-	other := run("rev-parse", "other")
-	if res, here := tr.closedHere(Resolution{Commit: fix, Also: []string{other}}); !here || res.Commit != other {
-		t.Errorf("the fix was cherry-picked here: %+v, %v", res, here)
-	}
-	if _, here := tr.closedHere(Resolution{Manual: true}); !here {
+	if !tr.closedHere(Resolution{Manual: true}) {
 		t.Error("older records apply everywhere")
 	}
 }

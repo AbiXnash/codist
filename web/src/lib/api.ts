@@ -1,11 +1,11 @@
-import type { Activity, DevAdvice, TeamReport, BranchFix, Flags, PeopleReport, HistoryCommit, BranchRef, BranchReport, MemoryItem, MemoryReport, PlannedCommit, RepoReport, FixRef, Working, CommitItem, DependencyReport, Detail, FixProposal, Graph, Incident, IncidentRow, IssueList, RcaReport, ReleaseReport, SignOff, Status } from './types';
+import type { Activity, TeamReport, Flags, PeopleReport, HistoryCommit, BranchRef, BranchReport, MemoryItem, MemoryReport, PlannedCommit, RepoReport, FixRef, Working, CommitItem, DependencyReport, Detail, FixProposal, Graph, Incident, IncidentRow, IssueList, RcaReport, ReleaseReport, Status } from './types';
 
 const json = (method: string, body?: unknown): RequestInit => ({
   method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body),
 });
 
 // Requests that wait for the model: Cancel aborts them, and the server stops the model too.
-const AI_PATH = /^\/(fix|edit|tests|team\/advice|working\/message|commits\/[^/]+\/message|incidents\/[^/]+\/(fix|test|rule|runbook))$/;
+const AI_PATH = /^\/(fix|edit|tests|working\/message|commits\/[^/]+\/message|incidents\/[^/]+\/(fix|test|rule|runbook))$/;
 let aiAbort: AbortController | null = null;
 
 export function cancelAI() {
@@ -33,13 +33,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   status: () => request<Status>('/status'),
-  setStage: (ids: string[], stage: string, assignee: string) => fetch('/api/issues/stage', json('POST', { ids, stage, assignee })),
   features: () => request<Flags>('/features'),
   people: () => request<PeopleReport>('/people'),
-  branchFixes: (sha: string) => request<BranchFix[]>(`/commits/${sha}/branch-fix`),
-  applyToBranches: (sha: string, branches: string[]) => request<BranchFix[]>(`/commits/${sha}/branch-fix`, json('POST', { branches })),
   team: () => request<TeamReport>('/team'),
-  devAdvice: (name: string) => request<DevAdvice>('/team/advice', json('POST', { name })),
   refs: () => request<BranchRef[]>('/refs'),
   history: (branches: string[]) => request<HistoryCommit[]>(`/history${branches.length ? `?branches=${encodeURIComponent(branches.join(','))}` : ''}`),
   follow: (name: string) => request<{ branch: string }>('/refs/follow', json('POST', { name })),
@@ -56,7 +52,6 @@ export const api = {
   commitPaths: (files: string[], message: string) => request<{ commit: string }>('/working/commit', json('POST', { files, message })),
   betterMessage: (sha: string) => request<{ message: string; why: string; pushed: boolean }>(`/commits/${sha}/message`, json('POST', {})),
   reword: (sha: string, message: string) => request<{ commit: string; rewritten: number }>(`/commits/${sha}/reword`, json('POST', { message })),
-  resetSignOff: () => fetch('/api/release/signoff', { method: 'DELETE' }),
   markFixed: (id: string) => fetch(`/api/issues/${id}/resolve`, { method: 'POST' }),
   reopenIssue: (id: string) => fetch(`/api/issues/${id}/resolve`, { method: 'DELETE' }),
   graph: () => request<Graph>('/graph'),
@@ -94,14 +89,9 @@ export const api = {
   saveRule: (yaml: string, team: boolean) => request<{ saved: number; file: string; total: number }>('/rules/learned', json('POST', { yaml, team })),
   issueTest: (body: { path: string; line: number; title: string; detail: string }) => request<FixProposal>('/tests', json('POST', body)),
   release: (to?: string) =>
-    request<{ report: ReleaseReport; signoff: SignOff; markdown: string; refs: { ref: string; label: string }[] }>(
+    request<{ report: ReleaseReport; markdown: string; refs: { ref: string; label: string }[] }>(
       `/release${to ? `?to=${encodeURIComponent(to)}` : ''}`),
   dependencies: () => request<DependencyReport>('/dependencies'),
-  signOff: async (to: string, text: string, done: boolean, custom = false) => {
-    const r = await fetch('/api/release/signoff', json('POST', { to, text, done, custom }));
-    if (!r.ok) throw new Error((await r.json()).error ?? r.statusText);
-  },
-  removeSignOff: (to: string, id: string) => fetch(`/api/release/signoff/${to}/${id}`, { method: 'DELETE' }),
   file: (path: string, sha: string | null) =>
     request<{ content: string }>(`/file?path=${encodeURIComponent(path)}${sha ? `&sha=${sha}` : ''}`),
 };

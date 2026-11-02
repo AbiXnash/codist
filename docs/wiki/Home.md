@@ -11,6 +11,6 @@
 | [Branches](Branches.md) | Viewing any branch, conflict alerts, rewording |
 | [Knowledge](Knowledge.md) | Prompts, bugbase, analysers (jdtls, PMD, SpotBugs), memory |
 | [Model quality](Model-quality.md) | What the model adds, measuring it, faster reviews, training |
-| [Release](Release.md) | Repository readiness and sign-off |
+| [Release](Release.md) | Repository readiness |
 | [Incidents](Incidents.md) | Root cause analysis from logs |
 | [Architecture](Architecture.md) | How it works, speed, tests |

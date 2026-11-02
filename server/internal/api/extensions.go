@@ -34,23 +34,6 @@ func (s *Server) extensionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/rules/learned", s.saveLearnedRule)
 	mux.HandleFunc("POST /api/tests", s.issueTest)
 	mux.HandleFunc("GET /api/release", s.release)
-	mux.HandleFunc("POST /api/release/signoff", s.signOff)
-	mux.HandleFunc("DELETE /api/release/signoff", func(w http.ResponseWriter, r *http.Request) {
-		if err := s.SignOffs.Reset(review.RepoSignOff); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		s.Hub.Publish("signoff", map[string]string{"to": review.RepoSignOff})
-		w.WriteHeader(http.StatusNoContent)
-	})
-	mux.HandleFunc("DELETE /api/release/signoff/{to}/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if err := s.SignOffs.Remove(r.PathValue("to"), r.PathValue("id")); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		s.Hub.Publish("signoff", map[string]string{"to": r.PathValue("to")})
-		w.WriteHeader(http.StatusNoContent)
-	})
 	mux.HandleFunc("GET /api/dependencies", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, review.Dependencies(s.Repo)) })
 }
 
@@ -422,7 +405,6 @@ func (s *Server) release(w http.ResponseWriter, r *http.Request) {
 		s.relCache[key] = rep
 		s.relMu.Unlock()
 	}
-	so := s.SignOffs.For(review.RepoSignOff, rep.Checklist) // one sign-off for the repository, kept as it moves
 	refs := []map[string]string{}
 	for i, c := range s.Repo.Log(30) {
 		label := c.ShortSHA + " " + c.Message
@@ -434,28 +416,7 @@ func (s *Server) release(w http.ResponseWriter, r *http.Request) {
 	for _, t := range s.Repo.Tags() {
 		refs = append(refs, map[string]string{"ref": t, "label": "tag " + t})
 	}
-	writeJSON(w, map[string]any{"report": rep, "signoff": so, "markdown": review.ReleaseMarkdown(rep, so), "refs": refs})
-}
-
-// signOff ticks, unticks or adds an item on the release target's checklist.
-func (s *Server) signOff(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		To     string `json:"to"`
-		Text   string `json:"text"`
-		Done   bool   `json:"done"`
-		Custom bool   `json:"custom"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request")
-		return
-	}
-	by := s.Repo.UserName()
-	if err := s.SignOffs.Set(review.RepoSignOff, req.Text, req.Done, req.Custom, by); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	s.Hub.Publish("signoff", map[string]string{"to": review.RepoSignOff})
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, map[string]any{"report": rep, "markdown": review.ReleaseMarkdown(rep), "refs": refs})
 }
 
 func slugify(s string) string {

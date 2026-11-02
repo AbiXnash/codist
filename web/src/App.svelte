@@ -4,7 +4,6 @@
   import { preload } from './lib/highlight';
   import TopBar from './components/TopBar.svelte';
   import Sidebar from './components/Sidebar.svelte';
-  import BranchFixDialog from './components/BranchFixDialog.svelte';
   import LeftDock from './components/LeftDock.svelte';
   import BranchGraph from './components/BranchGraph.svelte';
   import RepoView from './components/RepoView.svelte';
@@ -113,7 +112,6 @@
 </div>
 
 <FixDialog />
-<BranchFixDialog />
 <Toasts />
 
 <style>

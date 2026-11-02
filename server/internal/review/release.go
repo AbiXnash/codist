@@ -14,7 +14,7 @@ import (
 	"codist/internal/knowledge"
 )
 
-// ReleaseReport is the state of the whole codebase at the release commit, for sign-off.
+// ReleaseReport is the state of the whole codebase at the release commit, for a release decision.
 // It does not depend on which commits came before: every file is checked as it is.
 type ReleaseReport struct {
 	To            string    `json:"to"`
@@ -30,7 +30,6 @@ type ReleaseReport struct {
 	BuildFindings []Finding `json:"buildFindings"`
 	Risk          string    `json:"risk"`
 	Reasons       []string  `json:"reasons"`
-	Checklist     []string  `json:"checklist"`
 }
 
 type Module struct {
@@ -43,7 +42,7 @@ type Module struct {
 // tracked findings whose code is still there, and judges the risk from all of it.
 func Release(repo *gitx.Repo, tracker *Tracker, store *Store, ignores *Ignores, kb *knowledge.Base, to, label string) ReleaseReport {
 	rep := ReleaseReport{To: to, ToLabel: label, NotReviewed: []string{}, Modules: []Module{}, Open: []Issue{},
-		BuildFindings: []Finding{}, Reasons: []string{}, Checklist: []string{}}
+		BuildFindings: []Finding{}, Reasons: []string{}}
 	files := repo.JavaFilesAt(to)
 	g := javaidx.Index(files, to)
 	ctx := javaidx.ProjectContext(&g)
@@ -217,25 +216,6 @@ func Release(repo *gitx.Repo, tracker *Tracker, store *Store, ignores *Ignores, 
 	}
 	rep.Risk = worst
 
-	// The checklist depends only on the code at the release commit, so the sign-off stays stable.
-	if n := sev["critical"] + sev["high"]; n > 0 {
-		rep.Checklist = append(rep.Checklist, fmt.Sprintf("Fix or explicitly accept the %d critical/high issue(s) before release", n))
-	}
-	for _, f := range buildBlockers {
-		rep.Checklist = append(rep.Checklist, "Resolve the build issue: "+f.Title)
-	}
-	if len(rep.NotReviewed) > 0 {
-		rep.Checklist = append(rep.Checklist, fmt.Sprintf("Spot-check the %d source file(s) the model has not reviewed", len(rep.NotReviewed)))
-	}
-	tested := 0
-	for _, m := range rep.Modules {
-		if tested == 3 || m.Issues == 0 || strings.HasPrefix(m.Name, "tests: ") || strings.Contains(m.Name, "/") || m.Name == "build" {
-			continue
-		}
-		rep.Checklist = append(rep.Checklist, "Run the regression tests for "+m.Name)
-		tested++
-	}
-	rep.Checklist = append(rep.Checklist, "Run the full test suite and smoke tests")
 	return rep
 }
 
@@ -299,8 +279,8 @@ func buildAt(repo *gitx.Repo, sha string) (Build, bool) {
 	return Build{}, false
 }
 
-// ReleaseMarkdown renders the report for sharing, with the sign-off state.
-func ReleaseMarkdown(r ReleaseReport, so SignOff) string {
+// ReleaseMarkdown renders the report for sharing.
+func ReleaseMarkdown(r ReleaseReport) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Release risk report\n\n_%s · whole codebase: %d files, %d lines · %s · risk: **%s**_\n\n",
 		orDefault(r.ToLabel, shortSHA(r.To)), r.Files, r.Lines, time.Now().Format("2006-01-02"), r.Risk)
@@ -335,19 +315,6 @@ func ReleaseMarkdown(r ReleaseReport, so SignOff) string {
 	}
 	list("Modules", mods)
 	fmt.Fprintf(&b, "Model review coverage: %d of %d source files.\n\n", r.Reviewed, r.Sources)
-	fmt.Fprintf(&b, "## Sign-off checklist (%d / %d)\n\n", so.Done, so.Total)
-	for _, it := range so.Items {
-		if !it.Current {
-			continue
-		}
-		mark := " "
-		who := ""
-		if it.Done {
-			mark = "x"
-			who = fmt.Sprintf(" — %s, %s", orDefault(it.By, "someone"), time.UnixMilli(it.At).Format("2006-01-02 15:04"))
-		}
-		fmt.Fprintf(&b, "- [%s] %s%s\n", mark, it.Text, who)
-	}
 	return b.String()
 }
 

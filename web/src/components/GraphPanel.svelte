@@ -188,7 +188,7 @@
     {#if open.view}
       <div class="label">Shape</div>
       <div class="grid3">
-        {#each [['natural', 'Graph', 'Force-directed: related classes pull together. Drag anything.'], ['layers', 'Layers', 'Controllers, then services, repositories, entities'], ['services', 'Services', 'One node per service, with their calls'], ['hubs', 'Hubs', 'Most connected in the middle']] as [v, t, d]}
+        {#each [['natural', 'Graph', 'Force-directed: related classes pull together. Drag anything.'], ['layers', 'Layers', 'Controllers, then services, repositories, entities'], ['services', 'Services', 'One node per service, with their calls']] as [v, t, d]}
           <button class:on={app.layoutMode === v} title={d} onclick={() => setLayout(v as typeof app.layoutMode)}>{t}</button>
         {/each}
       </div>
@@ -359,7 +359,7 @@
   .seg.wide button { flex: 1; padding: 0 3px; }
   .seg button { height: 24px; padding: 0 8px; border: 0; border-radius: var(--r); background: none; font-size: 11.5px; color: var(--text-3); white-space: nowrap; }
   .seg button.on, .grid3 button.on { color: var(--text); background: var(--surface-3); box-shadow: var(--raised); }
-  .grid3 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
   .grid3 button { height: 24px; border: 0; border-radius: var(--r); background: none; font-size: 11.5px; color: var(--text-3); }
   .chips { display: flex; flex-wrap: wrap; gap: 4px; }
   .chip-t { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); font-size: 11.5px; color: var(--text); }

@@ -46,7 +46,6 @@ type Server struct {
 	peopleMu  sync.Mutex
 	people    *review.PeopleReport
 	Incidents *incident.Engine
-	SignOffs  *review.SignOffs
 	Memory    *review.Memory
 
 	relMu    sync.Mutex
@@ -260,29 +259,6 @@ func (s *Server) Handler() http.Handler {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("POST /api/issues/stage", func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			IDs      []string `json:"ids"`
-			Stage    string   `json:"stage"`
-			Assignee string   `json:"assignee"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.IDs) == 0 {
-			writeError(w, http.StatusBadRequest, "which issues?")
-			return
-		}
-		switch req.Stage {
-		case "", "in-progress", "in-review":
-		default:
-			writeError(w, http.StatusBadRequest, "unknown stage")
-			return
-		}
-		if err := s.Tracker.Work.Set(req.IDs, req.Stage, req.Assignee); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		s.Hub.Publish("ignores", map[string]string{"changed": "workflow"})
-		w.WriteHeader(http.StatusNoContent)
-	})
 	mux.HandleFunc("GET /api/prompts", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, prompts.All()) })
 	mux.HandleFunc("GET /api/working", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, review.WorkingReview(s.Repo, s.Fixer.Rules, s.Reviews.Ignores))
@@ -299,61 +275,6 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /api/team", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, s.team())
-	})
-	mux.HandleFunc("POST /api/team/advice", func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			Name string `json:"name"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
-			writeError(w, http.StatusBadRequest, "a name is required")
-			return
-		}
-		for _, p := range s.team().People {
-			if p.Name == req.Name {
-				advice, err := s.Fixer.DevAdvice(r.Context(), p)
-				if err != nil {
-					writeError(w, http.StatusBadGateway, err.Error())
-					return
-				}
-				writeJSON(w, advice)
-				return
-			}
-		}
-		writeError(w, http.StatusNotFound, "no commits by "+req.Name+" on this branch")
-	})
-	mux.HandleFunc("GET /api/commits/{sha}/branch-fix", func(w http.ResponseWriter, r *http.Request) {
-		out, err := s.Repo.BranchFixes(r.PathValue("sha"))
-		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		writeJSON(w, out)
-	})
-	mux.HandleFunc("POST /api/commits/{sha}/branch-fix", func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			Branches []string `json:"branches"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Branches) == 0 {
-			writeError(w, http.StatusBadRequest, "branches are required")
-			return
-		}
-		sha := r.PathValue("sha")
-		out, err := s.Repo.ApplyToBranches(sha, req.Branches)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		var made []string
-		for _, b := range out {
-			if b.Commit != "" {
-				made = append(made, b.Commit)
-			}
-		}
-		if len(made) > 0 {
-			_ = s.Tracker.Resolved.AlsoFixedBy(sha, made)
-			s.Hub.Publish("commits", map[string]any{"head": s.Repo.Head(), "new": []string{}})
-		}
-		writeJSON(w, out)
 	})
 	mux.HandleFunc("GET /api/history", func(w http.ResponseWriter, r *http.Request) {
 		var names []string
@@ -435,16 +356,12 @@ func (s *Server) guard(next http.Handler) http.Handler {
 				blocked = "features.fix"
 			case path == "/ask" && off(f.Panels, "ask"):
 				blocked = "panels.ask"
-			case strings.HasPrefix(path, "/team/") && off(f.Menus, "team"):
-				blocked = "menus.team"
 			case strings.HasSuffix(path, "/reword") && off(f.Features, "reword"):
 				blocked = "features.reword"
 			case strings.HasPrefix(path, "/working/") && off(f.Features, "localPlan"):
 				blocked = "features.localPlan"
 			case path == "/refs/follow" && off(f.Features, "branchSwitcher"):
 				blocked = "features.branchSwitcher"
-			case path == "/issues/stage" && off(f.Features, "issueWorkflow"):
-				blocked = "features.issueWorkflow"
 			case strings.HasPrefix(path, "/incidents") && off(f.Menus, "incidents"):
 				blocked = "menus.incidents"
 			}

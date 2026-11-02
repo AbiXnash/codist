@@ -37,9 +37,7 @@ type Issue struct {
 	FixedBy    string `json:"fixedBy,omitempty"`
 	FixedAt    int64  `json:"fixedAt,omitempty"`
 	FixedMsg   string `json:"fixedMsg,omitempty"`
-	Manual     bool   `json:"manual,omitempty"`   // closed by "Mark as fixed"
-	Stage      string `json:"stage,omitempty"`    // in-progress, in-review (open issues)
-	Assignee   string `json:"assignee,omitempty"` // who has it
+	Manual     bool   `json:"manual,omitempty"` // closed by "Mark as fixed"
 	Class             // what kind of issue, how urgent, how big a change
 	// Reopened: the issue was fixed, then the code came back (a revert, a bad merge, a copy).
 	WasFixedIn  string `json:"wasFixedIn,omitempty"`
@@ -79,9 +77,6 @@ type Tracker struct {
 	// unchanged) is resolved. Nil disables the re-check.
 	Rules RuleContext
 
-	// Work holds the workflow stage and assignee of open issues. Nil disables it.
-	Work *Workflow
-
 	// Resolved holds issues closed by hand or by a committed fix. Nil disables it.
 	Resolved *Resolutions
 
@@ -114,9 +109,6 @@ func (t *Tracker) key() string {
 	if t.Resolved != nil {
 		k += fmt.Sprintf("|%d", t.Resolved.Version())
 	}
-	if t.Work != nil {
-		k += fmt.Sprintf("|w%d", t.Work.Version())
-	}
 	return k
 }
 
@@ -124,21 +116,12 @@ func NewTracker(repo *gitx.Repo, store *Store, ignores *Ignores) *Tracker {
 	return &Tracker{repo: repo, store: store, ignores: ignores, files: map[string]string{}, fixedAt: map[string]string{}}
 }
 
-// closedHere says a closed issue is closed on the followed branch, and by which commit.
-func (t *Tracker) closedHere(res Resolution) (Resolution, bool) {
+// closedHere says a closed issue is closed on the followed branch.
+func (t *Tracker) closedHere(res Resolution) bool {
 	if res.Manual {
-		return res, res.Branch == "" || res.Branch == t.repo.Branch()
+		return res.Branch == "" || res.Branch == t.repo.Branch()
 	}
-	if res.Commit == "" {
-		return res, true
-	}
-	for _, c := range append([]string{res.Commit}, res.Also...) {
-		if t.repo.Contains(c) {
-			res.Commit = c
-			return res, true
-		}
-	}
-	return res, false
+	return res.Commit == "" || t.repo.Contains(res.Commit)
 }
 
 func (t *Tracker) fileAt(sha, path string) (string, bool) {
@@ -254,10 +237,7 @@ func (t *Tracker) compute() []Issue {
 				hasRes = false // reported again after it was closed
 			}
 			if hasRes {
-				var here bool
-				if res, here = t.closedHere(res); !here {
-					hasRes = false // closed on another branch: this one still has the bug
-				}
+				hasRes = t.closedHere(res) // closed on another branch: this one still has the bug
 			}
 		}
 		region := ""
@@ -362,14 +342,6 @@ func (t *Tracker) compute() []Issue {
 		for k, f := range fr.Findings {
 			i := idx[fr.Path][k]
 			out[i].Group, out[i].GroupRoot = f.Group, f.GroupRoot
-		}
-	}
-
-	if t.Work != nil {
-		for i := range out {
-			if w, ok := t.Work.Get(out[i].ID); ok && out[i].State == "open" {
-				out[i].Stage, out[i].Assignee = w.Stage, w.Assignee
-			}
 		}
 	}
 

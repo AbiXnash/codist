@@ -303,9 +303,6 @@
       case 'services':
         opts = presetFrom(serviceOverviewPositions());
         break;
-      case 'hubs':
-        opts = { name: 'concentric', concentric: (n: cytoscape.NodeSingular) => n.degree(false), levelWidth: () => 2, minNodeSpacing: 34 };
-        break;
       default:
         opts = app.groupBy !== 'none' ? presetFrom(boxedPositions()) : { ...fcoseLayout, randomize: !incremental };
     }

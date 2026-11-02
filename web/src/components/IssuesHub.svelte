@@ -7,10 +7,10 @@
   import type { FindingWithPath, FixRef, Issue, Severity } from '../lib/types';
 
   let filtersOpen = $state(false);
-  const activeFilters = $derived((app.scope !== 'all' ? 1 : 0) + [app.stage, app.kind, app.urgency, app.change].filter(Boolean).length);
+  const activeFilters = $derived((app.scope !== 'all' ? 1 : 0) + [app.kind, app.urgency, app.change].filter(Boolean).length);
   function clearFilters() {
     setScope('all');
-    app.stage = app.kind = app.urgency = app.change = null;
+    app.kind = app.urgency = app.change = null;
   }
   let closing = $state(false);
   let reason = $state('');
@@ -127,19 +127,9 @@
       </div>
       {/if}
 
-      {#if app.featureOn('issueWorkflow')}<div class="flow" aria-label="Workflow">
-        {#each ['Open', 'In progress', 'In review', 'Closed'] as st, n}
-          {@const at = i.state !== 'open' ? 3 : i.stage === 'in-review' ? 2 : i.stage === 'in-progress' ? 1 : 0}
-          <span class="st" class:done={n < at} class:now={n === at}>{n === 3 && i.state === 'ignored' ? "Won't fix" : n === 3 && i.state === 'resolved' ? 'Fixed' : st}</span>
-        {/each}
-        {#if i.assignee}<span class="who">· {who(i.assignee)}</span>{/if}
-      </div>{/if}
       {#if !isWorking(i)}
         <div class="actions">
           {#if i.state === 'open'}
-            {#if !i.stage && app.featureOn('issueWorkflow')}<button class="btn secondary" title="Assign it to yourself" onclick={() => issueAction(g, 'start')}>Start</button>{/if}
-            {#if i.stage === 'in-progress' && app.featureOn('issueWorkflow')}<button class="btn secondary" onclick={() => issueAction(g, 'review')}>Send to review</button>{/if}
-            {#if i.stage && app.featureOn('issueWorkflow')}<button class="btn secondary" onclick={() => issueAction(g, 'stop')}>Back to open</button>{/if}
             <button class="btn secondary" title="You already fixed it: close it. It reopens if a later review reports it again." onclick={() => issueAction(g, 'fixed')}>Mark fixed</button>
             <button class="btn secondary" onclick={() => { closing = !closing; }}>Won't fix…</button>
           {:else if i.manual || i.ignoreId}
@@ -205,9 +195,6 @@
         {/if}
       </div>
       <div class="triage">
-        <select aria-label="Workflow" value={app.stage ?? ''} class:on={!!app.stage} onchange={(e) => (app.stage = e.currentTarget.value || null)}>
-          <option value="">Stage: all</option><option value="unassigned">Unassigned</option><option value="mine">Assigned to me</option><option value="in-progress">In progress</option><option value="in-review">In review</option>
-        </select>
         {#each [['kind', 'Type', kinds], ['urgency', 'Urgency', urgencies], ['change', 'Change', changes]] as [key, title, opts]}
           <select aria-label={title as string} value={app[key as 'kind'] ?? ''} class:on={!!app[key as 'kind']} onchange={(e) => (app[key as 'kind'] = e.currentTarget.value || null)}>
             <option value="">{title}: all</option>
@@ -248,7 +235,6 @@
                     {#if i.kind}<span class="tg k">{i.kind}</span>{/if}
                     {#if i.urgency}<span class="tg u {i.urgency === 'Hotfix' ? 'hot' : ''}">{i.urgency}</span>{/if}
                     {#if i.change === 'Major'}<span class="tg">Major</span>{/if}
-                    {#if i.stage}<span class="tg k">{i.stage === 'in-review' ? 'In review' : 'In progress'}{i.assignee ? ` · ${who(i.assignee)}` : ''}</span>{/if}
                   </span>
                   <span class="sub">
                     <span class="mono loc">{g.length > 1 ? `${g.length} places` : `${name(i.path)}${i.line ? ':' + i.line : ''}`}</span>
@@ -329,12 +315,7 @@
   .level.info { --c: var(--sev-info); }
   :global(:root[data-theme='dark']) .level.low { --c: #94a3b8; }
 
-  .triage { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; font-size: 11.5px; }
-  .flow .st { padding: 2px 9px; border-radius: 10px; color: var(--text-3); background: var(--surface-2); border: 1px solid var(--border); }
-  .flow .st.done { color: var(--good); }
-  .flow .st.now { color: var(--text); font-weight: 600; border-color: var(--accent); background: var(--accent-soft); }
-  .flow .who { margin-left: 4px; color: var(--text-2); }
+  .triage { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .close { display: grid; gap: 6px; }
   .close textarea { padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: var(--r); background: var(--surface-2); color: var(--text); font: inherit; font-size: 12.5px; resize: vertical; }
   .close .btn { justify-self: start; }

@@ -1,8 +1,6 @@
 package review
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -11,7 +9,6 @@ import (
 	"time"
 
 	"codist/internal/gitx"
-	"codist/prompts"
 )
 
 // A profile describes work, and a little evidence says little. Below these, it says so and draws no
@@ -465,59 +462,4 @@ func judge(p *DevProfile, mine []Issue, teamRate float64) (strengths, improve []
 		bad("Repeats: "+r.title, fmt.Sprintf("Found in %d different commits.", len(r.commits)), advice, r.ids[:min(len(r.ids), 5)]...)
 	}
 	return strengths, improve
-}
-
-// DevAdviceText is the model's write-up of a profile.
-type DevAdviceText struct {
-	Summary   string   `json:"summary"`
-	Strengths []string `json:"strengths"`
-	Improve   []string `json:"improve"`
-	Advice    []string `json:"advice"`
-}
-
-// DevAdvice asks the model to write up a profile, from the measured facts only.
-func (x *Fixer) DevAdvice(ctx context.Context, p DevProfile) (DevAdviceText, error) {
-	// Plain sentences: given nested JSON, a small model tends to echo it back rather than write.
-	var facts strings.Builder
-	fmt.Fprintf(&facts, "Name: %s\nenoughEvidence: %v\nCommits: %d, of which %d reviewed\nLines added: %d, removed: %d, in the code today: %d\nShare of added lines that are tests: %d%%\nTypical commit: %d lines; %d commits over %d lines\n",
-		p.Name, p.EnoughEvidence, p.Commits, p.Reviewed, p.Added, p.Removed, p.Owned, p.TestShare, p.MedianCommit, p.BigCommits, bigCommitLines)
-	fmt.Fprintf(&facts, "Issues from their commits: %d, %d still open, %d critical, high or medium\nIssues they fixed: %d from their own commits, %d from colleagues'\n", p.Introduced, p.OpenNow, p.Serious, p.FixedOwn, p.FixedOthers)
-	for _, sk := range p.Skills[:min(len(p.Skills), 6)] {
-		fmt.Fprintf(&facts, "Works on %s: %d lines in %d commits\n", sk.Name, sk.Lines, sk.Commits)
-	}
-	for _, k := range p.Kinds {
-		fmt.Fprintf(&facts, "Issues of type %s: %d\n", k.Name, k.N)
-	}
-	for _, g := range p.Strengths {
-		fmt.Fprintf(&facts, "Measured strength: %s. %s\n", g.Title, g.Detail)
-	}
-	for _, g := range p.Improve {
-		fmt.Fprintf(&facts, "Measured problem: %s. %s %s\n", g.Title, g.Detail, g.Advice)
-	}
-	llm := x.ask
-	if llm == nil {
-		llm = x.llm
-	}
-	out, err := llm.With(ctx).For(Label{Kind: "dev-advice", Title: "Summary of " + p.Name + "'s work"}).ChatJSON(prompts.Get("dev-advice"), "## The facts\n"+facts.String())
-	if err != nil {
-		return DevAdviceText{}, err
-	}
-	list := func(key string) []string {
-		items := []string{}
-		raw, _ := out[key].([]any)
-		for _, v := range raw {
-			if m, ok := v.(map[string]any); ok { // some models answer with objects despite the instructions
-				v = strings.TrimSpace(str(m["title"]) + ": " + str(m["detail"]))
-			}
-			if s := strings.TrimSpace(str(v)); s != "" {
-				items = append(items, s)
-			}
-		}
-		return items
-	}
-	text := DevAdviceText{Summary: strings.TrimSpace(str(out["summary"])), Strengths: list("strengths"), Improve: list("improve"), Advice: list("advice")}
-	if text.Summary == "" {
-		return text, errors.New("the model returned no summary; try again")
-	}
-	return text, nil
 }

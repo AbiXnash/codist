@@ -187,8 +187,6 @@ export interface Issue {
   fixedMsg?: string;
   uncommitted?: boolean;
   manual?: boolean;
-  stage?: string;
-  assignee?: string;
   wasFixedIn?: string;
   reopenedIn?: string;
   reopenedBy?: string;
@@ -365,9 +363,7 @@ export interface DepRow { group: string; artifact: string; version: string; scop
 
 export interface DependencyReport { tool: string; java: string; springBoot: string; support: string; deps: DepRow[]; findings: Finding[]; file: string }
 
-export interface CheckItem { id: string; text: string; done: boolean; by?: string; at?: number; custom?: boolean; current: boolean }
 
-export interface SignOff { to: string; items: CheckItem[]; done: number; total: number }
 
 export interface RepoReport {
   name: string; head: string; branch: string; files: number; javaFiles: number; testFiles: number; lines: number; types: number; methods: number; commits: number;
@@ -414,7 +410,6 @@ export interface Flags { menus: Record<string, boolean>; panels: Record<string, 
 export interface PersonStats { name: string; commits: number; added: number; removed: number; files: number; owned: number }
 export interface PeopleReport { head: string; people: PersonStats[]; totalLines: number; tookMs: number }
 
-export interface BranchFix { branch: string; status: 'ready' | 'fixed' | 'conflict' | 'skipped' | 'unaffected' | 'already'; detail?: string; files?: string[]; commit?: string }
 
 export interface DevPoint { title: string; detail: string; advice?: string; issues?: string[] }
 export interface DevShare { name: string; lines: number; commits: number }
@@ -424,4 +419,3 @@ export interface DevProfile {
   fixed: number; fixedOwn: number; fixedOthers: number; avgFixDays: number; enoughEvidence: boolean; strengths: DevPoint[]; improve: DevPoint[];
 }
 export interface TeamReport { people: DevProfile[]; teamRate: number }
-export interface DevAdvice { summary: string; strengths: string[]; improve: string[]; advice: string[] }

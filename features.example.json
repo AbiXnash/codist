@@ -22,7 +22,6 @@
     "branchSwitcher": true,
     "fix": true,
     "reword": true,
-    "localPlan": true,
-    "issueWorkflow": true
+    "localPlan": true
   }
 }

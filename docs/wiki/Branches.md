@@ -16,23 +16,9 @@ In Review, the centre switches between **Code graph** and **Branch graph**. The 
 ones you pick, as lanes with their merges. A filled dot is a reviewed commit. Click a commit to review it, even if it
 is on another branch. Click a branch name to make commits, code graph and issues follow it.
 
-## Fix a bug on every branch
+## Fixes stay on their branch
 
-After you commit a fix, Codist looks for the same code on every other branch. If any still have it, a dialog offers
-**Fix all branches**. You can also start this from any commit, including one you fixed by hand, with **Apply to other
-branches** in the Commit tab.
-
-| Result | Meaning |
-|---|---|
-| Apply the fix | The branch has the code the fix removed, and the fix applies cleanly. Selected by default. |
-| Needs you | The code around it differs, or the branch is in another worktree or only on the remote. Nothing changes there. |
-| Nothing to do | The branch does not have that code, or is already fixed. |
-
-Each branch gets a new commit on top, saying which commit it came from. Nothing is checked out or pushed, and your
-working files do not change. To undo one, use `git reset` on that branch; `git reflog show <branch>` lists its earlier
-positions. A fix is judged by whether the code is the same, not by testing it, so check each branch builds.
-
-Fixing an issue on one branch closes it only there. Each branch keeps it open until it has the fix too.
+Fixing an issue on one branch closes it only there. Other branches keep it open until they have the fix too.
 
 ## Branches screen
 

@@ -3,22 +3,19 @@
   import { app, openFile, toast } from '../lib/store.svelte';
   import { api } from '../lib/api';
   import { ago, SEVERITIES } from '../lib/theme';
-  import type { DependencyReport, Issue, ReleaseReport, SignOff } from '../lib/types';
+  import type { DependencyReport, Issue, ReleaseReport } from '../lib/types';
 
   let report = $state.raw<ReleaseReport | null>(null);
   let markdown = $state('');
   let deps = $state.raw<DependencyReport | null>(null);
-  let signoff = $state.raw<SignOff | null>(null);
   let showAll = $state(false);
   let loading = $state(false);
-  let newItem = $state('');
 
   async function load() {
     loading = true;
     try {
       const d = await api.release();
       report = d.report;
-      signoff = d.signoff;
       markdown = d.markdown;
     } catch (e) {
       toast((e as Error).message, 'bad');
@@ -29,41 +26,7 @@
   onMount(() => {
     void load();
     api.dependencies().then((d) => (deps = d), () => {});
-    // Someone ticked an item (here or in another tab): reload the shared sign-off.
-    const onSign = (e: Event) => {
-      if ((e as CustomEvent<{ to: string }>).detail.to === REPO) void load();
-    };
-    window.addEventListener('codist:signoff', onSign);
-    return () => window.removeEventListener('codist:signoff', onSign);
   });
-
-  // There is one sign-off, for the repository as it is now.
-  const REPO = 'repo';
-  async function resetSignOff() {
-    if (!confirm('Start the next release? This clears every tick and the items you added.')) return;
-    await api.resetSignOff();
-    await load();
-  }
-  async function tick(text: string, done: boolean, custom = false) {
-    if (!report) return;
-    try {
-      await api.signOff(REPO, text, done, custom);
-      await load();
-    } catch (e) {
-      toast((e as Error).message, 'bad');
-    }
-  }
-  async function addItem() {
-    const t = newItem.trim();
-    if (!t) return;
-    newItem = '';
-    await tick(t, false, true);
-  }
-  async function removeItem(id: string) {
-    if (!report) return;
-    await api.removeSignOff(REPO, id);
-    await load();
-  }
 
   const name = (p: string) => p.slice(p.lastIndexOf('/') + 1);
   const short = (s?: string) => (s ? s.slice(0, 7) : '');
@@ -85,10 +48,9 @@
     <header>
       <div>
         <h1>{app.status?.repo ?? 'Repository'}: release readiness</h1>
-        <p class="muted">The whole repository as it is on {app.status?.tracking}{report ? ` at ${report.to.slice(0, 7)}` : ''}: every file checked, every open issue, and what to verify before sign-off. It does not depend on which commits are in the release.</p>
+        <p class="muted">The whole repository as it is on {app.status?.tracking}{report ? ` at ${report.to.slice(0, 7)}` : ''}: every file checked, and every open issue. It does not depend on which commits are in the release.</p>
       </div>
       <div class="pick">
-        <button class="btn secondary sm" title="Clear the checklist and start over" onclick={resetSignOff}>Start next release</button>
         <button class="btn secondary sm" onclick={copy} disabled={!markdown}>Copy as Markdown</button>
       </div>
     </header>
@@ -110,29 +72,6 @@
       </section>
 
       <div class="grid">
-        <section>
-          <div class="so-head">
-            <h2>Sign-off</h2>
-            {#if signoff}<span class="progress" class:complete={signoff.total > 0 && signoff.done === signoff.total}>{signoff.done} / {signoff.total} signed off</span>{/if}
-          </div>
-          <p class="faint small hint">One checklist for the repository, built from the code as it is and shared with everyone.</p>
-          {#each signoff?.items ?? [] as it (it.id)}
-            <div class="check" class:stale={!it.current}>
-              <input id="so-{it.id}" type="checkbox" checked={it.done} disabled={!it.current} onchange={(e) => tick(it.text, e.currentTarget.checked, it.custom)} />
-              <label for="so-{it.id}">
-                <span class:done={it.done}>{it.text}</span>
-                {#if it.done}<span class="who">✓ {it.by || 'someone'} · {ago(it.at ?? 0)}</span>{/if}
-                {#if !it.current}<span class="who">no longer needed for this code; kept because it was signed off</span>{/if}
-              </label>
-              {#if it.custom}<button class="x" title="Remove this item" aria-label="Remove item" onclick={() => removeItem(it.id)}>×</button>{/if}
-            </div>
-          {/each}
-          <form class="add" onsubmit={(e) => { e.preventDefault(); void addItem(); }}>
-            <input id="so-new" bind:value={newItem} placeholder="Add an item, e.g. Notify the support team" />
-            <button class="btn secondary sm" disabled={!newItem.trim()}>Add</button>
-          </form>
-        </section>
-
         <section>
           <h2>Open issues · {report.open.length}</h2>
           {#each shown as is (is.id)}
@@ -219,29 +158,14 @@
   .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ok { color: var(--good); }
   .kind { font-size: 10.5px; padding: 0 5px; border-radius: 3px; background: var(--surface-3); color: var(--text-2); }
-  .so-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .so-head h2 { margin: 0; }
-  .progress { font-size: 12px; font-weight: 600; color: var(--warn); }
-  .progress.complete { color: var(--good); }
   .hint { margin: 4px 0 8px; }
-  .check { display: flex; gap: 8px; align-items: baseline; padding: 5px 0; font-size: 13px; }
-  .check label { display: grid; gap: 1px; cursor: pointer; flex: 1; min-width: 0; }
-  .check .done { text-decoration: line-through; color: var(--text-3); }
-  .check.stale { opacity: 0.6; }
-  .who { font-size: 11.5px; color: var(--good); }
-  .check.stale .who { color: var(--text-3); }
-  .x { border: 0; background: none; color: var(--text-3); font-size: 16px; line-height: 1; padding: 0 4px; }
-  .x:hover { color: var(--bad); }
-  .add { display: flex; gap: 6px; margin-top: 8px; }
-  .add input { flex: 1; min-width: 0; height: 26px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface-2); color: var(--text); font: inherit; font-size: 12.5px; }
-  .add input:focus { outline: none; border-color: var(--accent); }
   .issue { width: 100%; border: 0; border-radius: var(--r); background: none; text-align: left; padding: 4px; color: inherit; font: inherit; font-size: 12.5px; }
   .issue:hover { background: var(--hover); }
   .by { font-size: 11.5px; white-space: nowrap; }
   .n { font-size: 11.5px; color: var(--warn); white-space: nowrap; }
   .n.zero { color: var(--text-3); }
   .more { margin-top: 8px; }
-  .grid section:nth-child(2), .grid section:nth-child(4) { max-height: 460px; overflow: auto; }
+  .grid section:nth-child(1), .grid section:nth-child(3) { max-height: 460px; overflow: auto; }
   .empty { display: flex; gap: 10px; align-items: center; justify-content: center; padding: 40px; }
   .warnc { color: var(--warn); font-size: 11.5px; white-space: nowrap; }
   .small { font-size: 11.5px; }

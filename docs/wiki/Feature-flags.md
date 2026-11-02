@@ -36,7 +36,6 @@ Later files win over earlier ones.
 | `features` | `fix` | Removes the Fix buttons and refuses fixes |
 | `features` | `reword` | Removes suggesting and rewording commit messages |
 | `features` | `localPlan` | Removes the recommended commits for local changes |
-| `features` | `issueWorkflow` | Removes Start, In review and the stage display |
 
 ## Mistakes
 

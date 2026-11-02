@@ -5,10 +5,10 @@
 Each issue is classified by **type** (Bug, Security, Optimization, Better log, Readability, Dead code, Poor coding,
 Test), **urgency** (Hotfix, Fix soon, Quick fix, Cleanup) and **change** (Minor, Major). All three are filters.
 
-## Workflow
+## Closing issues
 
-Open → In progress (assigned to you) → In review → Closed. **Mark fixed** closes an issue, and it reopens if a later
-review reports it again. **Won't fix** ignores it and takes an optional reason, which goes into Memory.
+**Mark fixed** closes an issue, and it reopens if a later review reports it again. **Won't fix** ignores it and takes an
+optional reason, which goes into Memory.
 
 The Fixed tab is all green, grouped by level: the stronger the green, the bigger the issue that was fixed.
 

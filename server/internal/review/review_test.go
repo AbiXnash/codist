@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -327,31 +326,6 @@ func TestCheckImportsAndTestProblems(t *testing.T) {
 	}
 }
 
-func TestSignOffSurvivesChangesAndKeysByText(t *testing.T) {
-	so := NewSignOffs(t.TempDir(), "r")
-	to := "abcdef1234567"
-	gen := []string{"Review the unreviewed commits", "Run the regression tests for com.demo.order"}
-	if err := so.Set(to, gen[1], true, false, "Dev"); err != nil {
-		t.Fatal(err)
-	}
-	// A different "changes since" range generates a different list, in a different order.
-	got := so.For(to, []string{"Check the h2 change", gen[1]})
-	if got.Total != 2 || got.Done != 1 || !got.Items[1].Done || got.Items[1].By != "Dev" {
-		t.Fatalf("tick must follow its item, not its position: %+v", got)
-	}
-	// An item that is no longer generated but was ticked stays visible, marked not current.
-	got = so.For(to, []string{"Check the h2 change"})
-	if len(got.Items) != 2 || got.Items[1].Current || !got.Items[1].Done {
-		t.Fatalf("a past sign-off must not be dropped: %+v", got)
-	}
-	if err := so.Set(to, "Notify the support team", false, true, "Dev"); err != nil {
-		t.Fatal(err)
-	}
-	if got = so.For(to, nil); got.Total != 1 || !got.Items[len(got.Items)-1].Custom {
-		t.Fatalf("custom items count: %+v", got)
-	}
-}
-
 func TestReleaseChecksTheWholeCodebase(t *testing.T) {
 	dir, data := t.TempDir(), t.TempDir()
 	git := func(args ...string) string {
@@ -397,9 +371,6 @@ func TestReleaseChecksTheWholeCodebase(t *testing.T) {
 	}
 	if found == nil || found.Line != 3 || found.FirstBy != "Dev" || found.FirstMsg != "start" {
 		t.Fatalf("issue in the untouched file should be reported with its author: %+v", rep.Open)
-	}
-	if !slices.Contains(rep.Checklist, "Run the regression tests for shop.order") {
-		t.Fatalf("checklist: %v", rep.Checklist)
 	}
 }
 
@@ -1081,36 +1052,6 @@ func TestMemoryReachesPromptsAndCanBeShared(t *testing.T) {
 	}
 	if len(m.All()) != 1 {
 		t.Fatalf("after remove: %+v", m.All())
-	}
-}
-
-func TestWorkflowStageShowsOnOpenIssuesOnly(t *testing.T) {
-	dir, git := newRepoT(t)
-	p := "A.java"
-	os.WriteFile(filepath.Join(dir, p), []byte("class A {\n  void x() { y(); }\n  void z() { w(); }\n}\n"), 0o644)
-	git("Ann", "add", "-A")
-	git("Ann", "commit", "-qm", "one")
-	head := git("Ann", "rev-parse", "HEAD")
-	data := t.TempDir()
-	repo, _ := gitx.Open(config.Config{RepoPath: dir})
-	store, _ := NewStore(data, "r")
-	store.Save(Review{SHA: head, Status: StatusDone, Files: []FileReview{{Path: p, Findings: []Finding{
-		{Line: 2, EndLine: 2, Severity: "high", Title: "One", Source: "llm", Ref: "a", Snippet: "void x() { y(); }"}}}}})
-	tr := NewTracker(repo, store, NewIgnores(data, "r", dir))
-	tr.Work, tr.Resolved = NewWorkflow(data, "r"), NewResolutions(data, "r")
-	id := tr.Issues()[0].ID
-	if err := tr.Work.Set([]string{id}, "in-progress", "Ann"); err != nil {
-		t.Fatal(err)
-	}
-	if is := tr.Issues()[0]; is.Stage != "in-progress" || is.Assignee != "Ann" {
-		t.Fatalf("stage not applied (the cache must notice): %+v", is)
-	}
-	if reloaded, _ := NewWorkflow(data, "r").Get(id); reloaded.Stage != "in-progress" {
-		t.Fatalf("not persisted: %+v", reloaded)
-	}
-	tr.Resolved.Set([]string{id}, Resolution{By: "Ann", Manual: true})
-	if is := tr.Issues()[0]; is.State != "resolved" || is.Stage != "" {
-		t.Fatalf("a closed issue has no stage: %+v", is)
 	}
 }
 

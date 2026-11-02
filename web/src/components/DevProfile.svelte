@@ -1,34 +1,9 @@
 <script lang="ts">
-  import { app, pickIssue, toast } from '../lib/store.svelte';
-  import { api } from '../lib/api';
-  import CopyButton from './CopyButton.svelte';
-  import type { DevAdvice, DevProfile, Issue } from '../lib/types';
+  import { app, pickIssue } from '../lib/store.svelte';
+  import type { DevProfile, Issue } from '../lib/types';
 
   let { p }: { p: DevProfile } = $props();
 
-  let advice = $state.raw<DevAdvice | null>(null);
-  let busy = $state(false);
-  let adviceFor = '';
-  $effect(() => {
-    if (p.name !== adviceFor) {
-      adviceFor = p.name;
-      advice = null;
-    }
-  });
-  async function write() {
-    busy = true;
-    try {
-      advice = await api.devAdvice(p.name);
-    } catch (e) {
-      if ((e as Error).name !== 'AbortError') toast((e as Error).message, 'bad');
-    } finally {
-      busy = false;
-    }
-  }
-  const adviceText = $derived(advice ? [advice.summary, section('Does well', advice.strengths), section('To work on', advice.improve), section('Advice', advice.advice)].filter(Boolean).join('\n\n') : '');
-  function section(title: string, items: string[]) {
-    return items.length ? `${title}\n${items.map((i) => `- ${i}`).join('\n')}` : '';
-  }
   const num = (n: number) => n.toLocaleString();
   const max = (list: { lines: number }[]) => Math.max(1, ...list.map((s) => s.lines));
   const byId = $derived(new Map((app.issueList?.issues ?? []).map((i) => [i.id, i] as const)));
@@ -99,22 +74,6 @@
     </section>
   </div>
 
-  <section class="pcard ai">
-    <div class="ah"><h3>Written summary</h3>
-      {#if advice}<CopyButton text={adviceText} label="Copy" />{/if}
-      <button class="btn secondary sm" disabled={busy} onclick={write}>{#if busy}<span class="spinner"></span>{/if}{advice ? 'Write again' : 'Write with AI'}</button>
-    </div>
-    {#if advice}
-      <p>{advice.summary}</p>
-      {#each [['Does well', advice.strengths], ['To work on', advice.improve], ['Advice', advice.advice]] as [t, items]}
-        {#if (items as string[]).length}<h4>{t}</h4><ul>{#each items as string[] as i}<li>{i}</li>{/each}</ul>{/if}
-      {/each}
-      <p class="faint hint">Written by the local model from the numbers above. Check it before you share it.</p>
-    {:else}
-      <p class="faint hint">The model turns the numbers above into a short note for {p.name}.</p>
-    {/if}
-  </section>
-
   <p class="faint foot">Measured from git and Codist's reviews on this branch. Lines do not measure effort, and hard code produces more findings. Use this to start a conversation, not to rate someone.</p>
 </div>
 
@@ -124,7 +83,6 @@
   header p { margin: 0; }
   h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
   h3.next { margin-top: 14px; }
-  h4 { margin: 10px 0 3px; font-size: 12.5px; font-weight: 600; }
   .point { padding: 7px 0; border-top: 1px solid var(--border); }
   h3 + .point { border-top: 0; padding-top: 0; }
   .point b { font-weight: 500; }
@@ -136,10 +94,6 @@
   .kinds { margin-top: 7px; }
   .tag { padding: 0 7px; line-height: 19px; border-radius: 5px; font-size: 11.5px; background: var(--surface-3); }
   .line { margin: 0; font-size: 12.5px; color: var(--text-2); }
-  .ah { display: flex; align-items: center; gap: 8px; }
-  .ah h3 { flex: 1; margin: 0; }
-  .ai > p { margin: 8px 0 0; }
-  ul { margin: 0; padding-left: 18px; font-size: 12.5px; }
   .foot { margin: 0 4px; font-size: 12px; }
   .bar-row { grid-template-columns: 150px 1fr 44px; }
   .bar-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

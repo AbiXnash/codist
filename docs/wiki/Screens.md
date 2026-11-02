@@ -41,8 +41,7 @@ Pick a person on **Team**, or scroll down on **My work**, for what git and the r
 branch: lines, the kind of code they write, where they work, bugs from their commits, fixes and commit habits.
 
 **Does well** and **To work on** come from fixed rules, and each quotes its numbers and links to examples. The same
-problem in two or more commits counts as a habit, and gets the fix suggestion as advice. **Write with AI** turns the numbers
-into a short note using the local model.
+problem in two or more commits counts as a habit, and gets the fix suggestion as advice.
 
 With fewer than 5 reviewed commits or 200 reviewed lines, a profile only reports facts and draws no conclusions about
 quality. People are compared with the team average only when at least two have enough evidence. Nobody is scored or
@@ -82,7 +81,7 @@ ask the AI to write, and a Commit button that commits only those files.
 
 - **Controls** (top right of the graph): find by class, package or `@Annotation` (highlight or show only
   matches); show or hide roles, link kinds, tests and packages; shapes **Graph**, **Layers**
-  (controllers on top, then services, repositories, entities), **Services** (one box per service) and **Hubs**; size by links, code
+  (controllers on top, then services, repositories, entities), and **Services** (one box per service); size by links, code
   size or open issues; labels; package boxes; PNG export.
 - **Right-click a class**: blast radius (what depends on it, by distance), show only its neighbours,
   dependencies or dependents, path from or to it, hide it, open its code.

@@ -111,7 +111,6 @@ func main() {
 	reviews.Memory, srv.Fixer.Memory = srv.Memory, srv.Memory
 	srv.Tracker.Rules = rules
 	srv.Tracker.Resolved = review.NewResolutions(cfg.DataDir, repo.Name())
-	srv.Tracker.Work = review.NewWorkflow(cfg.DataDir, repo.Name())
 	srv.Fixer.OnFixed = func(ids []string, sha string) {
 		_ = srv.Tracker.Resolved.Set(ids, review.Resolution{By: repo.UserName(), Commit: sha})
 	}
@@ -141,7 +140,6 @@ func main() {
 		}
 		go learn() // fixes and dismissals become knowledge for the next review
 	}
-	srv.SignOffs = review.NewSignOffs(cfg.DataDir, repo.Name())
 	srv.Incidents = incident.NewEngine(repo, g, askLLM, srv.Tracker, reviews, incident.NewStore(cfg.DataDir, repo.Name()), hub)
 	httpServer := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
 
