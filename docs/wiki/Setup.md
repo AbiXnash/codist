@@ -43,7 +43,7 @@ time. See [Speed](#speed) for memory tuning.
 
 ## Alternatives
 
-**Another Qwen2.5-Coder size.** `qwen2.5-coder:7b` or `:3b` on a low-memory laptop, or / `:32b` when you
+**Another Qwen2.5-Coder size.** `qwen2.5-coder:7b` or `:3b` on a low-memory laptop, or `:32b` when you
 have the RAM. Larger models find more, but reviews take longer.
 
 **Another Ollama model.** Coder or instruct models such as DeepSeek-Coder-V2, Granite Code or CodeLlama
