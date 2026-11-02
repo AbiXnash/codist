@@ -206,7 +206,6 @@
   h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--text-2); }
   h2.sub { margin-top: 14px; }
   .pick { display: flex; align-items: center; gap: 8px; }
-  select { max-width: 340px; height: 28px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: var(--r); background: var(--surface); color: var(--text); font: inherit; font-size: 12.5px; }
   .verdict { padding: 14px 16px; border: 1px solid var(--border); border-left: 3px solid var(--c); border-radius: var(--r-lg); background: var(--surface); display: grid; gap: 6px; }
   .verdict.low { --c: var(--good); } .verdict.medium { --c: var(--warn); } .verdict.high { --c: var(--bad); }
   .risk { font-size: 16px; font-weight: 600; text-transform: capitalize; color: var(--c); }

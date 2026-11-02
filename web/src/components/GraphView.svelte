@@ -746,9 +746,6 @@
   .seg.icons button { width: 26px; padding: 0; display: grid; place-items: center; }
   .seg button:hover { color: var(--text); }
   .seg button.on { color: var(--text); background: var(--surface-3); box-shadow: var(--raised); }
-  .tiphint { margin-left: auto; font-size: 11px; align-self: center; }
-  .controls { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); color: var(--text-2); font-size: 12px; font-weight: 500; }
-  .controls:hover, .controls.on { color: var(--text); border-color: var(--border-strong); background: var(--surface-3); }
   .hid { align-self: center; font-size: 10.5px; line-height: 16px; padding: 0 6px; border-radius: 9px; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
   .ov { align-self: center; font-size: 10.5px; line-height: 16px; padding: 0 6px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-text); text-transform: capitalize; }
 

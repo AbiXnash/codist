@@ -107,8 +107,6 @@
     white-space: nowrap;
   }
   .title { margin: 0 4px 0 2px; font-size: 15px; font-weight: 600; letter-spacing: -0.005em; }
-  .tiny { width: 9px; height: 9px; }
-  .sep { color: var(--text-3); }
   .repo { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
   .branch { color: var(--accent-text); }
   .sha { color: var(--text-3); }
@@ -147,8 +145,6 @@
   .rname { font-weight: 500; }
   .rpkg { margin-left: auto; font-size: 11px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; }
 
-  .status { display: inline-flex; align-items: center; gap: 6px; padding: 0 6px; font-size: 12px; color: var(--text-2); }
-  .status .dot { width: 7px; height: 7px; }
 
   @media (max-width: 1000px) {
     .repo, .sha { display: none; }
