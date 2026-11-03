@@ -99,6 +99,7 @@ type Fixer struct {
 	OnReady func(sha, key string)          // a prefetched fix became available
 	OnFixed func(ids []string, sha string) // a fix was committed
 	Memory  *Memory                        // what developers taught Codist about this repository
+	Build   buildRunner                    // runs the build for Check; nil runs the real one
 }
 
 func NewFixer(repo *gitx.Repo, fix, ask *Ollama, store *Store) *Fixer {

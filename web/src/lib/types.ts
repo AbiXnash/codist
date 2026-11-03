@@ -366,6 +366,8 @@ export interface ReleaseReport {
 
 export interface DepRow { group: string; artifact: string; version: string; scope: string; managed: boolean; status: 'ok' | 'unknown' | 'warn' | 'bad'; note: string; modules?: string[] }
 
+export interface FixCheck { status: 'passed' | 'failed' | 'unavailable'; step: string; output?: string; tookMs: number }
+
 export interface DependencyReport { tool: string; java: string; springBoot: string; support: string; deps: DepRow[]; findings: Finding[]; file: string }
 
 

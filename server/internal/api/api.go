@@ -77,6 +77,14 @@ func (s *Server) Handler() http.Handler {
 	s.extensionRoutes(mux)
 	mux.HandleFunc("POST /api/fix", s.proposeFix)
 	mux.HandleFunc("POST /api/fix/{id}/apply", s.applyFix)
+	mux.HandleFunc("POST /api/fix/{id}/check", func(w http.ResponseWriter, r *http.Request) {
+		c, err := s.Fixer.Check(r.Context(), r.PathValue("id"))
+		if err != nil {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeJSON(w, c)
+	})
 	mux.HandleFunc("POST /api/issues/{id}/resolve", func(w http.ResponseWriter, r *http.Request) {
 		if err := s.Tracker.Resolved.Set([]string{r.PathValue("id")}, review.Resolution{By: s.Repo.UserName(), Manual: true, Branch: s.Repo.Branch()}); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())

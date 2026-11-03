@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { FixCheck } from '../lib/types';
   import { app, applyFix, closeFix, toast } from '../lib/store.svelte';
   import { api } from '../lib/api';
   import CopyButton from './CopyButton.svelte';
@@ -61,6 +62,16 @@
   });
 
   // The model can change plenty and still leave the problem. It can't be proven here, but this can be seen.
+  // Every prepared fix is built and tested in a throwaway copy, so you know before you decide.
+  let check = $state.raw<FixCheck | 'running' | null>(null);
+  let checkedId = '';
+  $effect(() => {
+    const id = app.fix?.proposal?.id ?? '';
+    if (id === checkedId) return;
+    checkedId = id;
+    check = id ? 'running' : null;
+    if (id) api.checkFix(id).then((c) => { if (checkedId === id) check = c; }, () => { if (checkedId === id) check = null; });
+  });
   const flagged = $derived((app.fix?.finding.snippet ?? '').split('\n').map((l) => l.trim()).find((l) => l.length > 3) ?? '');
   const untouched = $derived(!!flagged && !lines.some((l) => l.startsWith('-') && l.includes(flagged)));
 
@@ -120,6 +131,14 @@
             {#if f.finding.detail}<p>{f.finding.detail}</p>{/if}
             {#if f.finding.suggestion}<p class="rec"><b>Recommendation:</b> {f.finding.suggestion}</p>{/if}
           </section>
+        {/if}
+        {#if check}
+          <div class="check {check === 'running' ? 'running' : check.status}" role="status">
+            {#if check === 'running'}Compiling and testing this fix in a separate copy. You can still decide now.
+            {:else if check.status === 'passed'}<b>Compiles, and the tests pass.</b> Checked in a separate copy in {Math.round(check.tookMs / 1000)} s.
+            {:else if check.status === 'failed'}<b>{check.step === 'tests' ? 'Compiles, but tests fail.' : 'This fix does not compile.'}</b>{#if check.output}<pre>{check.output}</pre>{/if}
+            {:else}<b>Could not check this fix.</b> {check.output}{/if}
+          </div>
         {/if}
         {#if untouched}
           <p class="warn"><b>The flagged line is unchanged:</b> <code>{flagged}</code>. Check that this really fixes the problem before applying it.</p>
@@ -186,6 +205,10 @@
 {/if}
 
 <style>
+  .check { margin: 0 0 10px; padding: 8px 11px; border-radius: var(--r-md, 8px); font-size: 12.5px; line-height: 1.45; background: var(--surface-2); color: var(--text-2); }
+  .check.passed { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
+  .check.failed { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
+  .check pre { margin: 6px 0 0; max-height: 160px; overflow: auto; white-space: pre-wrap; font-size: 11.5px; color: var(--text-2); }
   .backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, 0.45); }
   .dialog {
     position: fixed;

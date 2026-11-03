@@ -1,4 +1,4 @@
-import type { CallLink, ImpactReport, Activity, TeamReport, Flags, PeopleReport, HistoryCommit, BranchRef, BranchReport, MemoryItem, MemoryReport, PlannedCommit, RepoReport, FixRef, Working, CommitItem, DependencyReport, Detail, FixProposal, Graph, Incident, IncidentRow, IssueList, RcaReport, ReleaseReport, Status } from './types';
+import type { FixCheck, CallLink, ImpactReport, Activity, TeamReport, Flags, PeopleReport, HistoryCommit, BranchRef, BranchReport, MemoryItem, MemoryReport, PlannedCommit, RepoReport, FixRef, Working, CommitItem, DependencyReport, Detail, FixProposal, Graph, Incident, IncidentRow, IssueList, RcaReport, ReleaseReport, Status } from './types';
 
 const json = (method: string, body?: unknown): RequestInit => ({
   method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body),
@@ -64,6 +64,7 @@ export const api = {
   review: (sha: string) => request<{ sha: string; queued: boolean }>(`/commits/${sha}/review`, { method: 'POST' }),
   proposeFix: (body: { sha: string; path: string; line: number; title: string; guidance?: string; also?: FixRef[] }) =>
     request<FixProposal & { blocked?: boolean; error?: string }>('/fix', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+  checkFix: (id: string) => request<FixCheck>(`/fix/${id}/check`, { method: 'POST' }),
   applyFix: (id: string, message: string) =>
     request<{ commit: string }>(`/fix/${id}/apply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message }) }),
   discardFix: (id: string) => fetch(`/api/fix/${id}`, { method: 'DELETE' }),
