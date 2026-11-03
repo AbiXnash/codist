@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { app, boot, savePref, selectCommit } from './lib/store.svelte';
+  import { app, boot, savePref, saveStr, selectCommit } from './lib/store.svelte';
   import { preload } from './lib/highlight';
   import TopBar from './components/TopBar.svelte';
   import Sidebar from './components/Sidebar.svelte';
@@ -18,7 +18,7 @@
   import IncidentsView from './components/IncidentsView.svelte';
   import ReleaseView from './components/ReleaseView.svelte';
 
-  let dragging = $state(false);
+  let dragging = $state<'side' | 'panel' | null>(null);
 
   // The screen is in the address, so a reload or a bookmark lands in the same place.
   const SCREENS = ['review', 'graph', 'incidents', 'memory', 'activity', 'repo', 'branches', 'mine', 'team', 'release'];
@@ -29,6 +29,15 @@
   });
 
   onMount(() => {
+    for (const w of Object.values(WIDTHS)) {
+      let saved: string | null = null;
+      try {
+        saved = localStorage.getItem('codist.' + w.pref);
+      } catch {
+        /* storage is blocked: use the default width */
+      }
+      if (saved && Number(saved) >= w.min) document.documentElement.style.setProperty(w.name, `${saved}px`);
+    }
     preload();
     void boot();
   });
@@ -41,15 +50,40 @@
     requestAnimationFrame(() => window.dispatchEvent(new Event('codist:resize')));
   });
 
-  function startResize(e: PointerEvent) {
-    dragging = true;
+  // Both side panels can be dragged or moved with the arrow keys, and remember their width.
+  const WIDTHS = {
+    side: { name: '--side-w', pref: 'sideWidth', min: 200, other: '--panel-w' },
+    panel: { name: '--panel-w', pref: 'panelWidth', min: 300, other: '--side-w' },
+  } as const;
+  const CENTRE_MIN = 360;
+  type Edge = keyof typeof WIDTHS;
+
+  function setWidth(edge: Edge, wanted: number) {
+    const w = WIDTHS[edge];
+    const shownOther = edge === 'side' ? app.showPanel : app.showCommits;
+    const other = shownOther ? (document.querySelector(edge === 'side' ? '.panel' : '.dock') as HTMLElement | null)?.offsetWidth ?? 0 : 0;
+    const left = (document.querySelector('.side') as HTMLElement | null)?.offsetWidth ?? 0;
+    const max = Math.max(w.min, window.innerWidth - left - other - CENTRE_MIN);
+    const width = Math.round(Math.min(Math.max(wanted, w.min), max));
+    document.documentElement.style.setProperty(w.name, `${width}px`);
+    saveStr(w.pref, String(width));
+    window.dispatchEvent(new Event('codist:resize'));
+  }
+  function startResize(edge: Edge, e: PointerEvent) {
+    dragging = edge;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }
   function resize(e: PointerEvent) {
     if (!dragging) return;
-    const w = Math.min(Math.max(window.innerWidth - e.clientX, 360), window.innerWidth - 560);
-    document.documentElement.style.setProperty('--panel-w', `${w}px`);
-    window.dispatchEvent(new Event('codist:resize'));
+    if (dragging === 'panel') setWidth('panel', window.innerWidth - e.clientX);
+    else setWidth('side', e.clientX - ((document.querySelector('.dock') as HTMLElement | null)?.getBoundingClientRect().left ?? 0));
+  }
+  function resizeKey(edge: Edge, e: KeyboardEvent) {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const box = document.querySelector(edge === 'side' ? '.dock' : '.panel') as HTMLElement | null;
+    const grow = (e.key === 'ArrowRight') === (edge === 'side');
+    setWidth(edge, (box?.offsetWidth ?? 0) + (grow ? 24 : -24));
   }
 
   function keys(e: KeyboardEvent) {
@@ -103,11 +137,15 @@
   {:else}
   <main
     class="layout"
-    class:dragging
+    class:dragging={dragging !== null}
     class:no-side={!app.showCommits}
     class:no-panel={!app.showPanel}
   >
-    {#if app.showCommits}<LeftDock />{/if}
+    {#if app.showCommits}
+      <LeftDock />
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+      <div class="resizer" role="separator" aria-orientation="vertical" aria-label="Resize the commits panel" tabindex="0" onpointerdown={(e) => startResize('side', e)} onpointermove={resize} onpointerup={() => (dragging = null)} onkeydown={(e) => resizeKey('side', e)}></div>
+    {/if}
     {#if app.mode === 'review'}
       <DiffReview />
     {:else if app.centre === 'branches'}
@@ -121,8 +159,8 @@
       {/await}
     {/if}
     {#if app.showPanel}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="resizer" onpointerdown={startResize} onpointermove={resize} onpointerup={() => (dragging = false)}></div>
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+      <div class="resizer" role="separator" aria-orientation="vertical" aria-label="Resize the details panel" tabindex="0" onpointerdown={(e) => startResize('panel', e)} onpointermove={resize} onpointerup={() => (dragging = null)} onkeydown={(e) => resizeKey('panel', e)}></div>
       <Panel />
     {/if}
   </main>
@@ -142,16 +180,16 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: var(--side-w) minmax(0, 1fr) 1px var(--panel-w);
+    grid-template-columns: var(--side-w) 1px minmax(0, 1fr) 1px var(--panel-w);
   }
   .layout.no-side { grid-template-columns: minmax(0, 1fr) 1px var(--panel-w); }
-  .layout.no-panel { grid-template-columns: var(--side-w) minmax(0, 1fr); }
+  .layout.no-panel { grid-template-columns: var(--side-w) 1px minmax(0, 1fr); }
   .layout.no-side.no-panel { grid-template-columns: minmax(0, 1fr); }
   .layout.dragging { cursor: col-resize; user-select: none; }
 
   .resizer { position: relative; background: var(--border); cursor: col-resize; touch-action: none; z-index: 5; }
   .resizer::after { content: ''; position: absolute; inset: 0 -4px; }
-  .resizer:hover, .dragging .resizer { background: var(--accent); }
+  .resizer:hover, .resizer:focus-visible, .dragging .resizer { background: var(--accent); }
 
   @media (max-width: 1000px) {
     :global(body) { overflow: auto; }

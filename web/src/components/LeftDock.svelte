@@ -17,7 +17,7 @@
 </aside>
 
 <style>
-  .dock { display: flex; flex-direction: column; min-height: 0; min-width: 0; border-right: 1px solid var(--border); background: var(--surface); }
+  .dock { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: var(--surface); }
   .tabs { display: flex; gap: 0; margin: 10px; padding: 2px; border-radius: var(--r); background: var(--surface-3); flex-shrink: 0; }
   .tabs button { flex: 1; height: 24px; border: 0; border-radius: 5px; background: none; color: var(--text); font-size: 12.5px; }
     .tabs button.on { font-weight: 500; background: var(--surface-2); box-shadow: var(--raised); }
