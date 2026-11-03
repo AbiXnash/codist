@@ -6,6 +6,7 @@
   import { app, isTestNode as isTest, nodeFor, nodeMatches, openFile, saveList, saveStr, selectNode, toast } from '../lib/store.svelte';
   import { cssVar, SEVERITY_COLOR, STATE_COLOR, STEREOTYPE, stereo, worst } from '../lib/theme';
   import { dependencies, dependents, layeredPositions, path, type Metrics } from '../lib/graphAnalysis';
+  import { followOnDrag } from '../lib/graphDrag';
   import Glyph from './Glyph.svelte';
   import GraphGuide from './GraphGuide.svelte';
   import { api } from '../lib/api';
@@ -96,6 +97,18 @@
     if (untrack(() => methodLevel || app.expanded.length > 0)) void untrack(loadCalls);
   });
   const visible = $derived(app.graphView);
+  const focused = $derived(app.focusChanges && (app.overlay === 'none' || app.overlay === 'layers') ? app.detail?.analysis ?? null : null);
+  let showFiles = $state(false);
+  // Choosing a commit frames what it affects.
+  let framed: string | undefined;
+  $effect(() => {
+    const sha = focused?.commit.sha;
+    if (sha && sha !== framed) {
+      showFiles = false;
+      requestAnimationFrame(() => { highlight(); fit(); });
+    }
+    framed = sha;
+  });
   const matches = nodeMatches;
 
   function commonPrefix(pkgs: string[]): string {
@@ -280,7 +293,7 @@
       } as any },
       { selector: 'node[box = "service"]', style: {
         'background-color': cssVar('--accent'), 'background-opacity': 0.05, 'border-width': 1.5, 'border-style': 'solid', 'border-color': cssVar('--border-strong'),
-        color: cssVar('--text'), 'font-size': 20, 'font-weight': 600, 'text-margin-y': -6, padding: '16px', 'min-zoomed-font-size': 0,
+        color: cssVar('--text'), 'font-size': 34, 'font-weight': 600, 'text-margin-y': -8, padding: '24px', 'min-zoomed-font-size': 0,
       } as any },
       { selector: 'node[isService]', style: {
         shape: 'round-rectangle', width: 'data(boxW)', height: 46, 'background-color': cssVar('--surface-2'), 'border-width': 1.5, 'border-color': cssVar('--border-strong'),
@@ -313,6 +326,8 @@
       { selector: 'node.target', style: { 'border-color': 'data(issueColor)', 'border-width': 4, 'underlay-color': 'data(issueColor)', 'underlay-opacity': 0.45, 'underlay-padding': 12, 'font-weight': 700, color: cssVar('--text') } },
       { selector: 'node.picked', style: { 'border-color': accent, 'border-width': 3, 'underlay-color': accent, 'underlay-opacity': 0.2 } },
       { selector: 'node.match', style: { 'underlay-color': accent, 'underlay-opacity': 0.35, 'font-weight': 700, color: cssVar('--text') } },
+      { selector: 'edge.shared', style: { opacity: 0.06 } },
+      { selector: 'edge.shared.shown, edge.shared.hl, edge.shared.impact, edge.shared.onpath, edge.shared.cycle, edge.shared.violation', style: { opacity: 0.9 } },
       { selector: 'edge.impact', style: { 'line-color': STATE_COLOR.impacted, 'target-arrow-color': STATE_COLOR.impacted, width: 1.8 } },
       { selector: 'edge.hl', style: { 'line-color': accent, 'target-arrow-color': accent, width: 1.8 } },
       // Analysis overlays
@@ -325,24 +340,24 @@
       { selector: 'node.d3', style: { 'underlay-color': '#f97316', 'underlay-opacity': 0.14, 'border-color': '#fdba74', 'border-width': 2 } },
       { selector: 'node.onpath', style: { 'border-color': '#06b6d4', 'border-width': 3, 'underlay-color': '#06b6d4', 'underlay-opacity': 0.28, 'font-weight': 700, color: cssVar('--text') } },
       { selector: 'edge.onpath', style: { 'line-color': '#06b6d4', 'target-arrow-color': '#06b6d4', width: 2.8 } },
-      { selector: '.dim', style: { opacity: 0.14 } },
-      { selector: ':parent.dim', style: { opacity: 0.45 } },
+      { selector: '.dim', style: { opacity: 0.32 } },
+      { selector: ':parent.dim', style: { opacity: 0.8 } },
       { selector: '.fade', style: { opacity: 0.1 } },
     ];
   }
 
   const fcoseLayout = {
     name: 'fcose', quality: 'proof', nodeDimensionsIncludeLabels: true, packComponents: true, uniformNodeDimensions: false,
-    nodeRepulsion: () => 2000,
-    idealEdgeLength: (e: cytoscape.EdgeSingular) => 30 + 3 * Math.sqrt(e.source().degree(false) + e.target().degree(false)),
-    edgeElasticity: () => 0.35, nestingFactor: 0.4, gravity: 0.4, gravityRange: 2.4, gravityCompound: 1.4, numIter: 4000,
-    tile: true, tilingPaddingVertical: 12, tilingPaddingHorizontal: 12, padding: 40,
+    nodeRepulsion: () => 9000,
+    idealEdgeLength: (e: cytoscape.EdgeSingular) => 80 + 5 * Math.sqrt(e.source().degree(false) + e.target().degree(false)),
+    edgeElasticity: () => 0.35, nestingFactor: 0.4, gravity: 0.12, gravityRange: 3.8, gravityCompound: 1.4, numIter: 4000, nodeSeparation: 110,
+    tile: true, tilingPaddingVertical: 48, tilingPaddingHorizontal: 48, padding: 40,
   };
 
   const presetFrom = (pos: Map<string, { x: number; y: number }>) => ({ name: 'preset', positions: (n: cytoscape.NodeSingular) => pos.get(n.id()) ?? n.position() });
 
   // Distance is the relation: more calls, closer. Using a service's classes is a weaker tie than calling it.
-  const gapFor = (kind: string, calls: number) => (kind === 'feign' ? Math.max(24, 70 - 20 * (calls - 1)) : 130);
+  const gapFor = (kind: string, calls: number) => (kind === 'feign' ? Math.max(90, 150 - 20 * (calls - 1)) : 220);
 
   /** Each service or package as its own box, the boxes apart, with distance showing how related they are. */
   function boxedPositions() {
@@ -359,7 +374,7 @@
           const ring = members ? 70 + members * 7 : 0;
           return { id: n.id(), w: Math.max((n.data('size') ?? 24) + ring, String(n.data('label')).length * 5.6), h: (n.data('size') ?? 24) + 16 + ring };
         }),
-        links: kids.connectedEdges().filter((e) => !e.data('cross') && e.data('kind') !== 'member').map((e) => ({ a: e.data('source'), b: e.data('target'), len: 40 })),
+        links: kids.connectedEdges().filter((e) => !e.data('cross') && e.data('kind') !== 'member' && !e.hasClass('shared')).map((e) => ({ a: e.data('source'), b: e.data('target'), len: 70 })),
       });
     });
     cy!.edges('[?cross]').forEach((e) => {
@@ -369,7 +384,7 @@
       if (e.data('kind') === 'feign') { cur.kind = 'feign'; cur.calls++; }
       between.set(key, cur);
     });
-    const { positions } = clusterLayout(clusters, [...between.values()].map((l) => ({ a: l.a, b: l.b, len: gapFor(l.kind, l.calls) })));
+    const { positions } = clusterLayout(clusters, [...between.values()].map((l) => ({ a: l.a, b: l.b, len: gapFor(l.kind, l.calls) })), { itemGap: 26, boxGap: 90, pad: 26 });
     cy!.nodes('[member]').forEach((n) => {
       const owner = positions.get(n.data('owner'));
       if (!owner) return;
@@ -384,16 +399,27 @@
   function serviceOverviewPositions() {
     const items = cy!.nodes().map((n) => ({ id: n.id(), w: n.data('boxW') ?? 120, h: 46 }));
     const links = cy!.edges().map((e) => ({ a: e.source().id(), b: e.target().id(), len: gapFor(e.data('kind'), e.data('calls') ?? 1) }));
-    return arrange(items, links, 70);
+    return arrange(items, links, 120);
+  }
+
+  // Most classes use a few shared ones, such as a common exception. Those links say little about how
+  // the code is organised, and they would pull everything into one ball, so they stay out of the layout
+  // and are drawn faintly until the class is hovered or selected.
+  const SHARED = 15;
+  function markShared() {
+    cy!.edges().removeClass('shared');
+    cy!.nodes().filter((n) => !n.data('isService') && !n.data('member') && n.connectedEdges('[kind != "member"]').length >= SHARED)
+      .connectedEdges('[kind != "member"]').addClass('shared');
   }
 
   function layout(incremental: boolean, extra: Record<string, unknown> = {}) {
     if (!cy || cy.nodes().empty()) return;
-    const anim = { animate: true, animationDuration: incremental ? 500 : 700, animationEasing: 'ease-out-cubic', fit: !incremental, padding: 40 };
+    markShared();
+    const anim = { animate: true, animationDuration: incremental ? 500 : 700, animationEasing: 'ease-out-cubic', fit: !incremental, padding: 72 };
     let opts: Record<string, unknown>;
     switch (incremental ? 'natural' : app.layoutMode) {
       case 'layers': {
-        const pos = layeredPositions(visible.nodes, container.clientWidth);
+        const pos = layeredPositions(visible.nodes, container.clientWidth, container.clientHeight);
         opts = { name: 'preset', positions: (n: cytoscape.NodeSingular) => pos.get(n.id()) ?? { x: 0, y: 0 } };
         break;
       }
@@ -401,13 +427,14 @@
         opts = presetFrom(serviceOverviewPositions());
         break;
       default:
-        opts = app.groupBy !== 'none' ? presetFrom(boxedPositions()) : { ...fcoseLayout, randomize: !incremental };
+        opts = app.groupBy !== 'none' ? presetFrom(boxedPositions()) : { ...fcoseLayout, quality: cy.nodes().length > 300 ? 'default' : 'proof', randomize: !incremental };
     }
-    const run = cy.layout({ ...opts, ...anim, ...extra } as unknown as cytoscape.LayoutOptions);
+    const laidOut = opts.name === 'fcose' ? cy.elements().not('edge.shared') : cy.elements();
+    const run = laidOut.layout({ ...opts, ...anim, ...extra } as unknown as cytoscape.LayoutOptions);
     // Colours set while nodes are being added can freeze mid-transition, so settle them once layout ends.
     run.one('layoutstop', () => {
       cy?.nodes().removeClass('changed added impacted issue');
-      requestAnimationFrame(highlight);
+      requestAnimationFrame(() => { highlight(); if (focused) fit(); });
     });
     run.run();
   }
@@ -467,7 +494,6 @@
     const a = app.detail?.analysis;
     const picked = app.selectedNode;
     const q = app.graphQuery.trim().toLowerCase() || app.search.trim().toLowerCase();
-    const commitScope = app.scope === 'commit' || app.scope === 'working';
 
     cy.batch(() => {
       cy!.elements().removeClass('changed added impacted issue impact hl picked dim match target cycle violation origin d1 d2 d3 onpath');
@@ -513,13 +539,16 @@
         if (n.nonempty()) n.addClass('issue').data('issueColor', SEVERITY_COLOR[worst(list)]);
       }
 
-      // Method level already shows only what relates to the commit, so nothing on it should fade.
-      if (app.focusChanges && app.overlay === 'none' && !methodLevel) {
-        const seeds = commitScope && changed.size ? cy!.nodes('.changed, .added') : !commitScope && byNode.size ? cy!.nodes('.issue') : null;
-        if (seeds) {
-          let k = cy!.collection();
-          seeds.forEach((n) => { k = k.union(n.closedNeighborhood()); });
-          keep = k.union(k.nodes().ancestors());
+      // Focused on a commit: what it changed and what depends on that stay lit, with the methods shown for them.
+      let onCommit: cytoscape.Collection | null = null;
+      if (app.focusChanges && (app.overlay === 'none' || app.overlay === 'layers')) {
+        const seeds = cy!.nodes('.changed, .added, .impacted');
+        if (seeds.nonempty()) {
+          const open = new Set([...seeds.map((n) => n.id()), ...(methodLevel ? app.expanded : [])]);
+          const lit = cy!.nodes().filter((n) => open.has(n.id()) || open.has(n.data('owner')));
+          lit.edgesWith(lit).addClass('shown');
+          const k = lit.union(lit.edgesWith(lit));
+          onCommit = keep = k.union(k.nodes().ancestors());
         }
       }
 
@@ -539,7 +568,7 @@
           const e = cy!.getElementById(`${v.source}>${v.target}`);
           if (e.nonempty()) k = k.union(e.addClass('violation')).union(e.connectedNodes());
         }
-        keep = k.nonempty() ? k.union(k.nodes().ancestors()) : null;
+        keep = onCommit ?? (k.nonempty() ? k.union(k.nodes().ancestors()) : null); // a chosen commit wins here
       } else if (app.overlay === 'blast' && app.overlayNode && app.graph) {
         const origin = cy!.getElementById(app.overlayNode);
         let k = origin.addClass('origin');
@@ -591,6 +620,15 @@
     });
   }
 
+  /** Back to the whole graph: nothing dimmed and everything in view. */
+  function unfocus() {
+    app.focusChanges = false;
+    app.picked = null;
+    selectNode(null);
+    showFiles = false;
+    requestAnimationFrame(fit);
+  }
+
   function center(id: string) {
     const n = cy?.getElementById(id);
     if (n && n.nonempty()) cy!.animate({ center: { eles: n }, zoom: Math.max(cy!.zoom(), 1.2) }, { duration: 400, easing: 'ease-out-cubic' });
@@ -599,7 +637,8 @@
   export function fit() {
     if (!cy) return;
     // Frame what is lit, but a single highlighted class must not fill the screen.
-    const lit = cy.elements().not('.dim');
+    // Microservice boxes are few, and the rest of the picture is the point, so they all stay in view.
+    const lit = app.layoutMode === 'services' ? cy.elements() : cy.elements().not('.dim');
     const limit = cy.maxZoom();
     cy.maxZoom(1.5);
     cy.animate({ fit: { eles: lit.nodes().nonempty() ? lit : cy.elements(), padding: 50 } }, { duration: 400, complete: () => cy?.maxZoom(limit) });
@@ -649,7 +688,7 @@
   }
 
   onMount(() => {
-    cy = cytoscape({ container, minZoom: 0.2, maxZoom: 2.5, wheelSensitivity: 0.3, boxSelectionEnabled: false, style: styles() });
+    cy = cytoscape({ container, minZoom: 0.05, maxZoom: 2.5, textureOnViewport: true, wheelSensitivity: 0.3, boxSelectionEnabled: false, style: styles() });
     cy.on('tap', 'node', (e) => {
       if (e.target.data('isPkg')) return;
       if (e.target.data('member')) {
@@ -691,6 +730,7 @@
       const n = e.target;
       if (n.data('isPkg') || n.data('member') || n.data('isService') || menu) return;
       const hood = n.closedNeighborhood();
+      hood.edges().addClass('shown');
       cy!.elements().not(hood.union(hood.nodes().ancestors())).addClass('fade');
       const node = app.graph?.nodes.find((x) => x.id === n.id());
       const p = n.renderedPosition();
@@ -698,6 +738,7 @@
       container.style.cursor = 'pointer';
     });
     cy.on('mouseout', 'node', () => {
+      cy!.edges('.shown').removeClass('shown');
       cy!.elements().removeClass('fade');
       hover = null;
       container.style.cursor = '';
@@ -708,11 +749,7 @@
     });
     cy.on('mouseout', 'edge', () => (edgeTip = null));
     cy.on('pan zoom grab', () => { hover = null; menu = null; edgeTip = null; });
-    cy.on('dragfree', 'node', (e) => {
-      const n = e.target;
-      if (n.data('isPkg') || n.data('member') || app.layoutMode !== 'natural') return;
-      layout(true, { numIter: 600, fixedNodeConstraint: [{ nodeId: n.id(), position: { ...n.position() } }], animationDuration: 400 });
-    });
+    followOnDrag(cy);
     if (app.graph) { sync(); highlight(); }
 
     const onResize = () => cy?.resize();
@@ -787,10 +824,27 @@
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="7.5"/><path d="M7.8 7.6a2.3 2.3 0 1 1 3.2 2.1c-.6.3-1 .8-1 1.5v.4M10 14.6v.2"/></svg>
       </button>
     </div>
-    {#if methodLevel && !app.expanded.length}<span class="hid">This commit changes no classes</span>{/if}
     {#if hidden > 0}<span class="hid" title="Hidden by the Explorer filters">{hidden} hidden</span>{/if}
     {#if app.overlay !== 'none' && app.overlay !== 'layers'}<span class="ov">{app.overlay}</span>{/if}
   </div>
+
+  {#if focused}
+    <div class="focusbar" role="status">
+      {#if showFiles}
+        <ul class="filelist">
+          {#each focused.files as f (f.path)}
+            <li><button class="mono" title="Open {f.path}" onclick={() => { app.showPanel = true; void openFile(f.path, null, f.addedLines?.[0] ?? null); }}>{f.path}</button></li>
+          {/each}
+        </ul>
+      {/if}
+      <div class="focusrow">
+        <span class="mono">{focused.commit.shortSha}</span>
+        <button class="count" aria-expanded={showFiles} disabled={!focused.files.length} onclick={() => (showFiles = !showFiles)}>{focused.files.length} {focused.files.length === 1 ? 'file' : 'files'}</button>
+        <span>{focused.changed.length ? `${focused.changed.length} changed, ${focused.impacted.length} affected` : 'No classes changed'}</span>
+        <button class="unfocus" title="Show the whole graph (Esc)" onclick={unfocus}>Unfocus</button>
+      </div>
+    </div>
+  {/if}
 
   {#if hover && hm}
     <div class="tip" class:below={tipBelow} style:left="{tipX}px" style:top="{hover.y}px">
@@ -853,7 +907,7 @@
 </section>
 
 <svelte:window
-  onkeydown={(e) => { if (e.key === 'Escape') { menu = null; app.showGuide = false; } }}
+  onkeydown={(e) => { if (e.key === 'Escape') { if (focused && !menu && !app.showGuide) unfocus(); menu = null; app.showGuide = false; } }}
   onclick={(e) => { if (!e.ctrlKey) menu = null; }}
 />
 
@@ -867,6 +921,15 @@
   .seg.icons button { width: 26px; padding: 0; display: grid; place-items: center; }
   .seg button:hover { color: var(--text); }
   .seg button.on { color: var(--text); background: var(--surface-3); box-shadow: var(--raised); }
+  .focusbar { position: absolute; z-index: 3; left: 50%; bottom: max(16px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: grid; gap: 6px; max-width: calc(100% - 32px); font-size: 12px; color: var(--text-2); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 10px; padding: 6px 6px 6px 12px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); }
+  .focusrow { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+  .focusbar .mono { color: var(--text); }
+  .count { font: inherit; color: var(--accent); background: none; border: 0; padding: 2px 0; cursor: pointer; }
+  .count:disabled { color: inherit; cursor: default; }
+  .unfocus { font: inherit; font-weight: 600; color: #fff; background: var(--accent); border: 0; border-radius: 7px; padding: 5px 12px; cursor: pointer; }
+  .filelist { list-style: none; margin: 0; padding: 0 6px 0 0; max-height: 220px; overflow: auto; display: grid; gap: 2px; }
+  .filelist button { font-size: 11px; color: var(--text-2); background: none; border: 0; padding: 2px 0; text-align: left; cursor: pointer; max-width: 100%; overflow-wrap: anywhere; }
+  .filelist button:hover { color: var(--text); }
   .hid { align-self: center; font-size: 10.5px; line-height: 16px; padding: 0 6px; border-radius: 9px; background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
   .ov { align-self: center; font-size: 10.5px; line-height: 16px; padding: 0 6px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-text); text-transform: capitalize; }
 

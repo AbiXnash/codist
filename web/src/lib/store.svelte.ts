@@ -136,7 +136,7 @@ class AppState {
   asking = $state(false);
 
   follow = $state(true);
-  focusChanges = $state(true);
+  focusChanges = $state(false);
   groupBy = $state<'none' | 'package' | 'service'>(prefStr('groupBy', ['none', 'package', 'service'] as const, 'none'));
   showTests = $state(false);
 
@@ -416,6 +416,7 @@ export async function selectCommit(sha: string, focus = false) {
   if (focus) {
     app.scope = 'commit';
     app.picked = null;
+    app.focusChanges = true;
   }
   await refreshDetail();
 }

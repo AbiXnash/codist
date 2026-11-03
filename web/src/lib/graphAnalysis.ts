@@ -155,7 +155,7 @@ export function dependencies(g: Graph, id: string): Map<string, number> {
 }
 
 /** Positions for the layered layout: one row per layer, controllers on top, grouped by package. */
-export function layeredPositions(nodes: GraphNode[], width: number): Map<string, { x: number; y: number }> {
+export function layeredPositions(nodes: GraphNode[], width: number, height: number): Map<string, { x: number; y: number }> {
   const rows = new Map<number, GraphNode[]>();
   for (const n of nodes) {
     const l = LAYER[n.stereotype] ?? (n.stereotype === 'test' ? 4 : -1); // config, exceptions, other: their own row
@@ -163,18 +163,18 @@ export function layeredPositions(nodes: GraphNode[], width: number): Map<string,
   }
   const order = [4, 3, 2, 1, 0, -1].filter((l) => rows.has(l));
   const out = new Map<string, { x: number; y: number }>();
-  // A long layer wraps onto extra rows, so the view stays large enough to read when it is fitted.
-  const perRow = Math.max(4, Math.round(width / 110));
+  // A long layer wraps onto extra rows, as many as make the whole picture the shape of the screen.
+  const gap = 170, rowGap = 110;
+  const perRow = Math.max(4, Math.ceil(Math.sqrt((nodes.length * (width / Math.max(height, 1)) * rowGap) / gap)));
   let y = 0;
   order.forEach((l) => {
     const row = rows.get(l)!.sort((a, b) => a.pkg.localeCompare(b.pkg) || a.name.localeCompare(b.name));
-    const gap = 150;
     for (let i = 0; i < row.length; i += perRow) {
       const part = row.slice(i, i + perRow);
       part.forEach((n, j) => out.set(n.id, { x: (j - (part.length - 1) / 2) * gap, y }));
-      y += 110;
+      y += rowGap;
     }
-    y += 40; // a wider gap between layers than between the rows of one layer
+    y += 70; // a wider gap between layers than between the rows of one layer
   });
   return out;
 }
