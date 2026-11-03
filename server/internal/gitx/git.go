@@ -1016,6 +1016,26 @@ func (r *Repo) CommitsTouching(path string) []string {
 	return strings.Fields(out)
 }
 
+// AddCopy checks out the current commit into a throwaway folder, without touching the working tree.
+func (r *Repo) AddCopy(dir string) error {
+	_, err := r.git("worktree", "add", "--quiet", "--detach", dir, r.Head())
+	return err
+}
+
+// RemoveCopy deletes a folder made by AddCopy.
+func (r *Repo) RemoveCopy(dir string) {
+	_, _ = r.git("worktree", "remove", "--force", dir)
+}
+
+// ChangedFiles lists the paths that differ between two commits.
+func (r *Repo) ChangedFiles(a, b string) []string {
+	out, err := r.git("diff", "--name-only", "--no-renames", a, b)
+	if err != nil {
+		return nil
+	}
+	return strings.Fields(out)
+}
+
 // BlameLine is who last changed a line, at the tracked branch.
 type BlameLine struct {
 	SHA     string `json:"sha"`

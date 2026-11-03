@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"codist/internal/gitx"
@@ -36,6 +37,44 @@ func quotesCode(lines []string, quote string) bool {
 		return false
 	}
 	return strings.Contains(strings.Join(strings.Fields(strings.Join(lines, " ")), ""), want)
+}
+
+// quotedNear says the quote appears within reach of the line the model names. A model that quotes real
+// code from somewhere else in the file is usually talking about something other than that line.
+func quotedNear(lines []string, quote string, line, reach int) bool {
+	var parts []string
+	for _, l := range strings.Split(quote, "\n") {
+		parts = append(parts, numberedPrefix.ReplaceAllString(l, ""))
+	}
+	want := strings.Join(strings.Fields(strings.Join(parts, " ")), "")
+	if want == "" {
+		return false
+	}
+	var whole strings.Builder
+	starts := make([]int, len(lines))
+	for i, l := range lines {
+		starts[i] = whole.Len()
+		whole.WriteString(strings.Join(strings.Fields(l), ""))
+	}
+	text := whole.String()
+	for from := 0; ; {
+		at := strings.Index(text[from:], want)
+		if at < 0 {
+			return false
+		}
+		at += from
+		first := sort.Search(len(starts), func(i int) bool { return starts[i] > at }) // 1-based line of the match
+		if first >= line-reach && first <= line+reach {
+			return true
+		}
+		from = at + 1
+	}
+}
+
+// aboutPattern lists what a quote has to show for a bug pattern to apply. A BigDecimal precision problem
+// needs a construction or comparison; merely reading a BigDecimal field proves nothing.
+var aboutPattern = map[string]*regexp.Regexp{
+	"bigdecimal-precision": regexp.MustCompile(`new\s+BigDecimal|\.equals\(|doubleValue|floatValue|BigDecimal\.valueOf|\bdouble\b|\bfloat\b`),
 }
 
 // repoStandards reads what the repository says about how its code should be written, with the

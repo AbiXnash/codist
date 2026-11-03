@@ -32,7 +32,12 @@ var (
 func FilePrompt() string { return prompts.Get("review-file") }
 
 // Service reviews commits one at a time, file by file.
+// maxRuleFiles keeps one enormous commit from holding up the queue.
+const maxRuleFiles = 300
+
 type Service struct {
+	rulesOnly map[string]bool
+
 	ctxMu  sync.Mutex
 	ctxSHA string
 	ctxAt  javaidx.Context
@@ -72,6 +77,75 @@ func (s *Service) Build(sha string) Build {
 	b, _, _, _ := ReadBuild(func(p string) (string, bool) { return s.repo.ReadFile(sha, p) })
 	s.builds.Store(sha, b)
 	return b
+}
+
+// combined finds what breaks only once two branches meet: rule findings on the merged code that neither
+// parent had. Each side can be fine alone, such as one branch removing a route another starts to call.
+func (s *Service) combined(c gitx.Commit) []FileReview {
+	project := func(sha string) javaidx.Context {
+		g := javaidx.Index(s.repo.JavaFilesAt(sha), sha[:7])
+		return javaidx.ProjectContext(&g)
+	}
+	one, two := c.Parents[0], c.Parents[1]
+	merged, first, second := project(c.SHA), project(one), project(two)
+	findings := func(sha, path string, ctx javaidx.Context) (map[string]javaidx.RuleFinding, []string) {
+		src, ok := s.repo.ReadFile(sha, path)
+		if !ok {
+			return nil, nil
+		}
+		lines := strings.Split(src, "\n")
+		every := map[int]bool{}
+		for i := range lines {
+			every[i+1] = true
+		}
+		ctx.Path = path
+		out := map[string]javaidx.RuleFinding{}
+		for _, f := range javaidx.Check([]byte(src), every, ctx) {
+			code := ""
+			if f.Line >= 1 && f.Line <= len(lines) {
+				code = normalizeCode(lines[f.Line-1])
+			}
+			out[f.ID+"\x00"+code] = f
+		}
+		return out, lines
+	}
+	seen := map[string]bool{}
+	var out []FileReview
+	for _, path := range append(s.repo.ChangedFiles(one, c.SHA), s.repo.ChangedFiles(two, c.SHA)...) {
+		if seen[path] || !strings.HasSuffix(path, ".java") {
+			continue
+		}
+		seen[path] = true
+		now, lines := findings(c.SHA, path, merged)
+		left, _ := findings(one, path, first)
+		right, _ := findings(two, path, second)
+		fr := FileReview{Path: path, Findings: []Finding{}}
+		for key, f := range now {
+			if _, had := left[key]; had {
+				continue
+			}
+			if _, had := right[key]; had {
+				continue
+			}
+			fr.Findings = append(fr.Findings, Finding{Line: f.Line, EndLine: f.EndLine, Severity: f.Severity, Category: f.Category, Title: f.Title,
+				Detail: "Only once the branches are combined: neither branch had this alone. " + f.Detail, Suggestion: f.Suggestion, OnChangedLine: true, Source: "rule", Ref: f.ID, Snippet: strings.TrimSpace(lines[clampLine(f.Line, len(lines))-1])})
+		}
+		if len(fr.Findings) > 0 {
+			sort.Slice(fr.Findings, func(i, j int) bool { return fr.Findings[i].Line < fr.Findings[j].Line })
+			out = append(out, fr)
+		}
+	}
+	return out
+}
+
+func clampLine(line, n int) int {
+	if line < 1 {
+		return 1
+	}
+	if line > n {
+		return n
+	}
+	return line
 }
 
 // contextAt is what the rules know about the project at a commit. A review of an older commit must not
@@ -174,6 +248,17 @@ func (s *Service) Enqueue(sha string) bool {
 	return true
 }
 
+// EnqueueRulesOnly reviews a commit with the rules alone, for the older commits of a big pull.
+func (s *Service) EnqueueRulesOnly(sha string) bool {
+	s.mu.Lock()
+	if s.rulesOnly == nil {
+		s.rulesOnly = map[string]bool{}
+	}
+	s.rulesOnly[sha] = true
+	s.mu.Unlock()
+	return s.Enqueue(sha)
+}
+
 func (s *Service) worker() {
 	for sha := range s.queue {
 		s.run(sha)
@@ -216,6 +301,13 @@ func (s *Service) run(sha string) {
 	if s.cfg.ModelReview {
 		problem = s.llm.Problem()
 	}
+	s.mu.Lock()
+	quick := s.rulesOnly[sha]
+	delete(s.rulesOnly, sha)
+	s.mu.Unlock()
+	if quick && problem == "" {
+		problem = "The model skipped this older commit from a big pull; run the review again to include it"
+	}
 	a, err := s.analyzer.Analyze(sha)
 	if err != nil {
 		fail(err)
@@ -237,9 +329,13 @@ func (s *Service) run(sha string) {
 		}
 		return len(targets[i].AddedLines) > len(targets[j].AddedLines)
 	})
+	// Rules are cheap, so they check every changed file. The model takes minutes per file, so it reads the
+	// ones that come first, and the review says when it stopped.
 	if n := len(targets); n > s.cfg.MaxFiles {
-		targets = targets[:s.cfg.MaxFiles]
-		r.AnalysisProblems = append(r.AnalysisProblems, fmt.Sprintf("only %d of %d changed files were reviewed (limit: CODIST_MAX_FILES)", s.cfg.MaxFiles, n))
+		r.AnalysisProblems = append(r.AnalysisProblems, fmt.Sprintf("rules checked all %d changed files; the model read the first %d (limit: CODIST_MAX_FILES)", n, s.cfg.MaxFiles))
+	}
+	if len(targets) > maxRuleFiles {
+		targets = targets[:maxRuleFiles]
 	}
 
 	kb := s.Knowledge()
@@ -253,7 +349,7 @@ func (s *Service) run(sha string) {
 		analysis <- tools.Result{}
 	}
 	var res *tools.Result
-	for _, f := range targets {
+	for i, f := range targets {
 		slog.Info("reviewing", "file", f.Path, "sha", sha[:7])
 		began := time.Now()
 		fr, in, ok := s.rulePass(a, f, kb, build)
@@ -273,7 +369,10 @@ func (s *Service) run(sha string) {
 		if ok {
 			fr.Findings = mergeAnalysis(fr.Findings, res.Findings, f.NewPath, in)
 		}
-		fr.Pending = ok && problem == "" && s.cfg.ModelReview
+		fr.Pending = ok && problem == "" && s.cfg.ModelReview && i < s.cfg.MaxFiles
+		if ok && problem == "" && s.cfg.ModelReview && i >= s.cfg.MaxFiles {
+			fr.Skipped = "past the model's file limit: rules only"
+		}
 		if ok && problem != "" {
 			fr.Error = problem
 		}
@@ -285,8 +384,18 @@ func (s *Service) run(sha string) {
 		}
 	}
 
+	var joined []FileReview
+	if len(a.Commit.Parents) == 2 {
+		began := time.Now()
+		joined = s.combined(a.Commit)
+		r.Files = append(r.Files, joined...)
+		Activities.Step("Checked the merged result", sha, "", fmt.Sprintf("%d file(s) break only once the branches are combined", len(joined)), time.Since(began))
+	}
+
 	risk := ruleRisk(r.Files)
 	switch {
+	case len(joined) > 0:
+		r.Summary = "These problems appear only once the branches are combined. Each branch was fine alone."
 	case len(targets) == 0:
 		r.Summary = "No reviewable source changes in this commit."
 		if len(a.Commit.Parents) > 1 {
@@ -621,10 +730,18 @@ func dropReason(x map[string]any, line, end int, lines []string, existing []Find
 		return ""
 	}
 	// A model that cannot quote the code it is talking about has usually made the problem up.
-	if ev := str(x["evidence"]); ev != "" && !quotesCode(lines, ev) {
-		return "quotes code not in the file"
-	}
 	title, ref := str(x["title"]), str(x["ref"])
+	if ev := str(x["evidence"]); ev != "" {
+		if !quotesCode(lines, ev) {
+			return "quotes code not in the file"
+		}
+		if !quotedNear(lines, ev, line, 8) {
+			return "quotes code far from the line it names"
+		}
+		if about := aboutPattern[ref]; about != nil && !about.MatchString(ev) {
+			return "its quote does not show that problem"
+		}
+	}
 	if vagueAdvice(title) {
 		return "vague advice"
 	}

@@ -17,9 +17,32 @@ import (
 	"codist/internal/review"
 )
 
-// maxCatchUp is how many new commits are reviewed at once (a big pull from teammates, or commits
-// made while Codist was stopped). Older ones stay listed as not reviewed and can be reviewed on demand.
-const maxCatchUp = 30
+// maxCatchUp is how many new commits get the model at once (a big pull from teammates, or commits made
+// while Codist was stopped). It takes minutes per file, so older ones get the rules alone, up to
+// maxListed, and can be reviewed fully on demand.
+const (
+	maxCatchUp = 30
+	maxListed  = 2000
+)
+
+// queue reviews commits in order, oldest first, with the model on the newest ones. It runs on its own,
+// so a big pull can't hold up the watcher while the review queue fills.
+func (w *Watcher) queue(commits []gitx.Commit) {
+	go func() {
+		for i, c := range commits {
+			if w.reviews.Reviewed(c.SHA) { // a reworded commit keeps its review
+				continue
+			}
+			if modelFor(i, len(commits)) {
+				w.reviews.Enqueue(c.SHA)
+			} else {
+				w.reviews.EnqueueRulesOnly(c.SHA)
+			}
+		}
+	}()
+}
+
+func modelFor(i, n int) bool { return i >= n-maxCatchUp }
 
 type Watcher struct {
 	cfg     config.Config
@@ -59,16 +82,14 @@ func (w *Watcher) Start() {
 		seen := w.loadSeen()
 		var missed []gitx.Commit
 		if seen != "" && seen != w.lastHead {
-			missed = w.repo.CommitsSince(seen, w.lastHead, maxCatchUp)
+			missed = w.repo.CommitsSince(seen, w.lastHead, maxListed)
 		} else if !w.reviews.Reviewed(w.lastHead) {
 			missed = w.repo.CommitsSince("", w.lastHead, 1) // first run: just the latest commit
 		}
-		for _, c := range missed {
-			if !w.reviews.Reviewed(c.SHA) {
-				slog.Info("reviewing commit made while Codist was stopped", "sha", c.ShortSHA)
-				w.reviews.Enqueue(c.SHA)
-			}
+		if len(missed) > 0 {
+			slog.Info("reviewing commits made while Codist was stopped", "count", len(missed))
 		}
+		w.queue(missed)
 		// Reviews cut off by a restart are finished now.
 		for _, c := range w.repo.Log(20) {
 			if w.reviews.Interrupted(c.SHA) {
@@ -126,7 +147,7 @@ func (w *Watcher) tick() {
 
 	reindexed := false
 	if head := w.repo.Head(); head != "" && head != w.lastHead {
-		fresh := w.repo.CommitsSince(w.lastHead, head, maxCatchUp)
+		fresh := w.repo.CommitsSince(w.lastHead, head, maxListed)
 		slog.Info("new commits", "count", len(fresh), "branch", w.repo.Tracking())
 		w.lastHead = head
 		w.saveSeen(head)
@@ -138,11 +159,7 @@ func (w *Watcher) tick() {
 		}
 		w.hub.Publish("commits", map[string]any{"head": head, "new": shas})
 		if w.cfg.AutoReview {
-			for _, sha := range shas {
-				if !w.reviews.Reviewed(sha) { // a reworded commit keeps its review
-					w.reviews.Enqueue(sha)
-				}
-			}
+			w.queue(fresh)
 		}
 	}
 
@@ -187,11 +204,7 @@ func (w *Watcher) follow(branch string, made time.Time) error {
 	w.hub.Publish("commits", map[string]any{"head": w.lastHead, "new": shas})
 	w.hub.Publish("branch", map[string]any{"branch": branch})
 	if w.cfg.AutoReview {
-		for _, sha := range shas {
-			if !w.reviews.Reviewed(sha) {
-				w.reviews.Enqueue(sha)
-			}
-		}
+		w.queue(missed)
 	}
 	return nil
 }
@@ -203,13 +216,13 @@ func (w *Watcher) missed(seen, before, head string, made time.Time) []gitx.Commi
 		return nil
 	}
 	if seen != "" {
-		return w.repo.CommitsSince(seen, head, maxCatchUp)
+		return w.repo.CommitsSince(seen, head, maxListed)
 	}
 	if made.IsZero() || before == "" {
 		return nil
 	}
 	var fresh []gitx.Commit
-	for _, c := range w.repo.CommitsSince(before, head, maxCatchUp) {
+	for _, c := range w.repo.CommitsSince(before, head, maxListed) {
 		if c.Time >= made.Truncate(time.Second).UnixMilli() {
 			fresh = append(fresh, c)
 		}

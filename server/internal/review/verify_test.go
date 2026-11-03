@@ -95,3 +95,17 @@ func TestReviewPromptNowAsksForEvidence(t *testing.T) {
 		t.Error("the review prompt must ask for evidence, or the check never runs")
 	}
 }
+
+func TestDropReasonKeepsQuotesHonest(t *testing.T) {
+	lines := []string{"class A {", "  BigDecimal total() {", "    return item.getAmount();", "  }", "", "", "", "", "", "", "", "", "", "", "", "  int y = 2;", "}"}
+	bad := map[string]any{"title": "Precision", "ref": "bigdecimal-precision", "evidence": "item.getAmount()"}
+	if why := dropReason(bad, 3, 3, lines, nil, false); why != "its quote does not show that problem" {
+		t.Errorf("reading a BigDecimal proves nothing: %q", why)
+	}
+	if why := dropReason(map[string]any{"title": "Wrong sum", "evidence": "int y = 2;"}, 3, 3, lines, nil, false); why != "quotes code far from the line it names" {
+		t.Errorf("real code from elsewhere: %q", why)
+	}
+	if why := dropReason(map[string]any{"title": "Wrong sum", "evidence": "return item.getAmount();"}, 3, 3, lines, nil, false); why != "" {
+		t.Errorf("a true quote at its line stays: %q", why)
+	}
+}
