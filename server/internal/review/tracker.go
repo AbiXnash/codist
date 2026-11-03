@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"codist/internal/gitx"
 	"codist/internal/javaidx"
@@ -89,7 +90,14 @@ type Tracker struct {
 
 	mu      sync.Mutex
 	files   map[string]string // "sha:path" -> content, for resolution checks
-	fixedAt map[string]string // issue id + head -> commit where the rule stopped firing
+	fixedAt map[string]string // issue id -> commit where the rule stopped firing
+
+	crediting   map[string]bool
+	creditQueue chan *Issue
+	creditDone  int
+	contexts    map[string]javaidx.Context
+	sizeAt      string
+	size        int
 
 	// Issues are derived data: recomputed only when their inputs change.
 	issuesMu  sync.Mutex
@@ -113,6 +121,9 @@ func (t *Tracker) key() string {
 	if t.Resolved != nil {
 		k += fmt.Sprintf("|%d", t.Resolved.Version())
 	}
+	t.mu.Lock()
+	k += fmt.Sprintf("|c%d", t.creditDone)
+	t.mu.Unlock()
 	return k
 }
 
@@ -277,10 +288,11 @@ func (t *Tracker) compute() []Issue {
 			} else if line > 0 {
 				// The code is still there but the rule no longer flags it: fixed by a change elsewhere.
 				is.State, is.Line = "resolved", 0
-				is.FixedIn = t.ruleFixedIn(is)
+				var waiting bool
+				is.FixedIn, waiting = t.ruleFixedIn(is)
 				if c, ok := bySHA[is.FixedIn]; ok {
 					is.FixedBy, is.FixedAt, is.FixedMsg = c.Author, c.Time, c.Message
-				} else if is.FixedIn == "" && !t.repo.Remote {
+				} else if is.FixedIn == "" && !t.repo.Remote && !waiting {
 					is.Uncommitted = true
 				}
 			} else {
@@ -512,26 +524,105 @@ func (t *Tracker) recheck() func(is *Issue, line int) bool {
 
 // ruleFixedIn finds the first commit after the issue was last seen where the rule stops firing,
 // checking each commit with the whole project as it was then. "" means only the working tree fixes it.
-func (t *Tracker) ruleFixedIn(is *Issue) string {
-	head := t.repo.Head()
-	key := is.ID + "@" + head
+func (t *Tracker) ruleFixedIn(is *Issue) (string, bool) {
 	t.mu.Lock()
-	sha, ok := t.fixedAt[key]
+	sha, ok := t.fixedAt[is.ID]
 	t.mu.Unlock()
 	if ok {
-		return sha
+		return sha, false
 	}
-	// Once a rule stops firing it stays quiet, so the first quiet commit can be found by bisecting. All the
-	// commits since have to be in range, or the oldest one listed would get the credit for an older fix.
+	// Finding it can mean indexing the whole project several times. Small projects answer at once; on a
+	// large one a background job does it, so the issue list never waits. The credit appears when it is done.
+	copied := *is
+	if t.projectSize() <= creditNowLimit {
+		return t.findRuleFix(&copied), false
+	}
+	t.creditLater(&copied)
+	return "", true
+}
+
+const creditNowLimit = 150
+
+func (t *Tracker) projectSize() int {
+	head := t.repo.Head()
+	t.mu.Lock()
+	if t.sizeAt == head {
+		defer t.mu.Unlock()
+		return t.size
+	}
+	t.mu.Unlock()
+	n := len(t.repo.JavaFilesAt(head))
+	t.mu.Lock()
+	t.sizeAt, t.size = head, n
+	t.mu.Unlock()
+	return n
+}
+
+// findRuleFix searches for the commit and remembers it. A commit that fixed an issue stays the commit that
+// fixed it, so new commits don't start the search again.
+func (t *Tracker) findRuleFix(is *Issue) string {
 	_, kb, _ := t.Rules()
-	since := t.repo.CommitsSince(is.LastSeen, head, issueHistory)
+	since := t.repo.CommitsSince(is.LastSeen, t.repo.Head(), issueHistory)
+	sha := ""
 	if i := sort.Search(len(since), func(i int) bool { return t.ruleQuietAt(since[i].SHA, is, kb) }); i < len(since) {
 		sha = since[i].SHA
 	}
 	t.mu.Lock()
-	t.fixedAt[key] = sha
+	t.fixedAt[is.ID] = sha
 	t.mu.Unlock()
 	return sha
+}
+
+func (t *Tracker) creditLater(is *Issue) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.crediting == nil {
+		t.crediting = map[string]bool{}
+		t.creditQueue = make(chan *Issue, 4096)
+		go func() {
+			for job := range t.creditQueue {
+				t.findRuleFix(job)
+				t.mu.Lock()
+				delete(t.crediting, job.ID)
+				if len(t.crediting) == 0 {
+					t.creditDone++ // refresh the list once, when the whole batch is done
+				}
+				t.mu.Unlock()
+				time.Sleep(creditPause)
+			}
+		}()
+	}
+	if t.crediting[is.ID] {
+		return
+	}
+	select {
+	case t.creditQueue <- is:
+		t.crediting[is.ID] = true
+	default:
+	}
+}
+
+// creditPause keeps the background search from competing with reviews.
+const creditPause = 500 * time.Millisecond
+
+// contextAtCommit is the project at a commit. The searches for different issues visit many of the same
+// commits, so the latest few are kept.
+func (t *Tracker) contextAtCommit(sha string) javaidx.Context {
+	t.mu.Lock()
+	c, ok := t.contexts[sha]
+	t.mu.Unlock()
+	if ok {
+		return c
+	}
+	g := javaidx.Index(t.repo.JavaFilesAt(sha), sha)
+	c = javaidx.ProjectContext(&g)
+	t.mu.Lock()
+	if t.contexts == nil || len(t.contexts) >= 24 {
+		t.contexts = map[string]javaidx.Context{}
+	}
+	t.contexts[sha] = c
+	t.mu.Unlock()
+	return c
 }
 
 // ruleQuietAt says the issue is gone at a commit: its code is no longer there, or the rule no longer fires on it.
@@ -544,8 +635,7 @@ func (t *Tracker) ruleQuietAt(sha string, is *Issue, kb *knowledge.Base) bool {
 	if line == 0 {
 		return true
 	}
-	g := javaidx.Index(t.repo.JavaFilesAt(sha), sha)
-	return !fires(RuleScan(is.Path, []byte(src), javaidx.ProjectContext(&g), kb), is.Ref, line)
+	return !fires(RuleScan(is.Path, []byte(src), t.contextAtCommit(sha), kb), is.Ref, line)
 }
 
 // reopened finds an open issue's last comeback: the commit that removed its code after it was
