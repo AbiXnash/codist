@@ -645,14 +645,19 @@ func (c *checker) loops(root *sitter.Node) {
 	f := c.f
 	walk(root, func(n *sitter.Node) bool {
 		var body *sitter.Node
+		item := "" // the variable holding the current item: reading it is no remote call
 		switch n.Type() {
 		case "for_statement", "enhanced_for_statement", "while_statement", "do_statement":
 			body = n.ChildByFieldName("body")
+			if n.Type() == "enhanced_for_statement" {
+				item = f.text(n.ChildByFieldName("name"))
+			}
 		case "method_invocation":
 			if loopCalls[f.text(n.ChildByFieldName("name"))] {
 				for _, a := range args(n) {
 					if a.Type() == "lambda_expression" {
 						body = a.ChildByFieldName("body")
+						item = strings.Trim(f.text(a.ChildByFieldName("parameters")), "() ")
 					}
 				}
 			}
@@ -684,6 +689,7 @@ func (c *checker) loops(root *sitter.Node) {
 			case objText == "System.out" || objText == "System.err":
 				logs++
 				loud++
+			case objText == item:
 			case obj != nil && (remoteMethods[name] || remoteObject.MatchString(last)) && !logReceiver.MatchString(last):
 				remote = append(remote, collapse(objText)+"."+name+"()")
 			case obj != nil && repoObject.MatchString(last) && repoMethod.MatchString(name):

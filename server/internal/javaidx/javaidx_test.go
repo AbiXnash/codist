@@ -624,3 +624,30 @@ class S {
 		t.Errorf("a chain of stream steps is one pass:\n%s", all)
 	}
 }
+
+func TestReadingALoopItemIsNotARemoteCall(t *testing.T) {
+	src := `package a;
+class S {
+    void names(List<Client> clients) {
+        for (Client client : clients) { names.add(client.getName()); }
+        clients.forEach(client -> names.add(client.getName()));
+    }
+    void remote(List<Long> ids) {
+        for (Long id : ids) { gatewayClient.status(id); }
+    }
+}
+`
+	lines, all := map[int]bool{}, ""
+	for _, f := range Check([]byte(src), allLines(src), Context{}) {
+		if strings.HasPrefix(f.Title, "Remote call") {
+			lines[f.Line] = true
+			all += fmt.Sprint(f.Line, " ", f.Title, "\n")
+		}
+	}
+	if lines[4] || lines[5] {
+		t.Errorf("reading the current item is not remote:\n%s", all)
+	}
+	if !lines[8] {
+		t.Errorf("a real remote call must still be flagged:\n%s", all)
+	}
+}
