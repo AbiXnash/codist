@@ -198,7 +198,10 @@ func (s *Service) run(sha string) {
 		s.save(r)
 	}
 
-	problem := s.llm.Problem()
+	problem := ""
+	if s.cfg.ModelReview {
+		problem = s.llm.Problem()
+	}
 	a, err := s.analyzer.Analyze(sha)
 	if err != nil {
 		fail(err)

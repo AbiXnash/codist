@@ -59,3 +59,10 @@ func TestTeamOverrideWinsAndReloads(t *testing.T) {
 		t.Fatalf("an empty override should be skipped: %+v", p)
 	}
 }
+
+func TestPromptWithWindowsLineEndingsParses(t *testing.T) {
+	p := parse("x", "---\r\ndescription: A prompt\r\nformat: json\r\n---\r\nBody\r\n")
+	if p.Description != "A prompt" || p.Format != "json" || strings.Contains(p.Body, "\r") || strings.HasPrefix(p.Body, "---") {
+		t.Fatalf("got %+v", p)
+	}
+}

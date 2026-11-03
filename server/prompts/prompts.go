@@ -169,6 +169,7 @@ func Export(dir string) (int, error) {
 func parse(name, s string) Prompt {
 	p := Prompt{Name: name, Format: "text"}
 	s = strings.TrimPrefix(s, "\uFEFF")
+	s = strings.ReplaceAll(s, "\r\n", "\n") // files edited on Windows
 	if strings.HasPrefix(s, "---\n") {
 		if end := strings.Index(s[4:], "\n---\n"); end >= 0 {
 			for _, l := range strings.Split(s[4:4+end], "\n") {

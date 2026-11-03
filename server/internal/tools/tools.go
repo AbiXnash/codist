@@ -11,11 +11,13 @@
 package tools
 
 import (
+	"archive/tar"
 	"context"
 	_ "embed"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -199,19 +201,59 @@ func (r *Runner) export(sha, dir string) error {
 		return err
 	}
 	archive := exec.Command("git", "-C", r.Root, "archive", "--format=tar", sha)
-	untar := exec.Command("tar", "-x", "-C", dir)
 	pipe, err := archive.StdoutPipe()
 	if err != nil {
 		return err
 	}
-	untar.Stdin = pipe
-	if err := untar.Start(); err != nil {
+	if err := archive.Start(); err != nil {
 		return err
 	}
-	if err := archive.Run(); err != nil {
+	if err := untar(pipe, dir); err != nil {
+		_ = archive.Process.Kill()
+		_ = archive.Wait()
 		return err
 	}
-	return untar.Wait()
+	return archive.Wait()
+}
+
+// untar unpacks into dir without a tar program, which differs or is missing across systems. Only
+// directories and regular files are written, and nothing may land outside dir.
+func untar(from io.Reader, dir string) error {
+	tr := tar.NewReader(from)
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if !filepath.IsLocal(filepath.FromSlash(h.Name)) {
+			return fmt.Errorf("archive path outside the export: %s", h.Name)
+		}
+		dest := filepath.Join(dir, filepath.FromSlash(h.Name))
+		switch h.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(dest, 0o755); err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+				return err
+			}
+			f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+			if err != nil {
+				return err
+			}
+			_, err = io.Copy(f, tr)
+			if cerr := f.Close(); err == nil {
+				err = cerr
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
 }
 
 func (r *Runner) maven(dir string, args ...string) (string, error) {

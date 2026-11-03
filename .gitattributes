@@ -1,0 +1,4 @@
+# Prompts, Java fixtures and scripts must be identical on Windows and macOS.
+* text=auto eol=lf
+*.png binary
+*.woff2 binary
