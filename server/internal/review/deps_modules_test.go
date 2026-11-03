@@ -56,3 +56,23 @@ func TestReadBuildSingleModuleStillWorks(t *testing.T) {
 		t.Fatalf("%v %+v", ok, b)
 	}
 }
+
+func TestReadBuildNamesAParentOutsideTheRepository(t *testing.T) {
+	files := map[string]string{"pom.xml": `<project><parent><groupId>com.acme</groupId><artifactId>company-parent</artifactId><version>4.2</version></parent><artifactId>app</artifactId>
+		<dependencies><dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency></dependencies></project>`}
+	b, _, _, ok := ReadBuild(func(p string) (string, bool) { s, has := files[p]; return s, has })
+	if !ok || b.Outside != "com.acme:company-parent:4.2" || b.SpringBoot != "" || !unresolved(b) {
+		t.Fatalf("%+v", b)
+	}
+}
+
+func TestParseEffectiveReadsEveryProject(t *testing.T) {
+	got := parseEffective(`<?xml version="1.0"?><projects><project><dependencies><dependency><groupId>a</groupId><artifactId>one</artifactId><version>1.2</version></dependency></dependencies></project>
+		<project><dependencies><dependency><groupId>b</groupId><artifactId>two</artifactId><version>${x}</version></dependency><dependency><groupId>c</groupId><artifactId>three</artifactId><version>3</version></dependency></dependencies></project></projects>`)
+	if got["a:one"] != "1.2" || got["c:three"] != "3" || got["b:two"] != "" {
+		t.Fatalf("%v", got)
+	}
+	if one := parseEffective(`<project><dependencies><dependency><groupId>a</groupId><artifactId>one</artifactId><version>9</version></dependency></dependencies></project>`); one["a:one"] != "9" {
+		t.Fatalf("%v", one)
+	}
+}

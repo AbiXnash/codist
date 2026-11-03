@@ -1,7 +1,10 @@
 package review
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -350,6 +353,23 @@ func Dependencies(repo *gitx.Repo) DependencyReport {
 	if !ok {
 		return rep
 	}
+	real := map[string]string{}
+	if unresolved(b) && !repo.Remote && b.Tool == "Maven" {
+		real = mavenVersions(repo.Root, head)
+		for i, d := range b.Deps {
+			if v := real[d.Group+":"+d.Artifact]; v != "" {
+				b.Deps[i].Version = v
+			}
+		}
+		if b.SpringBoot == "" {
+			b.SpringBoot = real["org.springframework.boot:spring-boot"]
+			for _, d := range b.Deps {
+				if b.SpringBoot == "" && d.Group == "org.springframework.boot" {
+					b.SpringBoot = d.Version
+				}
+			}
+		}
+	}
 	rep.File, rep.Tool, rep.Java, rep.SpringBoot = path, b.Tool, b.Java, b.SpringBoot
 	if n := len(b.Modules); n > 0 {
 		rep.File = fmt.Sprintf("%s and %d modules", path, n)
@@ -364,6 +384,9 @@ func Dependencies(repo *gitx.Repo) DependencyReport {
 	default:
 		rep.Support = "" // only known end-of-life lines are reported
 	}
+	if b.SpringBoot == "" && b.Outside != "" {
+		rep.Support = "Parent build " + b.Outside + " is not in this repository, and Maven could not read it, so versions here were not checked."
+	}
 	rep.Findings = BuildFindings(b, src, nil)
 	byArtifact := map[string]Finding{}
 	for _, f := range rep.Findings {
@@ -376,6 +399,12 @@ func Dependencies(repo *gitx.Repo) DependencyReport {
 	for _, d := range b.Deps {
 		row := DepRow{Group: d.Group, Artifact: d.Artifact, Version: d.Version, Scope: orDefault(d.Scope, "compile"),
 			Managed: d.Version == "" && b.SpringBoot != "", Status: "ok", Modules: d.Modules}
+		if d.Version == "" && b.Outside != "" && b.SpringBoot == "" || strings.HasPrefix(d.Version, "${") {
+			row.Status, row.Note = "unknown", "Its version is set outside this repository, so it was not checked."
+			if b.Outside != "" {
+				row.Version = "set by " + b.Outside
+			}
+		}
 		if row.Managed {
 			row.Version = "managed by Spring Boot " + b.SpringBoot
 			if strings.HasPrefix(d.Group, "org.springframework.cloud") {
@@ -404,7 +433,51 @@ func Dependencies(repo *gitx.Repo) DependencyReport {
 	return rep
 }
 
-var statusRank = map[string]int{"ok": 0, "warn": 1, "bad": 2}
+var statusRank = map[string]int{"ok": 0, "unknown": 1, "warn": 2, "bad": 3}
+
+// unresolved says some dependency's version is not in the repository's files.
+func unresolved(b Build) bool {
+	for _, d := range b.Deps {
+		if strings.HasPrefix(d.Version, "${") || (d.Version == "" && b.SpringBoot == "") {
+			return true
+		}
+	}
+	return false
+}
+
+var (
+	mavenMu    sync.Mutex
+	mavenCache = map[string]map[string]string{}
+)
+
+// mavenVersions asks Maven for the real versions, which also covers parents and version lists kept in a
+// company repository such as JFrog. It uses the developer's own Maven settings and login, so Codist never
+// holds a token. Offline first, then online; if Maven can't answer, nothing is claimed.
+func mavenVersions(root, head string) map[string]string {
+	mavenMu.Lock()
+	defer mavenMu.Unlock()
+	if v, ok := mavenCache[head]; ok {
+		return v
+	}
+	versions := map[string]string{}
+	out := filepath.Join(os.TempDir(), "codist-effective-"+strings.ReplaceAll(head, "/", "_")+".xml")
+	defer os.Remove(out)
+	for _, args := range [][]string{{"-q", "-o", "help:effective-pom", "-Doutput=" + out}, {"-q", "help:effective-pom", "-Doutput=" + out}} {
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		cmd := exec.CommandContext(ctx, "mvn", args...)
+		cmd.Dir = root
+		err := cmd.Run()
+		cancel()
+		if err == nil {
+			if b, rerr := os.ReadFile(out); rerr == nil {
+				versions = parseEffective(string(b))
+				break
+			}
+		}
+	}
+	mavenCache[head] = versions
+	return versions
+}
 
 func minor(v string) int {
 	parts := strings.SplitN(v, ".", 3)

@@ -17,8 +17,11 @@ type Build struct {
 	Deps       []Dep
 	Modules    []string // the modules this build was read from, besides the root
 
+	Outside string // a parent build not in this repository, such as a company parent in JFrog
+
 	artifact string
 	declared []string
+	parent   string
 	props    map[string]string
 }
 
@@ -70,6 +73,8 @@ func ParseBuild(path, content string) (Build, bool) {
 		b.Java = firstNonEmpty(props["java.version"], props["maven.compiler.release"], props["maven.compiler.source"])
 		if p.Parent.ArtifactID == "spring-boot-starter-parent" {
 			b.SpringBoot = p.Parent.Version
+		} else if p.Parent.ArtifactID != "" {
+			b.parent = p.Parent.GroupID + ":" + p.Parent.ArtifactID + ":" + p.Parent.Version
 		}
 		for _, d := range p.Dependencies {
 			v := d.Version
@@ -166,6 +171,9 @@ func ReadBuild(read func(path string) (string, bool)) (b Build, file, rootSrc st
 		}
 		own[path.Base(m.path)] = true
 	}
+	if b.parent != "" && !own[strings.Split(b.parent, ":")[1]] {
+		b.Outside = b.parent
+	}
 	merged, at := []Dep{}, map[string]int{}
 	add := func(mod string, list []Dep) {
 		for _, d := range list {
@@ -198,6 +206,32 @@ func ReadBuild(read func(path string) (string, bool)) (b Build, file, rootSrc st
 	}
 	b.Deps = merged
 	return b, file, rootSrc, true
+}
+
+// parseEffective reads the output of `mvn help:effective-pom`: one project, or several wrapped in
+// <projects>. It returns the real version of each dependency, by group:artifact.
+func parseEffective(out string) map[string]string {
+	versions := map[string]string{}
+	dec := xml.NewDecoder(strings.NewReader(out))
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			return versions
+		}
+		start, ok := tok.(xml.StartElement)
+		if !ok || start.Name.Local != "project" {
+			continue
+		}
+		var p pom
+		if dec.DecodeElement(&p, &start) != nil {
+			continue
+		}
+		for _, d := range p.Dependencies {
+			if d.Version != "" && !strings.Contains(d.Version, "${") {
+				versions[d.GroupID+":"+d.ArtifactID] = d.Version
+			}
+		}
+	}
 }
 
 // Summary is a one-paragraph description for prompts.
