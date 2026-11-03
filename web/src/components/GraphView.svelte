@@ -581,7 +581,8 @@
           if (app.overlay === 'none') keep = hood.union(hood.nodes().ancestors());
         }
       }
-      if (q && app.graphQueryMode === 'highlight') {
+      // Typing a search lights its matches. An overlay keeps priority, and clicking a class clears the search.
+      if (q && app.graphQueryMode === 'highlight' && app.overlay === 'none') {
         const hits = cy!.nodes().filter((n) => !n.data('isPkg') && matches(app.graph!.nodes.find((x) => x.id === n.id())!, q));
         hits.addClass('match');
         keep = hits.union(hits.ancestors());
@@ -632,6 +633,7 @@
     const id = menu?.id;
     menu = null;
     if (!id || !app.graph) return;
+    app.search = '';
     const node = app.graph.nodes.find((n) => n.id === id);
     switch (action) {
       case 'open': if (node) { selectNode(id); app.showPanel = true; } break;
@@ -663,6 +665,9 @@
         toast(`Showing ${name}; reset in Explorer → Services`, 'info', 2500);
         return;
       }
+      // Clicking a class moves on from a search that was typed but never picked.
+      app.search = '';
+      if (app.graphQueryMode === 'highlight') app.graphQuery = '';
       selectNode(e.target.id());
     });
     // Double-click a class: draw its methods, fields and constants around it.
