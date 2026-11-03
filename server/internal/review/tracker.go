@@ -67,6 +67,10 @@ func Fingerprint(path string, f Finding) string {
 
 func normalizeCode(s string) string { return strings.Join(strings.Fields(s), " ") }
 
+// issueHistory is how far back reviews count. It has to reach past a project's older commits, or an
+// issue found there would disappear from the list whether or not it was ever fixed.
+const issueHistory = 20000
+
 // Tracker folds every review into issues.
 type Tracker struct {
 	repo    *gitx.Repo
@@ -163,7 +167,7 @@ func (t *Tracker) Issues() []Issue {
 }
 
 func (t *Tracker) compute() []Issue {
-	commits := t.repo.Log(300)
+	commits := t.repo.Log(issueHistory)
 	bySHA := map[string]gitx.Commit{}
 	for _, c := range commits {
 		bySHA[c.SHA] = c
@@ -517,27 +521,31 @@ func (t *Tracker) ruleFixedIn(is *Issue) string {
 	if ok {
 		return sha
 	}
+	// Once a rule stops firing it stays quiet, so the first quiet commit can be found by bisecting. All the
+	// commits since have to be in range, or the oldest one listed would get the credit for an older fix.
 	_, kb, _ := t.Rules()
-	for _, c := range t.repo.CommitsSince(is.LastSeen, head, 20) {
-		src, exists := t.fileAt(c.SHA, is.Path)
-		if !exists {
-			continue
-		}
-		line := lineOf(strings.Split(src, "\n"), is.Snippet)
-		if line == 0 {
-			sha = c.SHA
-			break
-		}
-		g := javaidx.Index(t.repo.JavaFilesAt(c.SHA), c.SHA)
-		if !fires(RuleScan(is.Path, []byte(src), javaidx.ProjectContext(&g), kb), is.Ref, line) {
-			sha = c.SHA
-			break
-		}
+	since := t.repo.CommitsSince(is.LastSeen, head, issueHistory)
+	if i := sort.Search(len(since), func(i int) bool { return t.ruleQuietAt(since[i].SHA, is, kb) }); i < len(since) {
+		sha = since[i].SHA
 	}
 	t.mu.Lock()
 	t.fixedAt[key] = sha
 	t.mu.Unlock()
 	return sha
+}
+
+// ruleQuietAt says the issue is gone at a commit: its code is no longer there, or the rule no longer fires on it.
+func (t *Tracker) ruleQuietAt(sha string, is *Issue, kb *knowledge.Base) bool {
+	src, exists := t.fileAt(sha, is.Path)
+	if !exists {
+		return false
+	}
+	line := lineOf(strings.Split(src, "\n"), is.Snippet)
+	if line == 0 {
+		return true
+	}
+	g := javaidx.Index(t.repo.JavaFilesAt(sha), sha)
+	return !fires(RuleScan(is.Path, []byte(src), javaidx.ProjectContext(&g), kb), is.Ref, line)
 }
 
 // reopened finds an open issue's last comeback: the commit that removed its code after it was
