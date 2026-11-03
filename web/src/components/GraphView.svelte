@@ -403,7 +403,13 @@
       default:
         opts = app.groupBy !== 'none' ? presetFrom(boxedPositions()) : { ...fcoseLayout, randomize: !incremental };
     }
-    cy.layout({ ...opts, ...anim, ...extra } as unknown as cytoscape.LayoutOptions).run();
+    const run = cy.layout({ ...opts, ...anim, ...extra } as unknown as cytoscape.LayoutOptions);
+    // Colours set while nodes are being added can freeze mid-transition, so settle them once layout ends.
+    run.one('layoutstop', () => {
+      cy?.nodes().removeClass('changed added impacted issue');
+      requestAnimationFrame(highlight);
+    });
+    run.run();
   }
 
   function sync() {
@@ -507,7 +513,8 @@
         if (n.nonempty()) n.addClass('issue').data('issueColor', SEVERITY_COLOR[worst(list)]);
       }
 
-      if (app.focusChanges && app.overlay === 'none') {
+      // Method level already shows only what relates to the commit, so nothing on it should fade.
+      if (app.focusChanges && app.overlay === 'none' && !methodLevel) {
         const seeds = commitScope && changed.size ? cy!.nodes('.changed, .added') : !commitScope && byNode.size ? cy!.nodes('.issue') : null;
         if (seeds) {
           let k = cy!.collection();

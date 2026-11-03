@@ -68,7 +68,7 @@
   .count { min-width: 18px; padding: 0 5px; border-radius: 9px; font-size: 11px; line-height: 17px; text-align: center; background: var(--surface-3); color: var(--text-2); }
   .count.hot { background: color-mix(in srgb, var(--sev-critical) 18%, transparent); color: var(--sev-critical); }
   .spacer { flex: 1; }
-  .ask { height: 28px; margin-right: 4px; padding: 0 10px; border: 0; border-radius: var(--r); background: var(--surface-3); color: var(--text); font-size: 12.5px; }
+  .ask { white-space: nowrap; height: 28px; margin-right: 4px; padding: 0 10px; border: 0; border-radius: var(--r); background: var(--surface-3); color: var(--text); font-size: 12.5px; }
   .ask.on { color: #fff; background: var(--accent); }
   .sub { padding: 7px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .seg { display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }

@@ -53,7 +53,7 @@
   // Both side panels can be dragged or moved with the arrow keys, and remember their width.
   const WIDTHS = {
     side: { name: '--side-w', pref: 'sideWidth', min: 200, other: '--panel-w' },
-    panel: { name: '--panel-w', pref: 'panelWidth', min: 300, other: '--side-w' },
+    panel: { name: '--panel-w', pref: 'panelWidth', min: 360, other: '--side-w' },
   } as const;
   const CENTRE_MIN = 360;
   type Edge = keyof typeof WIDTHS;
