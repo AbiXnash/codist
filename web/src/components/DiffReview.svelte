@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app, openFile, requestReview } from '../lib/store.svelte';
   import { ago, SEVERITIES } from '../lib/theme';
+  import { langFor, tokenize, type Line } from '../lib/highlight';
   import FindingCard from './FindingCard.svelte';
   import CopyButton from './CopyButton.svelte';
   import type { FileChange, FindingWithPath } from '../lib/types';
@@ -27,6 +28,25 @@
     return issues.filter((g) => g[0].path === path);
   }
   const isClosed = (path: string) => closed[path] ?? files.length > MANY_FILES;
+
+  // Very long files stay plain, so opening a large commit doesn't stall the page.
+  const MAX_HIGHLIGHT = 200_000;
+  const allRows = $derived(new Map(files.map((f) => [f.path, rowsOf(f)])));
+  let colours = $state<Record<string, Line[]>>({});
+  $effect(() => {
+    const theme = app.theme;
+    const rows = allRows;
+    colours = {};
+    for (const [path, list] of rows) {
+      const lang = langFor(path);
+      // Hunk headers become blank lines, so each row keeps the same index as its coloured line.
+      const code = list.map((r) => (r.kind === 'hunk' ? '' : r.text)).join('\n');
+      if (!lang || code.length > MAX_HIGHLIGHT) continue;
+      void tokenize(code, lang, theme).then((lines) => {
+        if (allRows === rows && app.theme === theme) colours[path] = lines;
+      });
+    }
+  });
 
   function rowsOf(f: FileChange): Row[] {
     const rows: Row[] = [];
@@ -112,7 +132,7 @@
     </header>
 
     {#each files as f (f.path)}
-      {@const rows = rowsOf(f)}
+      {@const rows = allRows.get(f.path) ?? []}
       {@const here = inFile(f.path)}
       {@const inDiff = lastLine(rows)}
       <article class="file">
@@ -133,11 +153,11 @@
             <p class="faint pad">Binary file, so there are no lines to show.</p>
           {:else}
             <div class="code">
-              {#each rows as r}
+              {#each rows as r, i}
                 {#if r.kind === 'hunk'}
                   <div class="row hunk"><span class="no"></span><span class="no"></span><code>{r.text}</code></div>
                 {:else}
-                  <div class="row {r.kind}"><span class="no">{r.old ?? ''}</span><span class="no">{r.now ?? ''}</span><code>{r.text || ' '}</code></div>
+                  <div class="row {r.kind}"><span class="no">{r.old ?? ''}</span><span class="no">{r.now ?? ''}</span><code>{#if colours[f.path]?.[i]}{#each colours[f.path][i] as t}<span style:color={t.color}>{t.content}</span>{/each}{:else}{r.text || ' '}{/if}</code></div>
                   {#each r.now ? here.filter((g) => g[0].line === r.now) : [] as g (g[0].title + g[0].line)}
                     <div class="note {worstOf(g)}" class:active={isActive(g)} id={`issue-${g[0].path}-${g[0].line}`}><FindingCard f={g[0]} members={g} showPath={false} /></div>
                   {/each}
