@@ -33,6 +33,10 @@ func FilePrompt() string { return prompts.Get("review-file") }
 
 // Service reviews commits one at a time, file by file.
 type Service struct {
+	ctxMu  sync.Mutex
+	ctxSHA string
+	ctxAt  javaidx.Context
+
 	cfg      config.Config
 	repo     *gitx.Repo
 	graph    *graph.Service
@@ -68,6 +72,22 @@ func (s *Service) Build(sha string) Build {
 	b, _, _, _ := ReadBuild(func(p string) (string, bool) { return s.repo.ReadFile(sha, p) })
 	s.builds.Store(sha, b)
 	return b
+}
+
+// contextAt is what the rules know about the project at a commit. A review of an older commit must not
+// judge it against code written later, so its project is read as it was then. The last one is kept,
+// since a commit's files are checked one after another.
+func (s *Service) contextAt(sha string) javaidx.Context {
+	if sha == "" || sha == s.repo.Head() {
+		return javaidx.ProjectContext(s.graph.Graph())
+	}
+	s.ctxMu.Lock()
+	defer s.ctxMu.Unlock()
+	if s.ctxSHA != sha {
+		g := javaidx.Index(s.repo.JavaFilesAt(sha), sha[:7])
+		s.ctxAt, s.ctxSHA = javaidx.ProjectContext(&g), sha
+	}
+	return s.ctxAt
 }
 
 // Reviewed reports whether a commit already has a stored review.
@@ -217,8 +237,9 @@ func (s *Service) run(sha string) {
 		}
 		return len(targets[i].AddedLines) > len(targets[j].AddedLines)
 	})
-	if len(targets) > s.cfg.MaxFiles {
+	if n := len(targets); n > s.cfg.MaxFiles {
 		targets = targets[:s.cfg.MaxFiles]
+		r.AnalysisProblems = append(r.AnalysisProblems, fmt.Sprintf("only %d of %d changed files were reviewed (limit: CODIST_MAX_FILES)", s.cfg.MaxFiles, n))
 	}
 
 	kb := s.Knowledge()
@@ -247,7 +268,7 @@ func (s *Service) run(sha string) {
 			if len(got.Ran) > 0 || len(got.Problems) > 0 {
 				Activities.Step("Static analysers: "+strings.Join(got.Ran, ", "), sha, "", fmt.Sprintf("%d finding(s) in the commit %s", len(got.Findings), strings.Join(got.Problems, "; ")), time.Since(began))
 			}
-			r.Analysers, r.AnalysisProblems = got.Ran, got.Problems
+			r.Analysers, r.AnalysisProblems = got.Ran, append(r.AnalysisProblems, got.Problems...)
 		}
 		if ok {
 			fr.Findings = mergeAnalysis(fr.Findings, res.Findings, f.NewPath, in)
@@ -474,7 +495,7 @@ func (s *Service) rulePass(a Analysis, f gitx.FileChange, kb *knowledge.Base, bu
 
 	if f.IsJava() {
 		in.types = s.graph.TypesIn([]byte(src), f.NewPath)
-		ctx := javaidx.ProjectContext(s.graph.Graph())
+		ctx := s.contextAt(a.Commit.SHA)
 		ctx.Path = f.NewPath
 		for _, x := range javaidx.Check([]byte(src), in.changed, ctx) {
 			fr.Findings = append(fr.Findings, Finding{
