@@ -55,5 +55,8 @@ export const shortName = (id: string) => id.slice(id.lastIndexOf('.') + 1);
 
 /** Reads a CSS custom property from :root, for canvas code (the graph) that cannot use var(). */
 export function cssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  // The graph library can't read #rrggbbaa, so colours with transparency are written as rgba().
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(v);
+  return m ? `rgba(${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)},${(parseInt(m[4], 16) / 255).toFixed(3)})` : v;
 }

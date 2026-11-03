@@ -34,7 +34,7 @@
 
 <div class="page"><div class="page-in">
   <header>
-    <h1>Memory</h1>
+    <h1>Knowledge</h1>
     <p>What this repository has taught the model on top of its base knowledge. Items are added to the prompts of later reviews and fixes; the model itself is not retrained.</p>
   </header>
   {#if !m}<div class="empty"><span class="spinner"></span></div>
