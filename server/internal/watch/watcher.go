@@ -32,6 +32,7 @@ type Watcher struct {
 	lastHead    string
 	fingerprint string
 	lastFetch   time.Time
+	lastTick    time.Time
 	poke        chan struct{}
 	checkout    string // the branch last seen checked out
 	first       string // the branch Codist started on
@@ -51,6 +52,7 @@ func (w *Watcher) Start() {
 		w.fingerprint = w.repo.Fingerprint()
 	}
 	w.checkout = w.repo.CurrentBranch()
+	w.lastTick = time.Now()
 	w.graph.Reindex()
 
 	if w.cfg.AutoReview && w.lastHead != "" {
@@ -102,6 +104,8 @@ func (w *Watcher) Poke() {
 func (w *Watcher) tick() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	previous := w.lastTick
+	w.lastTick = time.Now()
 
 	if w.repo.Remote && time.Since(w.lastFetch) > w.cfg.FetchInterval {
 		w.repo.Fetch()
@@ -113,7 +117,7 @@ func (w *Watcher) tick() {
 		if b := w.repo.CurrentBranch(); b != w.checkout && b != "HEAD" && b != "" {
 			w.checkout = b
 			if b != w.repo.Branch() {
-				if err := w.follow(b); err != nil {
+				if err := w.follow(b, previous); err != nil {
 					slog.Warn("could not follow checkout", "branch", b, "err", err)
 				}
 			}
@@ -153,27 +157,64 @@ func (w *Watcher) tick() {
 }
 
 // Follow switches to another branch. Nothing is checked out, and its commits are not queued for
-// review just because someone looked at the branch: new commits on it are.
+// review just because someone looked at the branch: commits since it was last followed are.
 func (w *Watcher) Follow(branch string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return w.follow(branch)
+	return w.follow(branch, time.Time{})
 }
 
-func (w *Watcher) follow(branch string) error {
+// follow moves to branch. made is when commits start counting as just made on a branch never followed
+// before, so a commit on a new branch is reviewed even if the checkout and the commit came between two
+// polls. It is zero when someone only chose to look at the branch.
+func (w *Watcher) follow(branch string, made time.Time) error {
+	before := w.lastHead
 	if err := w.repo.SwitchBranch(branch); err != nil {
 		return err
 	}
 	w.lastHead = w.repo.Head()
+	missed := w.missed(w.loadSeen(), before, w.lastHead, made)
 	w.saveSeen(w.lastHead)
 	w.fingerprint = ""
 	if !w.repo.Remote {
 		w.fingerprint = w.repo.Fingerprint()
 	}
 	w.graph.Reindex()
-	w.hub.Publish("commits", map[string]any{"head": w.lastHead, "new": []string{}})
+	shas := make([]string, 0, len(missed))
+	for _, c := range missed {
+		shas = append(shas, c.SHA)
+	}
+	w.hub.Publish("commits", map[string]any{"head": w.lastHead, "new": shas})
 	w.hub.Publish("branch", map[string]any{"branch": branch})
+	if w.cfg.AutoReview {
+		for _, sha := range shas {
+			if !w.reviews.Reviewed(sha) {
+				w.reviews.Enqueue(sha)
+			}
+		}
+	}
 	return nil
+}
+
+// missed lists what landed while Codist was on another branch: everything since the branch was last
+// followed, or, on a branch it has never followed, what was committed since made on top of before.
+func (w *Watcher) missed(seen, before, head string, made time.Time) []gitx.Commit {
+	if head == "" || seen == head {
+		return nil
+	}
+	if seen != "" {
+		return w.repo.CommitsSince(seen, head, maxCatchUp)
+	}
+	if made.IsZero() || before == "" {
+		return nil
+	}
+	var fresh []gitx.Commit
+	for _, c := range w.repo.CommitsSince(before, head, maxCatchUp) {
+		if c.Time >= made.Truncate(time.Second).UnixMilli() {
+			fresh = append(fresh, c)
+		}
+	}
+	return fresh
 }
 
 // One per branch, so going back to a branch does not re-review what happened on another.
