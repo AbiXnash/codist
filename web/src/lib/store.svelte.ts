@@ -85,7 +85,7 @@ class AppState {
 
   selectedSha = $state<string | null>(null);
   selectedNode = $state<string | null>(null);
-  tab = $state<Tab>('issues');
+  tab = $state<Tab>('review');
   /** The left dock: commits or the graph explorer. */
   left = $state<'commits' | 'explorer'>('commits');
   search = $state('');

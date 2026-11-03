@@ -71,6 +71,8 @@
 {:else}
   {@const c = d.analysis.commit}
   <div class="review">
+    <!-- On Review the centre of the screen already shows the commit's title and its issues. -->
+    {#if app.mode !== 'review'}
     <header>
       <h1>{c.message}</h1>
       <div class="meta">
@@ -80,6 +82,7 @@
         <span>{d.analysis.files.length} file{d.analysis.files.length === 1 ? '' : 's'}</span>
       </div>
     </header>
+    {/if}
 
     <section class="status">
       {#if !r}
@@ -156,15 +159,17 @@
       {@const pending = r.files.filter((f) => f.pending)}
       {@const errors = r.files.filter((f) => f.error)}
       <section class="issues">
-        <div class="issues-head">
+        <div class="issues-head" class:hidden={app.mode === 'review'}>
           <span class="label">New in this commit · {app.issues.length}</span>
           {#if app.findings.length > app.issues.length + app.carried.length}<span class="faint" title="Findings with the same root cause are shown once">grouped from {app.findings.length} findings</span>{/if}
         </div>
+        {#if app.mode !== 'review'}
         {#each app.issues as group (group[0].path + group[0].line + group[0].title)}
           <FindingCard f={group[0]} members={group} />
         {:else}
           {#if r.status === 'done' && !pending.length}<p class="faint none">No new issues.</p>{/if}
         {/each}
+        {/if}
         {#each pending as f (f.path)}<p class="faint pending"><span class="spinner inline"></span>AI reviewing {f.path.split('/').pop()}…</p>{/each}
         {#each errors as f (f.path)}<p class="error mono">{f.path.split('/').pop()}: {f.error}</p>{/each}
       </section>
@@ -252,4 +257,5 @@
   .msg textarea { width: 100%; margin-top: 8px; padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: var(--r); background: var(--surface-2); color: var(--text); font-size: 12px; resize: vertical; }
   .msg .row-actions { align-items: center; }
   .card-head .spacer { flex: 1; }
+  .issues-head.hidden { display: none; }
 </style>

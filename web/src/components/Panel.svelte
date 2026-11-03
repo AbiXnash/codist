@@ -18,6 +18,10 @@
     ...(app.selectedNode ? [{ id: 'type' as Tab, label: 'Class' }] : []),
   ]);
   const onCommit = $derived(app.tab === 'review' || app.tab === 'diff');
+  // On Review the centre already shows the changes, so the panel needn't.
+  $effect(() => {
+    if (app.mode === 'review' && app.tab === 'diff') app.tab = 'review';
+  });
 </script>
 
 <section class="panel">
@@ -37,7 +41,7 @@
     </button>
   </div>
 
-  {#if onCommit}
+  {#if onCommit && app.mode !== 'review'}
     <div class="sub">
       <div class="seg">
         <button class:on={app.tab === 'review'} onclick={() => (app.tab = 'review')}>Review{#if app.issues.length} · {app.issues.length}{/if}</button>
