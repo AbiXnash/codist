@@ -260,7 +260,7 @@ export interface AskMessage {
   error?: boolean;
 }
 
-export type Mode = 'review' | 'repo' | 'branches' | 'mine' | 'team' | 'release' | 'incidents' | 'activity' | 'memory';
+export type Mode = 'review' | 'graph' | 'repo' | 'branches' | 'mine' | 'team' | 'release' | 'incidents' | 'activity' | 'memory';
 
 export interface Frame { class: string; method: string; file: string; line: number }
 

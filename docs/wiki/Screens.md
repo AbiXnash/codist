@@ -1,3 +1,5 @@
+> The `rebuild` branch has a new menu: Review, Graph, Incidents, Knowledge (formerly Memory) and Activity, with the other screens under More. Review now shows the commit's diff with issues inline, and the graph has its own screen.
+
 # Screens
 
 The sidebar groups the screens by what you are doing. Collapse it to icons with `\` or the logo.
@@ -69,7 +71,8 @@ time, and the commit, file and knowledge entries it relates to. Calls saved by r
 | `/` or `⌘K` | Go to class |
 | `\` | Collapse or expand the sidebar |
 | `[` / `]` | Hide or show the left dock / right panel |
-| `j` / `k` | Next / previous commit |
+| `j` / `k` | Next / previous issue on Review; next / previous commit elsewhere |
+| `J` / `K` | Next / previous commit |
 | `1`–`5` | Issues, commit review, commit changes, Code, Ask |
 | `⌘↵` | Commit the fix in the fix dialog; "change code" in the Ask tab |
 

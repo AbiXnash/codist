@@ -5,12 +5,14 @@
 </script>
 
 <aside class="dock">
+  {#if app.mode === 'graph' && app.featureOn('explorer')}
   <div class="tabs" role="tablist">
-    <button role="tab" aria-selected={app.left === 'commits'} class:on={app.left === 'commits'} onclick={() => (app.left = 'commits')}>Commits <span class="n">{app.shownCommits.length}</span></button>
-    {#if app.featureOn('explorer')}<button role="tab" aria-selected={app.left === 'explorer'} class:on={app.left === 'explorer'} onclick={() => (app.left = 'explorer')}>Explorer <span class="n">{app.graphView.nodes.length}</span></button>{/if}
+    <button role="tab" aria-selected={app.left === 'commits' || app.mode !== 'graph'} class:on={app.left === 'commits' || app.mode !== 'graph'} onclick={() => (app.left = 'commits')}>Commits <span class="n">{app.shownCommits.length}</span></button>
+    <button role="tab" aria-selected={app.left === 'explorer'} class:on={app.left === 'explorer'} onclick={() => (app.left = 'explorer')}>Explorer <span class="n">{app.graphView.nodes.length}</span></button>
   </div>
+  {/if}
   <div class="body">
-    {#if app.left === 'commits'}<CommitsTab />{:else}<GraphPanel />{/if}
+    {#if app.left === 'commits' || app.mode !== 'graph'}<CommitsTab />{:else}<GraphPanel />{/if}
   </div>
 </aside>
 

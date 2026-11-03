@@ -9,11 +9,11 @@ The evidence is in the [research report](../research/rebuild-research.md). Sizes
 | Milestone | Work | Finished when | Status |
 |---|---|---|---|
 | 0. Branch and harness | `rebuild` branch, CI on macOS and Windows, reproducible results, per-call timing, logged drops, switches for rules, RAG, facts and filters | A test run can be repeated and explained on both systems | Done |
-| 1. Test set | About 100 real bugs from Defects4J and GitBug-Java, a false-alarm set from fixed versions, a frozen holdout, a sample submodule repo. Run the 16 GB models and report 32 GB | `qwen2.5-coder:14b` has a full result, with confidence ranges | Next |
+| 1. Test set | 199 real bugs from Defects4J and GitBug-Java, a false-alarm set from fixed versions, a frozen holdout, a sample submodule repo. Run the 16 GB models and report 32 GB | `qwen2.5-coder:14b` has a full result, with confidence ranges | In progress: bug set built, rules measured, model runs and sample repo still to do |
 | 2. Core engine | Git layer with submodules, ChangeSet, facts by content hash, rules, SQLite store, CLI, secure server | Rule results from the CLI match or beat today on both systems | |
 | 3. Model and RAG | Method-level review, schema output, context builder, "need" loop, one experiment at a time | Each kept technique has a paired win on the test set | |
 | 4. Fixes and Proven | Patch-only fixes, compile and test on click, before-and-after tests, the three labels | First fix success rate and Proven precision are published | |
-| 5. Review UI | Review, Knowledge and Activity screens, keyboard map | The whole loop works in the browser | |
+| 5. Review UI | Review, Knowledge and Activity screens, keyboard map | The whole loop works in the browser | Started early: new look, new menu, and Review now shows one diff with issues inline. Graph and Incidents screens work in the new look |
 | 6. Graph and Incidents | Four-level graph and Incidents screen, with a test set for incidents | A stack trace leads to a prepared fix, and accuracy is measured | |
 | 7. Git depth | Branch comparison, conflict resolution, merge checks, other Git actions | Merge cases in the test set are scored | |
 | 8. Learning loop | Capture, learn, check and forward, team notes in `.codist/` | Learned changes beat the unlearned version on the holdout | |
@@ -28,6 +28,15 @@ The evidence is in the [research report](../research/rebuild-research.md). Sizes
 | `qwen2.5-coder:7b`, macOS | 11/16 (44–86%) | 2/7 (8–64%) | 327 s, 17 calls, about 19 s per call, 15 findings dropped |
 
 The earlier harness recorded 12/16 for `7b`. The new drop log explains the difference: the model did report the `last-copy-race` bug, and the filter removed it as "repeats a rule finding" because an unrelated rule fired next to it. That filter matches by position, not topic, and is due for replacement in milestone 3. Ranges are 95% confidence, so these results can't be told apart statistically.
+
+### Results on real bugs and with the model alone
+
+| Run | Result | Notes |
+|---|---|---|
+| Rules only, 118 real bugs | 6 located (2–11%), an upper bound | 2 of 120 bugs could not run: one patch didn't apply and one repository is gone. Candidate false alarms on 10 of 118 fixes |
+| `qwen2.5-coder:7b` alone on the 16 seeded bugs, rules and filters off | 5/16 (14–56%), 1/7 logic, 12 noise | 804 s, about 35 s per call |
+
+Rules score 10/16 on the seeded project and at most 6/118 on real bugs. The seeded project was written alongside those rules, so **its scores greatly overstate what the rules catch**. The model hasn't been run on the real bugs yet, and "located" counts a finding near the bug even if it doesn't describe it.
 
 ## Decisions
 

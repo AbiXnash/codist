@@ -11,7 +11,7 @@
   import PeopleView from './components/PeopleView.svelte';
   import ActivityView from './components/ActivityView.svelte';
   import MemoryView from './components/MemoryView.svelte';
-  import GraphView from './components/GraphView.svelte';
+  import DiffReview from './components/DiffReview.svelte';
   import Panel from './components/Panel.svelte';
   import Toasts from './components/Toasts.svelte';
   import FixDialog from './components/FixDialog.svelte';
@@ -19,6 +19,14 @@
   import ReleaseView from './components/ReleaseView.svelte';
 
   let dragging = $state(false);
+
+  // The screen is in the address, so a reload or a bookmark lands in the same place.
+  const SCREENS = ['review', 'graph', 'incidents', 'memory', 'activity', 'repo', 'branches', 'mine', 'team', 'release'];
+  const wanted = location.hash.slice(1);
+  if (SCREENS.includes(wanted)) app.mode = wanted as typeof app.mode;
+  $effect(() => {
+    history.replaceState(null, '', `#${app.mode}`);
+  });
 
   onMount(() => {
     preload();
@@ -49,10 +57,10 @@
     if (e.key === '\\') app.showSidebar = !app.showSidebar;
     else if (e.key === '[') app.showCommits = !app.showCommits;
     else if (e.key === ']') app.showPanel = !app.showPanel;
-    else if (e.key === 'j' || e.key === 'k') {
+    else if (e.key === 'J' || e.key === 'K' || (app.mode !== 'review' && (e.key === 'j' || e.key === 'k'))) {
       const list = app.shownCommits;
       const i = list.findIndex((c) => c.commit.sha === app.selectedSha);
-      const next = list[Math.max(0, Math.min(list.length - 1, i + (e.key === 'j' ? 1 : -1)))];
+      const next = list[Math.max(0, Math.min(list.length - 1, i + (e.key.toLowerCase() === 'j' ? 1 : -1)))];
       if (next) void selectCommit(next.commit.sha, true);
     } else if ('12345'.includes(e.key) && e.key.length === 1) {
       const panels = ['issues', 'commit', 'commit', 'code', 'ask'];
@@ -100,7 +108,18 @@
     class:no-panel={!app.showPanel}
   >
     {#if app.showCommits}<LeftDock />{/if}
-    {#if app.centre === 'branches'}<BranchGraph />{:else}<GraphView />{/if}
+    {#if app.mode === 'review'}
+      <DiffReview />
+    {:else if app.centre === 'branches'}
+      <BranchGraph />
+    {:else}
+      <!-- The graph library is large, so it loads only when this screen opens. -->
+      {#await import('./components/GraphView.svelte')}
+        <div class="empty">Loading the graph</div>
+      {:then { default: GraphView }}
+        <GraphView />
+      {/await}
+    {/if}
     {#if app.showPanel}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div class="resizer" onpointerdown={startResize} onpointermove={resize} onpointerup={() => (dragging = false)}></div>

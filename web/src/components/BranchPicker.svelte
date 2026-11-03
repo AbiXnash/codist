@@ -49,7 +49,7 @@
           </li>
         {:else}<li class="none">No branches.</li>{/each}
       </ul>
-      {#if app.featureOn('branchGraph')}<button class="allb" onclick={() => { open = false; app.mode = 'review'; app.centre = 'branches'; saveStr('centre', 'branches'); }}>See all branches as a graph</button>{/if}
+      {#if app.featureOn('branchGraph')}<button class="allb" onclick={() => { open = false; app.mode = 'graph'; app.centre = 'branches'; saveStr('centre', 'branches'); }}>See all branches as a graph</button>{/if}
     </div>
   {/if}
 </div>

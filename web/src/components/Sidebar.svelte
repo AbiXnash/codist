@@ -5,6 +5,7 @@
   // Grouped the way a Mac source list is: what you are doing first, then the screen.
   const paths: Record<string, string> = {
     review: 'M8 2.5 13.5 5v3.2c0 3-2.2 4.8-5.5 5.8-3.3-1-5.5-2.8-5.5-5.8V5L8 2.5ZM5.8 8.1l1.6 1.6 2.9-3',
+    graph: 'M4 4.5a1.75 1.75 0 1 0 0-.01M12 3.5a1.75 1.75 0 1 0 0-.01M12 12.5a1.75 1.75 0 1 0 0-.01M5.6 4.9l4.8-1M5.4 5.6l5.2 5.8',
     repo: 'M3 3.5A1.5 1.5 0 0 1 4.5 2h7A1.5 1.5 0 0 1 13 3.5V14l-5-2.5L3 14V3.5Z',
     branches: 'M5 3.5v9M5 9c0-2.5 6-1.5 6-4.5M5 3.5a1.5 1.5 0 1 0 0-.01M11 3a1.5 1.5 0 1 0 0 .01M5 12.5a1.5 1.5 0 1 0 0 .01',
     mine: 'M8 8a2.75 2.75 0 1 0 0-5.5A2.75 2.75 0 0 0 8 8ZM2.8 13.8c.4-2.6 2.6-4 5.2-4s4.8 1.4 5.2 4',
@@ -15,10 +16,8 @@
     memory: 'M5.5 3.2A2.2 2.2 0 0 0 3.4 5.9 2.3 2.3 0 0 0 3 10a2.3 2.3 0 0 0 2.6 2.7c.6.9 2.4.9 2.4-.5V3.5c0-1.2-1.5-1.5-2.5-.3ZM10.5 3.2a2.2 2.2 0 0 1 2.1 2.7A2.3 2.3 0 0 1 13 10a2.3 2.3 0 0 1-2.6 2.7c-.6.9-2.4.9-2.4-.5',
   };
   const GROUPS: { title: string; items: [string, string][] }[] = [
-    { title: 'Code', items: [['review', 'Review'], ['repo', 'Repository'], ['branches', 'Branches']] },
-    { title: 'People', items: [['mine', 'My work'], ['team', 'Team']] },
-    { title: 'Ship', items: [['release', 'Release'], ['incidents', 'Incidents']] },
-    { title: 'AI', items: [['activity', 'Activity'], ['memory', 'Memory']] },
+    { title: 'Codist', items: [['review', 'Review'], ['graph', 'Graph'], ['incidents', 'Incidents'], ['memory', 'Knowledge'], ['activity', 'Activity']] },
+    { title: 'More', items: [['repo', 'Repository'], ['branches', 'Branches'], ['mine', 'My work'], ['team', 'Team'], ['release', 'Release']] },
   ];
   const open = $derived((app.issueList?.issues ?? []).filter((i) => i.state === 'open' && (!i.group || i.groupRoot)).length);
   const badge = (m: string) => {

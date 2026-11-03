@@ -4,7 +4,7 @@
   import BranchPicker from './BranchPicker.svelte';
   import CopyButton from './CopyButton.svelte';
 
-  const TITLES: Record<string, string> = { review: 'Review', repo: 'Repository', branches: 'Branches', mine: 'My work', team: 'Team', release: 'Release', incidents: 'Incidents', activity: 'Activity', memory: 'Memory' };
+  const TITLES: Record<string, string> = { review: 'Review', graph: 'Graph', repo: 'Repository', branches: 'Branches', mine: 'My work', team: 'Team', release: 'Release', incidents: 'Incidents', activity: 'Activity', memory: 'Knowledge' };
   let input: HTMLInputElement;
   let focused = $state(false);
   let active = $state(0);
@@ -20,6 +20,8 @@
 
   function pick(id: string) {
     selectNode(id);
+    app.mode = 'graph';
+    app.centre = 'code';
     app.showPanel = true;
     app.search = '';
     input.blur();
@@ -48,7 +50,7 @@
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M5.5 2.5v11"/>{#if app.showCommits}<path d="M2.5 5h2M2.5 7h2" stroke-linecap="round"/>{/if}</svg>
   </button>
 
-  {#if app.mode === 'review' || app.mode === 'incidents'}<h1 class="title">{TITLES[app.mode]}</h1>{/if}
+  {#if app.mode === 'review' || app.mode === 'graph' || app.mode === 'incidents'}<h1 class="title">{TITLES[app.mode]}</h1>{/if}
 
   <span class="repo" title={app.status?.path}>{app.status?.repo ?? '…'}</span>
   {#if app.status}
