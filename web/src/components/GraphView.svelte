@@ -20,6 +20,32 @@
   let edgeTip = $state<{ x: number; y: number; text: string } | null>(null);
 
   const m = $derived(app.graphMetrics as Map<string, Metrics>);
+
+  // Four zoom levels, from the whole system down to what is inside the classes a commit changed.
+  type Level = 'microservice' | 'service' | 'layer' | 'method';
+  const LEVELS: { id: Level; label: string; hint: string }[] = [
+    { id: 'microservice', label: 'Microservice', hint: 'One box per service, joined by Feign calls and shared code. A repository with one module is split by its top-level packages.' },
+    { id: 'service', label: 'Service', hint: 'The classes inside each service' },
+    { id: 'layer', label: 'Layer', hint: 'Controllers above services above repositories, with calls that break the layers marked' },
+    { id: 'method', label: 'Method', hint: 'The methods and fields of the classes this commit changed' },
+  ];
+  const level = $derived<Level | null>(
+    app.layoutMode === 'services' ? 'microservice'
+      : app.layoutMode === 'layers' ? 'layer'
+      : app.groupBy === 'service' ? 'service'
+      : app.expanded.length ? 'method' : null,
+  );
+  function setLevel(next: Level) {
+    const mode = next === 'microservice' ? 'services' : next === 'layer' ? 'layers' : 'natural';
+    const group = next === 'service' ? 'service' : 'none';
+    app.layoutMode = mode;
+    app.groupBy = group;
+    saveStr('layoutMode', mode);
+    saveStr('groupBy', group);
+    if (next === 'layer') app.overlay = 'layers';
+    else if (app.overlay === 'layers') app.overlay = 'none';
+    app.expanded = next === 'method' ? (app.detail?.analysis.changed ?? []).filter((t) => t.status !== 'deleted').map((t) => t.id) : [];
+  }
   const visible = $derived(app.graphView);
   const matches = nodeMatches;
 
@@ -378,6 +404,15 @@
           const node = app.graph?.nodes.find((x) => x.id === n.id());
           if (node && files.has(node.file)) { n.addClass('changed'); changed.add(n.id()); }
         });
+      } else if (a && app.layoutMode === 'services') {
+        // At this level a box stands for a whole service, so mark the services the commit touches.
+        const area = areaNamer(visible.nodes);
+        const box = (id: string) => {
+          const node = visible.nodes.find((x) => x.id === id);
+          return node ? cy!.getElementById('svc:' + area(node)) : null;
+        };
+        for (const id of a.impacted) box(id)?.addClass('impacted');
+        for (const c of a.changed) box(c.id)?.removeClass('impacted').addClass('changed');
       } else if (a) {
         for (const c of a.changed) {
           const n = cy!.getElementById(c.id);
@@ -653,6 +688,11 @@
       <button class="on">Code graph</button>
       {#if app.featureOn('branchGraph')}<button onclick={() => { app.centre = 'branches'; saveStr('centre', 'branches'); }}>Branch graph</button>{/if}
     </div>
+    <div class="seg" role="group" aria-label="Zoom level">
+      {#each LEVELS as l (l.id)}
+        <button class:on={level === l.id} aria-pressed={level === l.id} title={l.hint} onclick={() => setLevel(l.id)}>{l.label}</button>
+      {/each}
+    </div>
     <div class="seg icons">
       <button title="Re-run layout" aria-label="Re-run layout" onclick={() => layout(false)}>
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M16 10a6 6 0 1 1-1.8-4.3M16 3v3.5h-3.5"/></svg>
@@ -665,8 +705,7 @@
       </button>
     </div>
     {#if hidden > 0}<span class="hid" title="Hidden by the Explorer filters">{hidden} hidden</span>{/if}
-    {#if app.overlay !== 'none'}<span class="ov">{app.overlay}</span>{/if}
-    {#if app.layoutMode !== 'natural'}<span class="ov">{app.layoutMode}</span>{/if}
+    {#if app.overlay !== 'none' && app.overlay !== 'layers'}<span class="ov">{app.overlay}</span>{/if}
   </div>
 
   {#if hover && hm}
@@ -736,10 +775,10 @@
 <style>
   .graph { container-type: inline-size; position: relative; min-width: 0; min-height: 360px; overflow: hidden; background-color: var(--canvas); background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px); background-size: 18px 18px; }
   .canvas { position: absolute; inset: 0; }
-  .toolbar { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 6px; z-index: 3; pointer-events: none; }
+  .toolbar { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; flex-wrap: wrap; gap: 6px; z-index: 3; pointer-events: none; }
   .toolbar > * { pointer-events: auto; }
   .seg { display: flex; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface-2); }
-  .seg button { height: 24px; padding: 0 10px; border: 0; border-radius: var(--r); background: none; font-size: 12px; color: var(--text-3); transition: background 0.15s, color 0.15s; }
+  .seg button { height: 24px; padding: 0 10px; white-space: nowrap; border: 0; border-radius: var(--r); background: none; font-size: 12px; color: var(--text-3); transition: background 0.15s, color 0.15s; }
   .seg.icons button { width: 26px; padding: 0; display: grid; place-items: center; }
   .seg button:hover { color: var(--text); }
   .seg button.on { color: var(--text); background: var(--surface-3); box-shadow: var(--raised); }

@@ -258,4 +258,5 @@
   .msg .row-actions { align-items: center; }
   .card-head .spacer { flex: 1; }
   .issues-head.hidden { display: none; }
+  .status:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 </style>

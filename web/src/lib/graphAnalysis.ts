@@ -163,10 +163,18 @@ export function layeredPositions(nodes: GraphNode[], width: number): Map<string,
   }
   const order = [4, 3, 2, 1, 0, -1].filter((l) => rows.has(l));
   const out = new Map<string, { x: number; y: number }>();
-  order.forEach((l, r) => {
+  // A long layer wraps onto extra rows, so the view stays large enough to read when it is fitted.
+  const perRow = Math.max(4, Math.round(width / 110));
+  let y = 0;
+  order.forEach((l) => {
     const row = rows.get(l)!.sort((a, b) => a.pkg.localeCompare(b.pkg) || a.name.localeCompare(b.name));
-    const gap = Math.min(170, Math.max(120, width / Math.max(row.length, 1) / 1.6));
-    row.forEach((n, i) => out.set(n.id, { x: (i - (row.length - 1) / 2) * gap, y: r * 150 }));
+    const gap = 150;
+    for (let i = 0; i < row.length; i += perRow) {
+      const part = row.slice(i, i + perRow);
+      part.forEach((n, j) => out.set(n.id, { x: (j - (part.length - 1) / 2) * gap, y }));
+      y += 110;
+    }
+    y += 40; // a wider gap between layers than between the rows of one layer
   });
   return out;
 }

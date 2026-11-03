@@ -1,4 +1,4 @@
-> The `rebuild` branch has a new menu: Review, Graph, Incidents, Knowledge (formerly Memory) and Activity, with the other screens under More. Review now shows the commit's diff with issues inline, and the graph has its own screen.
+> The `rebuild` branch has a new menu: Review, Graph, Incidents, Knowledge (formerly Memory) and Activity, with the other screens under More. Review now shows the commit's diff, with syntax highlighting and issues inline, and the panel on the right holds what the diff doesn't: the summary, what the change can affect and the commit message. The graph has its own screen, with Microservice, Service, Layer and Method zoom buttons. In a repository with one module, Microservice splits it by top-level package.
 
 # Screens
 
