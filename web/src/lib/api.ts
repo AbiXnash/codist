@@ -1,4 +1,4 @@
-import type { ImpactReport, Activity, TeamReport, Flags, PeopleReport, HistoryCommit, BranchRef, BranchReport, MemoryItem, MemoryReport, PlannedCommit, RepoReport, FixRef, Working, CommitItem, DependencyReport, Detail, FixProposal, Graph, Incident, IncidentRow, IssueList, RcaReport, ReleaseReport, Status } from './types';
+import type { CallLink, ImpactReport, Activity, TeamReport, Flags, PeopleReport, HistoryCommit, BranchRef, BranchReport, MemoryItem, MemoryReport, PlannedCommit, RepoReport, FixRef, Working, CommitItem, DependencyReport, Detail, FixProposal, Graph, Incident, IncidentRow, IssueList, RcaReport, ReleaseReport, Status } from './types';
 
 const json = (method: string, body?: unknown): RequestInit => ({
   method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body),
@@ -56,6 +56,7 @@ export const api = {
   markFixed: (id: string) => fetch(`/api/issues/${id}/resolve`, { method: 'POST' }),
   reopenIssue: (id: string) => fetch(`/api/issues/${id}/resolve`, { method: 'DELETE' }),
   graph: () => request<Graph>('/graph'),
+  calls: () => request<CallLink[]>('/graph/calls'),
   commits: (limit = 300) => request<CommitItem[]>(`/commits?limit=${limit}`),
   commit: (sha: string) => request<Detail>(`/commits/${sha}`),
   working: () => request<Working>('/working'),

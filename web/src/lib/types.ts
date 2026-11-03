@@ -80,6 +80,11 @@ export interface GraphEdge {
   via?: string[];
 }
 
+export interface CallEnd { class: string; name: string; file: string; line: number }
+
+/** One method calling another. Not confirmed means the call was matched by name only. */
+export interface CallLink { from: CallEnd; to: CallEnd; confirmed: boolean }
+
 export interface Graph {
   nodes: GraphNode[];
   edges: GraphEdge[];

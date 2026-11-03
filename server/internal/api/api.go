@@ -60,6 +60,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/status", s.status)
 	mux.HandleFunc("GET /api/graph", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.Graph.Graph()) })
+	mux.HandleFunc("GET /api/graph/calls", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.callGraph().Calls()) })
 	mux.HandleFunc("GET /api/commits", s.commits)
 	mux.HandleFunc("GET /api/commits/{sha}", s.commit)
 	mux.HandleFunc("POST /api/commits/{sha}/review", s.review)

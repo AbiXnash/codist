@@ -60,6 +60,7 @@
         <div class="r"><svg width="44" height="14"><line x1="2" y1="7" x2="33" y2="7" stroke="var(--text-2)"/><path d="M33 2l9 5-9 5z" fill="none" stroke="var(--text-2)"/></svg><b>Hollow arrow: extends</b><span class="faint">dashed when it implements an interface</span></div>
         <div class="r"><svg width="44" height="14"><line x1="2" y1="7" x2="34" y2="7" stroke="#06b6d4" stroke-width="3"/><path d="M34 2l8 5-8 5z" fill="#06b6d4"/></svg><b>Thick cyan: Feign call</b><span class="faint">a client calling a controller in another service; hover for the routes. A client with no such line calls a route nobody serves</span></div>
         <div class="r"><svg width="44" height="14"><line x1="2" y1="7" x2="42" y2="7" stroke="var(--text-2)" stroke-dasharray="1 3"/></svg><b>Dotted: member</b><span class="faint">a method (circle, red when costly), field (square) or constant (green diamond) of an expanded class</span></div>
+        <div class="r"><svg width="44" height="14"><line x1="2" y1="7" x2="33" y2="7" stroke="var(--accent)" stroke-width="1.6"/><path d="M33 2l9 5-9 5z" fill="var(--accent)"/></svg><b>Method call</b><span class="faint">one method calls another; dashed means it was matched by name only</span></div>
 
         <h3>Rings are state: what the selected commit or the issue list says</h3>
         <div class="r"><i class="ring" style:border-color={STATE_COLOR.changed}></i><b>Changed</b><span class="faint">modified in the selected commit (or in your uncommitted edits)</span></div>

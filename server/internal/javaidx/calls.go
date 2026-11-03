@@ -257,6 +257,50 @@ func (cg *CallGraph) linkRoutes(g *Graph) {
 	}
 }
 
+// Call is one method calling another. Confirmed means the receiver's type was known; otherwise the call
+// was matched by name only. A call through an interface or superclass also links to the methods that
+// can run instead, as CallersOf does.
+type Call struct {
+	From      *Method `json:"from"`
+	To        *Method `json:"to"`
+	Confirmed bool    `json:"confirmed"`
+}
+
+// Calls is every link in the graph between two different methods, in a stable order.
+func (cg *CallGraph) Calls() []Call {
+	best := map[[2]string]Call{}
+	for target, callers := range cg.callers {
+		for caller, sure := range callers {
+			from := cg.methods[caller]
+			if from == nil {
+				continue
+			}
+			for _, key := range cg.sameMethod(target) {
+				to := cg.methods[key]
+				if to == nil || key == caller {
+					continue
+				}
+				id := [2]string{caller, key}
+				if old, ok := best[id]; !ok || (sure && !old.Confirmed) {
+					best[id] = Call{From: from, To: to, Confirmed: sure}
+				}
+			}
+		}
+	}
+	out := make([]Call, 0, len(best))
+	for _, c := range best {
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.From.key != b.From.key {
+			return a.From.key < b.From.key
+		}
+		return a.To.key < b.To.key
+	})
+	return out
+}
+
 // MethodsIn is the methods of a file that contain any of the lines.
 func (cg *CallGraph) MethodsIn(path string, lines []int) []*Method {
 	var out []*Method

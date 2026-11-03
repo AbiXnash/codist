@@ -8,7 +8,8 @@
   import { dependencies, dependents, layeredPositions, path, type Metrics } from '../lib/graphAnalysis';
   import Glyph from './Glyph.svelte';
   import GraphGuide from './GraphGuide.svelte';
-  import type { Graph, GraphNode, Severity } from '../lib/types';
+  import { api } from '../lib/api';
+  import type { CallEnd, CallLink, Graph, GraphNode, Severity } from '../lib/types';
 
   cytoscape.use(fcose);
 
@@ -29,12 +30,37 @@
     { id: 'layer', label: 'Layer', hint: 'Controllers above services above repositories, with calls that break the layers marked' },
     { id: 'method', label: 'Method', hint: 'The methods and fields of the classes this commit changed' },
   ];
+  let methodLevel = $state(false);
+  let calls = $state.raw<CallLink[]>([]);
+  /** At Method level, a class the commit didn't change shows only the methods on a call line. */
+  let onlyMembers = $state.raw(new Map<string, Set<string>>());
   const level = $derived<Level | null>(
     app.layoutMode === 'services' ? 'microservice'
       : app.layoutMode === 'layers' ? 'layer'
       : app.groupBy === 'service' ? 'service'
-      : app.expanded.length ? 'method' : null,
+      : methodLevel ? 'method' : null,
   );
+  const nodeOfCall = (end: CallEnd) => visible.nodes.find((n) => n.name === end.class && n.file === end.file);
+
+  /** Opens the classes a commit changed, plus the classes at the other end of their calls. */
+  function focusOnChange() {
+    const changed = new Set((app.detail?.analysis.changed ?? []).filter((t) => t.status !== 'deleted').map((t) => t.id));
+    const open = new Set(changed);
+    const only = new Map<string, Set<string>>();
+    const note = (id: string, method: string) => {
+      if (changed.has(id)) return;
+      open.add(id);
+      only.set(id, (only.get(id) ?? new Set()).add(method));
+    };
+    for (const c of calls) {
+      const from = nodeOfCall(c.from), to = nodeOfCall(c.to);
+      if (!from || !to || (!changed.has(from.id) && !changed.has(to.id))) continue;
+      note(from.id, c.from.name);
+      note(to.id, c.to.name);
+    }
+    onlyMembers = only;
+    app.expanded = [...open];
+  }
   function setLevel(next: Level) {
     const mode = next === 'microservice' ? 'services' : next === 'layer' ? 'layers' : 'natural';
     const group = next === 'service' ? 'service' : 'none';
@@ -44,8 +70,31 @@
     saveStr('groupBy', group);
     if (next === 'layer') app.overlay = 'layers';
     else if (app.overlay === 'layers') app.overlay = 'none';
-    app.expanded = next === 'method' ? (app.detail?.analysis.changed ?? []).filter((t) => t.status !== 'deleted').map((t) => t.id) : [];
+    methodLevel = next === 'method';
+    onlyMembers = new Map();
+    app.expanded = [];
+    if (next === 'method') void loadCalls().then(focusOnChange);
   }
+
+  async function loadCalls() {
+    try {
+      calls = await api.calls();
+    } catch {
+      calls = []; // the classes still show; only the call lines are missing
+    }
+  }
+
+  // Method level follows the selected commit, and calls refresh when the code changes.
+  let focusedOn: string | undefined;
+  $effect(() => {
+    const sha = app.detail?.analysis.commit.sha;
+    if (methodLevel && sha !== focusedOn) untrack(focusOnChange);
+    focusedOn = sha;
+  });
+  $effect(() => {
+    void app.graph;
+    if (untrack(() => methodLevel || app.expanded.length > 0)) void untrack(loadCalls);
+  });
   const visible = $derived(app.graphView);
   const matches = nodeMatches;
 
@@ -125,7 +174,13 @@
 
   function elements(): ElementDefinition[] {
     if (app.layoutMode === 'services') return serviceElements();
-    const { nodes, edges } = visible;
+    let { nodes, edges } = visible;
+    // At Method level only the classes on the calls show, so the methods have room to read.
+    if (methodLevel && app.expanded.length) {
+      const open = new Set(app.expanded);
+      nodes = nodes.filter((n) => open.has(n.id));
+      edges = edges.filter((e) => open.has(e.source) && open.has(e.target));
+    }
     const degree = new Map<string, number>();
     for (const e of edges) {
       degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
@@ -162,16 +217,30 @@
       out.push({ group: 'edges', data: { id: `${e.source}>${e.target}`, source: e.source, target: e.target, kind: e.kind, via: e.via?.join(', '), ...(cross ? { cross: true } : {}) } });
     }
     // Expanded classes show their constants, fields and methods around them.
+    const shown = new Map<string, string>();
     for (const n of nodes) {
       if (!app.expanded.includes(n.id)) continue;
       for (const mem of n.members) {
+        if (onlyMembers.get(n.id) && !onlyMembers.get(n.id)!.has(mem.name)) continue;
         const id = `${n.id}#${mem.kind}:${mem.name}:${mem.startLine}`;
         const type = mem.value ? 'constant' : mem.kind === 'field' ? 'field' : 'method';
         const hot = !!mem.cost && (mem.cost.loopIo > 0 || mem.cost.loopDepth > 1 || mem.cost.complexity > 10);
         out.push({ group: 'nodes', data: { id, member: type, hot, label: mem.name + (type === 'method' ? '()' : ''), owner: n.id, file: n.file, line: mem.startLine, ...(app.groupBy !== 'none' ? { parent: groupId(n) } : {}) } });
         out.push({ group: 'edges', data: { id: `${n.id}>${id}`, source: n.id, target: id, kind: 'member' } });
+        if (type === 'method' && !shown.has(`${n.id}#${mem.name}`)) shown.set(`${n.id}#${mem.name}`, id); // overloads share one line
       }
     }
+    // Calls between the methods on screen: solid when the receiver's type is known, dashed when matched by name.
+    const lines = new Map<string, ElementDefinition>();
+    for (const c of calls) {
+      const from = nodeOfCall(c.from), to = nodeOfCall(c.to);
+      const source = from && shown.get(`${from.id}#${c.from.name}`);
+      const target = to && shown.get(`${to.id}#${c.to.name}`);
+      if (!source || !target || source === target) continue;
+      const key = `call:${source}>${target}`;
+      if (!lines.get(key)?.data.confirmed) lines.set(key, { group: 'edges', data: { id: key, source, target, kind: 'call', confirmed: c.confirmed } });
+    }
+    out.push(...lines.values());
     return out;
   }
 
@@ -226,6 +295,8 @@
       { selector: 'edge[cross][kind != "feign"]', style: { 'line-style': 'dashed', opacity: 0.55 } as any },
       { selector: 'edge[edgeLabel]', style: { label: 'data(edgeLabel)', 'min-zoomed-font-size': 0, 'font-size': 10.5, color: cssVar('--text-2'), 'text-background-color': cssVar('--canvas'), 'text-background-opacity': 1, 'text-background-padding': '2px', 'text-rotation': 'autorotate' } as any },
       { selector: 'edge[kind = "member"]', style: { width: 0.8, 'line-style': 'dotted', 'target-arrow-shape': 'none' } as any },
+      { selector: 'edge[kind = "call"]', style: { width: 1.6, 'line-color': accent, 'target-arrow-color': accent, 'target-arrow-shape': 'triangle', 'arrow-scale': 0.8, 'curve-style': 'bezier', opacity: 0.95 } as any },
+      { selector: 'edge[kind = "call"][!confirmed]', style: { 'line-style': 'dashed', opacity: 0.65 } as any },
       { selector: 'node[member]', style: { width: 12, height: 12, shape: 'ellipse', 'background-color': cssVar('--surface-3'), 'border-width': 1, 'border-color': cssVar('--node-border'), 'font-size': 9, 'text-margin-y': 3 } as any },
       { selector: 'node[member = "constant"]', style: { shape: 'diamond', 'border-color': '#22c55e' } as any },
       { selector: 'node[member = "field"]', style: { shape: 'rectangle' } as any },
@@ -338,7 +409,7 @@
   function sync() {
     if (!cy || !app.graph) return;
     const els = elements();
-    const key = [app.groupBy, app.layoutMode].join('|');
+    const key = [app.groupBy, app.layoutMode, methodLevel].join('|');
     // Another branch can be entirely different code: lay it out afresh rather than around what is gone.
     const incoming = els.filter((e) => e.group === 'nodes');
     const kept = incoming.filter((e) => cy!.getElementById(e.data.id!).nonempty()).length;
@@ -651,7 +722,7 @@
   });
 
   $effect(() => {
-    void app.graph; void app.groupBy; void app.layoutMode; void visible; void app.sizeBy; void issuesPerNode; void app.expanded;
+    void app.graph; void app.groupBy; void app.layoutMode; void visible; void calls; void onlyMembers; void app.sizeBy; void issuesPerNode; void app.expanded;
     untrack(() => { sync(); highlight(); });
   });
 
@@ -704,6 +775,7 @@
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="7.5"/><path d="M7.8 7.6a2.3 2.3 0 1 1 3.2 2.1c-.6.3-1 .8-1 1.5v.4M10 14.6v.2"/></svg>
       </button>
     </div>
+    {#if methodLevel && !app.expanded.length}<span class="hid">This commit changes no classes</span>{/if}
     {#if hidden > 0}<span class="hid" title="Hidden by the Explorer filters">{hidden} hidden</span>{/if}
     {#if app.overlay !== 'none' && app.overlay !== 'layers'}<span class="ov">{app.overlay}</span>{/if}
   </div>
@@ -749,6 +821,7 @@
     <div class="legend">
       {#each legend as s}<span><Glyph stereotype={s.key} />{s.label}</span>{/each}
       {#if app.groupBy !== 'none' || app.layoutMode === 'services'}<span class="sep"></span><span>Closer boxes are more related · <i class="fl"></i>service call · dashed: uses</span>{/if}
+      {#if app.expanded.length}<span class="sep"></span><span><i class="call"></i>Method call · dashed: matched by name only</span>{/if}
       <span class="sep"></span>
       <span><i class="ring" style:border-color={STATE_COLOR.changed}></i>Changed</span>
       <span><i class="ring" style:border-color={STATE_COLOR.added}></i>Added</span>
@@ -811,4 +884,5 @@
   .legend .more:hover { text-decoration: underline; }
   .overlay { position: absolute; inset: 0; display: flex; gap: 10px; align-items: center; justify-content: center; }
   @media (max-width: 1000px) { .graph { height: 60vh; } }
+  .call { display: inline-block; width: 16px; height: 2px; margin-right: 5px; vertical-align: middle; background: var(--accent); }
 </style>
