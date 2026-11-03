@@ -202,16 +202,17 @@ def run(config, labels, args):
                 break
             except OSError:
                 time.sleep(0.2)
-        start = time.time()
+        start = time.monotonic()  # does not count time the machine spent asleep
         get(port, f"/commits/{sha}/review", {})
         while True:
             time.sleep(0.5 if rules_only else 2)
             review = get(port, f"/commits/{sha}").get("review") or {}
             if review.get("status") in ("done", "failed"):
                 break
-            if time.time() - start > 3600:
-                raise SystemExit("gave up after an hour")
-        took = time.time() - start
+            if time.monotonic() - start > args.timeout:
+                review = {**review, "status": "timed out"}
+                break
+        took = time.monotonic() - start
         findings = []
         for f in review.get("files") or []:
             for x in f.get("findings") or []:
@@ -235,6 +236,8 @@ def run(config, labels, args):
 def problems(result, rules_only):
     """Reasons a result must not be treated as a score."""
     out = []
+    if result.get("status") != "done":
+        out.append(f"{result['config']}: the review {result.get('status') or 'did not finish'}")
     if not rules_only and not [c for c in result["calls"] if c["status"] == "done"]:
         out.append(f"{result['config']}: the model was never called successfully")
     if result["failedFiles"]:
@@ -296,6 +299,7 @@ def main():
     ap.add_argument("--no-filters", action="store_true", help="keep every model finding with a valid position")
     ap.add_argument("--default-settings", action="store_true", help="use the settings users get, including the file limit")
     ap.add_argument("--repeat", type=int, default=1, help="runs per configuration")
+    ap.add_argument("--timeout", type=int, default=3600, help="seconds a run may take while the machine is awake")
     ap.add_argument("--compare", nargs=2, metavar="FILE", help="compare two result files")
     args = ap.parse_args()
     if args.compare:

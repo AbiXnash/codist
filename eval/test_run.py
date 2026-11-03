@@ -78,13 +78,17 @@ class Results(unittest.TestCase):
         self.assertEqual(run.drops(self.ACTIVITY), [{"reason": "vague advice", "title": "Consider logging", "path": "A.java"}])
 
     def test_a_model_run_with_no_model_calls_is_invalid(self):
-        result = {"config": "m", "calls": [], "failedFiles": []}
+        result = {"config": "m", "status": "done", "calls": [], "failedFiles": []}
         self.assertTrue(run.problems(result, rules_only=False))
         self.assertFalse(run.problems(result, rules_only=True))
 
     def test_failed_calls_do_not_count_as_a_model_run(self):
-        result = {"config": "m", "calls": [{"status": "failed"}], "failedFiles": []}
+        result = {"config": "m", "status": "done", "calls": [{"status": "failed"}], "failedFiles": []}
         self.assertTrue(run.problems(result, rules_only=False))
+
+    def test_an_unfinished_review_is_invalid(self):
+        result = {"config": "m", "status": "timed out", "calls": [{"status": "done"}], "failedFiles": []}
+        self.assertIn("timed out", run.problems(result, rules_only=False)[0])
 
     def test_compare_finds_gains_and_losses(self):
         def write(name, bugs):
