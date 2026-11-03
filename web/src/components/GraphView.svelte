@@ -437,6 +437,9 @@
       requestAnimationFrame(() => { highlight(); if (focused) fit(); });
     });
     run.run();
+    // Boxes hold hundreds of classes, and curved lines cost the most when a box resizes under a drag.
+    const heavy = app.groupBy !== 'none' && cy.nodes().length > 300;
+    cy.style().selector('edge').style({ 'curve-style': heavy ? 'straight' : 'unbundled-bezier' }).update();
   }
 
   function sync() {

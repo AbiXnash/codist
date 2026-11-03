@@ -45,6 +45,36 @@ function boxShares(box: NodeSingular): Map<NodeSingular, number> {
   return out;
 }
 
+/** After a drag, boxes that now overlap move out of the way, and any they then reach do the same. */
+export function pushBoxesApart(cy: Core, moved: NodeSingular): void {
+  const GAP = 40;
+  const boxes = cy.nodes(':parent').filter((b) => !b.parent().nonempty());
+  const shift = new Map<string, { x: number; y: number }>();
+  const placed = new Set([moved.id()]);
+  const rect = (b: NodeSingular) => { const r = b.boundingBox({}), d = shift.get(b.id()) ?? { x: 0, y: 0 }; return { x1: r.x1 + d.x, x2: r.x2 + d.x, y1: r.y1 + d.y, y2: r.y2 + d.y }; };
+  for (let round = 0, queue = [moved]; round < 40 && queue.length; round++) {
+    const fixed = queue.shift()!, f = rect(fixed);
+    boxes.forEach((o) => {
+      const other = o as NodeSingular;
+      if (placed.has(other.id())) return;
+      const r = rect(other), ox = Math.min(f.x2, r.x2) - Math.max(f.x1, r.x1) + GAP, oy = Math.min(f.y2, r.y2) - Math.max(f.y1, r.y1) + GAP;
+      if (ox <= 0 || oy <= 0) return;
+      const d = shift.get(other.id()) ?? { x: 0, y: 0 };
+      if (ox < oy) d.x += (r.x1 + r.x2 < f.x1 + f.x2 ? -1 : 1) * ox; else d.y += (r.y1 + r.y2 < f.y1 + f.y2 ? -1 : 1) * oy;
+      shift.set(other.id(), d);
+      placed.add(other.id());
+      queue.push(other);
+    });
+  }
+  const instant = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  shift.forEach((d, id) => {
+    (cy.getElementById(id) as NodeSingular).descendants().filter((n) => !n.isParent()).forEach((n) => {
+      const p = (n as NodeSingular).position(), to = { x: p.x + d.x, y: p.y + d.y };
+      if (instant) (n as NodeSingular).position(to); else n.animate({ position:to }, { duration:280, easing:'ease-out-cubic' });
+    });
+  });
+}
+
 export function followOnDrag(cy: Core): void {
   const still = matchMedia('(prefers-reduced-motion: reduce)');
   let held: NodeSingular | null = null;
@@ -97,6 +127,11 @@ export function followOnDrag(cy: Core): void {
       frame = requestAnimationFrame(tick);
     }
   });
-  cy.on('freeon', 'node', () => { held = null; });
+  cy.on('freeon', 'node', (e) => {
+    const n: NodeSingular = e.target;
+    held = null;
+    const box = n.isParent() ? n : n.parent().first();
+    if (box.nonempty()) setTimeout(() => pushBoxesApart(cy, box as NodeSingular), still.matches ? 0 : 320);
+  });
   cy.on('destroy', () => { cancelAnimationFrame(frame); });
 }
