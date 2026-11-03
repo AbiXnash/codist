@@ -364,7 +364,7 @@ export interface ReleaseReport {
   checklist: string[];
 }
 
-export interface DepRow { group: string; artifact: string; version: string; scope: string; managed: boolean; status: 'ok' | 'warn' | 'bad'; note: string }
+export interface DepRow { group: string; artifact: string; version: string; scope: string; managed: boolean; status: 'ok' | 'warn' | 'bad'; note: string; modules?: string[] }
 
 export interface DependencyReport { tool: string; java: string; springBoot: string; support: string; deps: DepRow[]; findings: Finding[]; file: string }
 

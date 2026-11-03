@@ -3,6 +3,7 @@ package review
 import (
 	"encoding/xml"
 	"fmt"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -14,14 +15,22 @@ type Build struct {
 	Java       string
 	SpringBoot string
 	Deps       []Dep
+	Modules    []string // the modules this build was read from, besides the root
+
+	artifact string
+	declared []string
+	props    map[string]string
 }
 
 type Dep struct {
 	Group, Artifact, Version, Scope string
+	Modules                         []string // where it is declared, when the project has modules
 }
 
 type pom struct {
-	Parent struct {
+	ArtifactID string   `xml:"artifactId"`
+	Modules    []string `xml:"modules>module"`
+	Parent     struct {
 		GroupID    string `xml:"groupId"`
 		ArtifactID string `xml:"artifactId"`
 		Version    string `xml:"version"`
@@ -52,19 +61,20 @@ func ParseBuild(path, content string) (Build, bool) {
 		if err := xml.Unmarshal([]byte(content), &p); err != nil {
 			return Build{}, false
 		}
-		b := Build{Tool: "Maven"}
+		b := Build{Tool: "Maven", artifact: p.ArtifactID, declared: p.Modules}
 		props := map[string]string{}
 		for _, e := range p.Properties.Entries {
 			props[e.XMLName.Local] = strings.TrimSpace(e.Value)
 		}
+		b.props = props
 		b.Java = firstNonEmpty(props["java.version"], props["maven.compiler.release"], props["maven.compiler.source"])
 		if p.Parent.ArtifactID == "spring-boot-starter-parent" {
 			b.SpringBoot = p.Parent.Version
 		}
 		for _, d := range p.Dependencies {
 			v := d.Version
-			if strings.HasPrefix(v, "${") {
-				v = props[strings.Trim(v, "${}")]
+			if r, ok := props[strings.Trim(v, "${}")]; ok && strings.HasPrefix(v, "${") {
+				v = r
 			}
 			b.Deps = append(b.Deps, Dep{Group: d.GroupID, Artifact: d.ArtifactID, Version: v, Scope: d.Scope})
 		}
@@ -84,6 +94,110 @@ func ParseBuild(path, content string) (Build, bool) {
 		return b, true
 	}
 	return Build{}, false
+}
+
+var gradleInclude = regexp.MustCompile(`(?m)^\s*include\s*\(?([^\n)]*)`)
+var gradleName = regexp.MustCompile(`["']:?([^"']+)["']`)
+
+const deepestModule = 6
+
+// ReadBuild reads the build of a whole project through read, which returns a file's text. Most Java
+// services keep their dependencies in each module, so the root file alone can list none at all.
+func ReadBuild(read func(path string) (string, bool)) (b Build, file, rootSrc string, ok bool) {
+	for _, p := range []string{"pom.xml", "build.gradle.kts", "build.gradle"} {
+		if src, found := read(p); found {
+			if b, ok = ParseBuild(p, src); ok {
+				file, rootSrc = p, src
+			}
+			break
+		}
+	}
+	if !ok {
+		return b, "", "", false
+	}
+	type found struct {
+		path string
+		b    Build
+	}
+	var mods []found
+	seen := map[string]bool{"": true}
+	var walk func(dir string, names []string, depth int)
+	walk = func(dir string, names []string, depth int) {
+		if depth > deepestModule {
+			return
+		}
+		for _, name := range names {
+			mod := strings.Trim(path.Join(dir, strings.TrimSuffix(name, "/pom.xml")), "/")
+			if seen[mod] {
+				continue
+			}
+			seen[mod] = true
+			for _, f := range []string{"pom.xml", "build.gradle.kts", "build.gradle"} {
+				if src, has := read(mod + "/" + f); has {
+					if mb, parsed := ParseBuild(f, src); parsed {
+						mods = append(mods, found{mod, mb})
+						walk(mod, mb.declared, depth+1)
+					}
+					break
+				}
+			}
+		}
+	}
+	names := b.declared
+	if b.Tool == "Gradle" {
+		for _, f := range []string{"settings.gradle.kts", "settings.gradle"} {
+			if src, has := read(f); has {
+				for _, m := range gradleInclude.FindAllStringSubmatch(src, -1) {
+					for _, n := range gradleName.FindAllStringSubmatch(m[1], -1) {
+						names = append(names, strings.ReplaceAll(strings.TrimPrefix(n[1], ":"), ":", "/"))
+					}
+				}
+				break
+			}
+		}
+	}
+	walk("", names, 1)
+
+	// A module depending on another module of this project isn't a dependency to upgrade.
+	own := map[string]bool{}
+	for _, m := range mods {
+		if m.b.artifact != "" {
+			own[m.b.artifact] = true
+		}
+		own[path.Base(m.path)] = true
+	}
+	merged, at := []Dep{}, map[string]int{}
+	add := func(mod string, list []Dep) {
+		for _, d := range list {
+			if own[d.Artifact] {
+				continue
+			}
+			if v := strings.Trim(d.Version, "${}"); strings.HasPrefix(d.Version, "${") {
+				if r, has := b.props[v]; has {
+					d.Version = r
+				}
+			}
+			k := d.Group + ":" + d.Artifact + ":" + d.Version + ":" + d.Scope
+			i, has := at[k]
+			if !has {
+				i = len(merged)
+				at[k] = i
+				merged = append(merged, d)
+			}
+			if mod != "" {
+				merged[i].Modules = append(merged[i].Modules, mod)
+			}
+		}
+	}
+	add("", b.Deps)
+	for _, m := range mods {
+		b.Modules = append(b.Modules, m.path)
+		b.Java = firstNonEmpty(b.Java, m.b.Java)
+		b.SpringBoot = firstNonEmpty(b.SpringBoot, m.b.SpringBoot)
+		add(m.path, m.b.Deps)
+	}
+	b.Deps = merged
+	return b, file, rootSrc, true
 }
 
 // Summary is a one-paragraph description for prompts.

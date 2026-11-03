@@ -271,12 +271,8 @@ func buildAt(repo *gitx.Repo, sha string) (Build, bool) {
 	if sha == "" {
 		return Build{}, false
 	}
-	for _, p := range []string{"pom.xml", "build.gradle.kts", "build.gradle"} {
-		if src, ok := repo.ReadFile(sha, p); ok {
-			return ParseBuild(p, src)
-		}
-	}
-	return Build{}, false
+	b, _, _, ok := ReadBuild(func(p string) (string, bool) { return repo.ReadFile(sha, p) })
+	return b, ok
 }
 
 // ReleaseMarkdown renders the report for sharing.
@@ -330,39 +326,34 @@ type DependencyReport struct {
 }
 
 type DepRow struct {
-	Group    string `json:"group"`
-	Artifact string `json:"artifact"`
-	Version  string `json:"version"`
-	Scope    string `json:"scope"`
-	Managed  bool   `json:"managed"`
-	Status   string `json:"status"` // ok, warn, bad
-	Note     string `json:"note"`
+	Group    string   `json:"group"`
+	Artifact string   `json:"artifact"`
+	Version  string   `json:"version"`
+	Scope    string   `json:"scope"`
+	Managed  bool     `json:"managed"`
+	Status   string   `json:"status"` // ok, warn, bad
+	Note     string   `json:"note"`
+	Modules  []string `json:"modules,omitempty"`
 }
 
 // Dependencies checks the current build file (working tree, or the tracked head for mirrors).
 func Dependencies(repo *gitx.Repo) DependencyReport {
 	rep := DependencyReport{Deps: []DepRow{}, Findings: []Finding{}}
-	var src, path string
-	for _, p := range []string{"pom.xml", "build.gradle.kts", "build.gradle"} {
-		var ok bool
+	head := repo.Head()
+	b, path, src, ok := ReadBuild(func(p string) (string, bool) {
 		if repo.Remote {
-			src, ok = repo.ReadFile(repo.Head(), p)
-		} else {
-			src, ok, _ = repo.ReadWorking(p)
+			return repo.ReadFile(head, p)
 		}
-		if ok {
-			path = p
-			break
-		}
-	}
-	if path == "" {
-		return rep
-	}
-	b, ok := ParseBuild(path, src)
+		text, found, _ := repo.ReadWorking(p)
+		return text, found
+	})
 	if !ok {
 		return rep
 	}
 	rep.File, rep.Tool, rep.Java, rep.SpringBoot = path, b.Tool, b.Java, b.SpringBoot
+	if n := len(b.Modules); n > 0 {
+		rep.File = fmt.Sprintf("%s and %d modules", path, n)
+	}
 	switch m := major(b.SpringBoot); {
 	case b.SpringBoot == "":
 		rep.Support = ""
@@ -384,9 +375,15 @@ func Dependencies(repo *gitx.Repo) DependencyReport {
 	}
 	for _, d := range b.Deps {
 		row := DepRow{Group: d.Group, Artifact: d.Artifact, Version: d.Version, Scope: orDefault(d.Scope, "compile"),
-			Managed: d.Version == "" && b.SpringBoot != "", Status: "ok"}
+			Managed: d.Version == "" && b.SpringBoot != "", Status: "ok", Modules: d.Modules}
 		if row.Managed {
 			row.Version = "managed by Spring Boot " + b.SpringBoot
+			if strings.HasPrefix(d.Group, "org.springframework.cloud") {
+				row.Version = "managed by Spring Cloud"
+				if v := b.props["spring-cloud.version"]; v != "" {
+					row.Version += " " + v
+				}
+			}
 		}
 		if f, ok := byArtifact[d.Artifact]; ok {
 			row.Note = f.Title + ". " + f.Suggestion
@@ -397,7 +394,13 @@ func Dependencies(repo *gitx.Repo) DependencyReport {
 		}
 		rep.Deps = append(rep.Deps, row)
 	}
-	sort.SliceStable(rep.Deps, func(i, j int) bool { return statusRank[rep.Deps[i].Status] > statusRank[rep.Deps[j].Status] })
+	sort.SliceStable(rep.Deps, func(i, j int) bool {
+		a, z := rep.Deps[i], rep.Deps[j]
+		if statusRank[a.Status] != statusRank[z.Status] {
+			return statusRank[a.Status] > statusRank[z.Status]
+		}
+		return a.Artifact < z.Artifact
+	})
 	return rep
 }
 

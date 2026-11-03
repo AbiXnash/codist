@@ -122,7 +122,7 @@
             <tbody>
               {#each deps.deps as d}
                 <tr>
-                  <td class="mono">{d.artifact}<div class="faint small">{d.group}</div></td>
+                  <td class="mono">{d.artifact}<div class="faint small">{d.group}</div>{#if d.modules?.length}<div class="faint small" title={d.modules.join(', ')}>{d.modules.length <= 2 ? d.modules.join(', ') : `in ${d.modules.length} modules`}</div>{/if}</td>
                   <td class="mono small">{d.version || '—'}</td>
                   <td>{d.scope}</td>
                   <td><span class="st {d.status}">{d.status === 'ok' ? 'ok' : d.status === 'warn' ? 'check' : 'upgrade'}</span>{#if d.note}<div class="small note">{d.note}</div>{/if}</td>

@@ -65,13 +65,7 @@ func (s *Service) Build(sha string) Build {
 	if b, ok := s.builds.Load(sha); ok {
 		return b.(Build)
 	}
-	var b Build
-	for _, p := range []string{"pom.xml", "build.gradle.kts", "build.gradle"} {
-		if content, ok := s.repo.ReadFile(sha, p); ok {
-			b, _ = ParseBuild(p, content)
-			break
-		}
-	}
+	b, _, _, _ := ReadBuild(func(p string) (string, bool) { return s.repo.ReadFile(sha, p) })
 	s.builds.Store(sha, b)
 	return b
 }
