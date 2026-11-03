@@ -405,7 +405,7 @@ type Cost struct {
 }
 
 var (
-	dbReceiver  = regexp.MustCompile(`(?i)(repository|repo|dao|jdbctemplate|entitymanager|em)$`)
+	dbReceiver  = regexp.MustCompile(`(?i)(repository|repo|dao|jdbctemplate|entitymanager)$|^em$`) // "em" alone: item and system are not databases
 	dbMethod    = regexp.MustCompile(`^(find|save|delete|exists|count|get(One|ReferenceById)|query|update|persist|merge|execute|createQuery|createNativeQuery)`)
 	loopTypes   = map[string]bool{"for_statement": true, "enhanced_for_statement": true, "while_statement": true, "do_statement": true}
 	branchTypes = map[string]bool{"if_statement": true, "for_statement": true, "enhanced_for_statement": true, "while_statement": true, "do_statement": true,
@@ -414,6 +414,25 @@ var (
 )
 
 // MethodCost measures one method.
+// runsOnce reports whether kid is evaluated once however many items its parent loops over: what a
+// for-each iterates, a for loop's setup, or what a call is made on. repo.findAll().stream().map(f)
+// queries once, and a chain of stream steps is one pass rather than nested loops.
+func runsOnce(n, kid *sitter.Node) bool {
+	field := ""
+	switch n.Type() {
+	case "enhanced_for_statement":
+		field = "value"
+	case "for_statement":
+		field = "init"
+	case "method_invocation":
+		field = "object"
+	default:
+		return false
+	}
+	once := n.ChildByFieldName(field)
+	return once != nil && once.Equal(kid)
+}
+
 func MethodCost(f *file, m *sitter.Node) Cost {
 	cost := Cost{Complexity: 1, Lines: endLine(m) - startLine(m) + 1}
 	if ps := m.ChildByFieldName("parameters"); ps != nil {
@@ -435,14 +454,15 @@ func MethodCost(f *file, m *sitter.Node) Cost {
 				cost.Complexity++
 			}
 		}
+		inner := depth
 		if loopTypes[t] {
-			depth++
+			inner++
 		}
 		if t == "method_invocation" {
 			name := f.text(n.ChildByFieldName("name"))
 			obj := f.text(n.ChildByFieldName("object"))
 			if streamLoops[name] && strings.Contains(obj, "stream()") {
-				depth++
+				inner++
 			}
 			if i := strings.LastIndex(obj, "."); i >= 0 {
 				obj = obj[i+1:]
@@ -459,9 +479,13 @@ func MethodCost(f *file, m *sitter.Node) Cost {
 				cost.LoopIO++
 			}
 		}
-		cost.LoopDepth = max(cost.LoopDepth, depth)
+		cost.LoopDepth = max(cost.LoopDepth, inner)
 		for _, k := range named(n) {
-			visit(k, depth)
+			if runsOnce(n, k) {
+				visit(k, depth)
+			} else {
+				visit(k, inner)
+			}
 		}
 	}
 	visit(body, 0)
@@ -503,7 +527,8 @@ func (c *checker) cost(m *sitter.Node) {
 	// Database calls per item.
 	var inLoop func(n *sitter.Node, loop *sitter.Node)
 	reported := map[string]bool{}
-	inLoop = func(n, loop *sitter.Node) {
+	inLoop = func(n, outer *sitter.Node) {
+		loop := outer
 		if loopTypes[n.Type()] {
 			loop = n
 		}
@@ -525,7 +550,11 @@ func (c *checker) cost(m *sitter.Node) {
 			}
 		}
 		for _, k := range named(n) {
-			inLoop(k, loop)
+			if runsOnce(n, k) {
+				inLoop(k, outer)
+			} else {
+				inLoop(k, loop)
+			}
 		}
 	}
 	inLoop(body, nil)

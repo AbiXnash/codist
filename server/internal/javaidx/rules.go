@@ -634,7 +634,7 @@ var (
 	remoteObject  = regexp.MustCompile(`(?i)(client|resttemplate|webclient|restclient|feign|gateway|api|http|template|stub|proxy)$`)
 	remoteMethods = map[string]bool{"getForObject": true, "getForEntity": true, "postForObject": true, "postForEntity": true,
 		"exchange": true, "retrieve": true, "execute": true, "send": true, "call": true, "invoke": true}
-	repoObject = regexp.MustCompile(`(?i)(repo|repository|dao|jdbc|jdbctemplate|entitymanager|em)$`)
+	repoObject = regexp.MustCompile(`(?i)(repo|repository|dao|jdbc|jdbctemplate|entitymanager)$|^em$`) // "em" alone: item and system are not databases
 	repoMethod = regexp.MustCompile(`^(find|get|save|delete|exists|count|query|update|insert|persist|merge|load)`)
 	loopCalls  = map[string]bool{"forEach": true, "map": true, "flatMap": true, "peek": true, "filter": true, "forEachOrdered": true}
 )

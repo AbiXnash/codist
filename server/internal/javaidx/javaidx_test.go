@@ -581,3 +581,46 @@ interface ElsewhereClient { @GetMapping("/x") String get(); }`),
 		t.Fatal("stale route not reported")
 	}
 }
+
+func TestLoopRulesOnlyCountWhatRunsPerItem(t *testing.T) {
+	src := `package a;
+class S {
+    List<R> once() {
+        return repository.findByStatus("A").stream().sorted().limit(5).map(R::from).toList();
+    }
+    void forEachSource() {
+        for (Order o : repository.findAll()) { total += o.amount(); }
+    }
+    void notADatabase(List<Item> items) {
+        for (Item item : items) { item.getPrice(); item.findOption(); }
+    }
+    void perItem(List<Long> ids) {
+        ids.stream().map(id -> repository.findById(id)).toList();
+    }
+    void perIteration(List<Long> ids) {
+        for (Long id : ids) { em.find(id); }
+    }
+}
+`
+	lines := map[int]bool{}
+	var titles []string
+	for _, f := range Check([]byte(src), allLines(src), Context{}) {
+		lines[f.Line] = true
+		titles = append(titles, fmt.Sprint(f.Line, " ", f.Title))
+	}
+	all := strings.Join(titles, "\n")
+	for _, line := range []int{4, 7, 10} {
+		if lines[line] {
+			t.Errorf("line %d runs once or is no database call:\n%s", line, all)
+		}
+	}
+	if !strings.Contains(all, "13 Database call in a loop: repository.findById()") {
+		t.Errorf("a query per stream item must still be flagged:\n%s", all)
+	}
+	if !strings.Contains(all, "16 Database call in a loop: em.find()") {
+		t.Errorf("a query per iteration must still be flagged:\n%s", all)
+	}
+	if strings.Contains(all, "Nested loops") {
+		t.Errorf("a chain of stream steps is one pass:\n%s", all)
+	}
+}
