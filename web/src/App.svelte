@@ -26,6 +26,7 @@
   if (SCREENS.includes(wanted)) app.mode = wanted as typeof app.mode;
   $effect(() => {
     history.replaceState(null, '', `#${app.mode}`);
+    app.drawer = false; // a drawer belongs to the page it opened on
   });
 
   onMount(() => {
@@ -87,6 +88,7 @@
   }
 
   function keys(e: KeyboardEvent) {
+    if (e.key === 'Escape' && app.drawer) { app.drawer = false; return; }
     if ((e.target as Element | null)?.closest?.('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey || app.fix || app.mode !== 'review') return;
     if (e.key === '\\') app.showSidebar = !app.showSidebar;
     else if (e.key === '[') app.showCommits = !app.showCommits;
@@ -168,10 +170,20 @@
 </div>
 </div>
 
+{#if app.drawer}
+  <button class="scrim" aria-label="Close the details" onclick={() => (app.drawer = false)}></button>
+  <div class="drawer"><Panel /></div>
+{/if}
+
 <FixDialog />
 <Toasts />
 
 <style>
+  .scrim { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.22); border: 0; padding: 0; cursor: default; }
+  .drawer { position: fixed; z-index: 41; top: 0; right: 0; bottom: 0; width: min(520px, 100%); display: flex; background: var(--bg); box-shadow: -14px 0 40px rgba(0, 0, 0, 0.28); animation: drawer-in 0.22s ease-out; }
+  .drawer :global(.panel) { flex: 1; min-width: 0; }
+  @keyframes drawer-in { from { transform: translateX(28px); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .drawer { animation: none; } }
   .window { height: 100%; display: flex; }
   .shell { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; }
   .op { padding: 7px 16px; font-size: 12.5px; color: var(--text); background: color-mix(in srgb, var(--warn) 14%, var(--surface)); border-bottom: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); }

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { app, openFile, openIncident, selectCommit } from '../lib/store.svelte';
+  import { app, openFile, openIncident, showCommit } from '../lib/store.svelte';
   import { api } from '../lib/api';
   import CopyButton from './CopyButton.svelte';
   import { ago } from '../lib/theme';
@@ -57,8 +57,8 @@
     const r = picked?.response ?? '';
     try { return JSON.stringify(JSON.parse(r), null, 2); } catch { return r; }
   });
-  function goCommit(sha: string) { app.mode = 'review'; app.showPanel = true; void selectCommit(sha, true); app.tab = 'review'; }
-  function goFile(p: string) { app.mode = 'review'; app.showPanel = true; void openFile(p, null); }
+  function goCommit(sha: string) { void showCommit(sha); }
+  function goFile(p: string) { void openFile(p, null); }
   function goIncident(id: string) { app.mode = 'incidents'; void openIncident(id); }
 </script>
 

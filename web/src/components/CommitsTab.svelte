@@ -54,6 +54,7 @@
   }
   function pick(c: CommitItem) {
     void selectCommit(c.commit.sha, true);
+    if (app.tab === 'code' || app.tab === 'type') app.tab = 'review';
     open[c.commit.sha] = !open[c.commit.sha];
   }
   const name = (p: string) => p.slice(p.lastIndexOf('/') + 1);

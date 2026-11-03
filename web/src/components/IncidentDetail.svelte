@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { app, loadIncidents, openFile, openIncident, openProposal, selectCommit, selectNode, toast } from '../lib/store.svelte';
+  import { app, loadIncidents, openFile, openIncident, openProposal, showCommit, selectNode, toast } from '../lib/store.svelte';
   import { api } from '../lib/api';
   import { ago } from '../lib/theme';
   import type { IncidentLocation, RcaReport } from '../lib/types';
@@ -27,16 +27,11 @@
   let rule = $state<{ cause: number; yaml: string; team: boolean } | null>(null);
 
   function goToCode(l: IncidentLocation) {
-    app.mode = 'review';
-    app.showPanel = true;
     selectNode(l.nodeId);
     void openFile(l.path, null, l.line);
   }
   function goToCommit(sha: string) {
-    app.mode = 'review';
-    app.showPanel = true;
-    void selectCommit(sha, true);
-    app.tab = 'review';
+    void showCommit(sha);
   }
   async function confirm(i: number) {
     const d = await api.updateIncident(inc.id, { confirmed: inc.confirmed === i ? -1 : i });

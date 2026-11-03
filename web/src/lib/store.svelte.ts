@@ -137,6 +137,7 @@ class AppState {
 
   follow = $state(true);
   focusChanges = $state(false);
+  drawer = $state(false); // the details panel, opened over a page that has none of its own
   groupBy = $state<'none' | 'package' | 'service'>(prefStr('groupBy', ['none', 'package', 'service'] as const, 'none'));
   showTests = $state(false);
 
@@ -411,6 +412,22 @@ export function showWorking() {
   app.showPanel = true;
 }
 
+const NO_PANEL = ['incidents', 'repo', 'branches', 'mine', 'team', 'release', 'activity', 'memory'];
+
+/** Shows the details where the person is: the page's panel, or a drawer on pages without one. */
+export function reveal() {
+  if (NO_PANEL.includes(app.mode)) app.drawer = true;
+  else app.showPanel = true;
+}
+
+/** Opens a commit's review without leaving the current page. */
+export async function showCommit(sha: string) {
+  reveal();
+  app.tab = 'review';
+  await selectCommit(sha, true);
+  app.tab = 'review';
+}
+
 export async function selectCommit(sha: string, focus = false) {
   app.selectedSha = sha;
   if (focus) {
@@ -625,7 +642,10 @@ export async function openFile(path: string, sha: string | null, line: number | 
       return;
     }
   }
-  if (switchTab) app.tab = 'code';
+  if (switchTab) {
+    app.tab = 'code';
+    reveal();
+  }
   if (line) app.focusLine = { line, nonce: Math.random() };
 }
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { app, openFile, selectNode } from '../lib/store.svelte';
+  import { app, openFile, reveal, selectNode } from '../lib/store.svelte';
   import { api } from '../lib/api';
   import CopyButton from './CopyButton.svelte';
   import { SEVERITIES } from '../lib/theme';
@@ -13,13 +13,10 @@
 
   const name = (p: string) => p.slice(p.lastIndexOf('/') + 1);
   function openClass(node: string) {
-    app.mode = 'review';
-    app.showPanel = true;
     selectNode(node);
+    reveal();
   }
   function openLine(file: string, line: number) {
-    app.mode = 'review';
-    app.showPanel = true;
     void openFile(file, null, line);
   }
   const eps = $derived((r?.endpoints ?? []).filter((e) => !query || `${e.service} ${e.route} ${e.class} ${e.handler}`.toLowerCase().includes(query.toLowerCase())));

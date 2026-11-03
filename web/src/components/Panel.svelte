@@ -36,7 +36,7 @@
     </div>
     <span class="spacer"></span>
     {#if app.panelOn('ask')}<button class="ask" class:on={app.tab === 'ask'} title="Ask about the code, or describe a change" onclick={() => (app.tab = app.tab === 'ask' ? 'issues' : 'ask')}>Ask AI</button>{/if}
-    <button class="icon-btn" title="Hide panel  ]" aria-label="Hide panel" onclick={() => (app.showPanel = false)}>
+    <button class="icon-btn" title="Hide panel  ]" aria-label="Hide panel" onclick={() => { app.drawer = false; app.showPanel = false; }}>
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m4 4 8 8M12 4l-8 8"/></svg>
     </button>
   </div>

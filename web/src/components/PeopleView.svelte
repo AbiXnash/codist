@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { app, pickIssue, selectCommit } from '../lib/store.svelte';
+  import { app, pickIssue, reveal, showCommit } from '../lib/store.svelte';
   import { ago, SEVERITIES } from '../lib/theme';
   import { api } from '../lib/api';
   import DevProfileCard from './DevProfile.svelte';
@@ -52,8 +52,8 @@
   const urgencyOrder = ['Hotfix', 'Fix soon', 'Quick fix', 'Cleanup'];
   const todo = $derived(urgencyOrder.map((u) => ({ urgency: u, items: me.open.filter((i) => i.urgency === u) })).filter((g) => g.items.length));
   const name = (p: string) => p.slice(p.lastIndexOf('/') + 1);
-  function openIssue(i: Issue) { app.mode = 'review'; pickIssue(i.id); }
-  function openCommit(sha: string) { app.mode = 'review'; app.left = 'commits'; app.showPanel = true; void selectCommit(sha, true); app.tab = 'review'; }
+  function openIssue(i: Issue) { pickIssue(i.id); reveal(); }
+  function openCommit(sha: string) { void showCommit(sha); }
   const maxCommits = $derived(Math.max(1, ...people.map((p) => p.commits.length)));
   const urgent = $derived(roots.filter((i) => i.state === 'open' && (i.urgency === 'Hotfix' || i.urgency === 'Fix soon')));
 </script>
