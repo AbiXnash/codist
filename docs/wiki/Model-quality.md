@@ -29,6 +29,8 @@ list, which earlier versions left out of the report. **This test is 16 hand-seed
 alongside some of the rules it scores, so use it as a smoke test.** Don't quote it as accuracy. A larger test set is
 milestone 1 of the [rebuild plan](Rebuild-plan.md).
 
+The current results are in the [rebuild plan](Rebuild-plan.md#results-from-milestone-0).
+
 ## What was measured
 
 On a 16 GB Apple Silicon Mac, with the 15 bugs labelled at the time. One run of each, so treat the times as rough.

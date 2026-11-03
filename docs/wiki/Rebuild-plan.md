@@ -8,7 +8,7 @@ The evidence is in the [research report](../research/rebuild-research.md). Sizes
 
 | Milestone | Work | Finished when | Status |
 |---|---|---|---|
-| 0. Branch and harness | `rebuild` branch, CI on macOS and Windows, reproducible results, per-call timing, logged drops, switches for rules, RAG, facts and filters | A test run can be repeated and explained on both systems | In progress |
+| 0. Branch and harness | `rebuild` branch, CI on macOS and Windows, reproducible results, per-call timing, logged drops, switches for rules, RAG, facts and filters | A test run can be repeated and explained on both systems | Done |
 | 1. Test set | About 100 real bugs from Defects4J and GitBug-Java, a false-alarm set from fixed versions, a frozen holdout, a sample submodule repo. Run the 16 GB models and report 32 GB | `qwen2.5-coder:14b` has a full result, with confidence ranges | Next |
 | 2. Core engine | Git layer with submodules, ChangeSet, facts by content hash, rules, SQLite store, CLI, secure server | Rule results from the CLI match or beat today on both systems | |
 | 3. Model and RAG | Method-level review, schema output, context builder, "need" loop, one experiment at a time | Each kept technique has a paired win on the test set | |
@@ -19,6 +19,15 @@ The evidence is in the [research report](../research/rebuild-research.md). Sizes
 | 8. Learning loop | Capture, learn, check and forward, team notes in `.codist/` | Learned changes beat the unlearned version on the holdout | |
 | 9. Global patterns | Turso over HTTP, read-only download and local copy, draft-and-approve sending, holding table and review tool | A pattern sent from one install helps a review on another with a different model, and a network capture shows no code left | |
 | 10. Open-source release | Licence, where rules and patterns came from, installers, real Windows testing, new docs | Someone else can install it, and every claim has a published result | |
+
+### Results from milestone 0
+
+| Run | Bugs found | Logic bugs | Notes |
+|---|---|---|---|
+| Rules only, macOS and Windows | 10/16 (39–82%) | 1/7 (3–51%) | Same score on both systems |
+| `qwen2.5-coder:7b`, macOS | 11/16 (44–86%) | 2/7 (8–64%) | 327 s, 17 calls, about 19 s per call, 15 findings dropped |
+
+The earlier harness recorded 12/16 for `7b`. The new drop log explains the difference: the model did report the `last-copy-race` bug, and the filter removed it as "repeats a rule finding" because an unrelated rule fired next to it. That filter matches by position, not topic, and is due for replacement in milestone 3. Ranges are 95% confidence, so these results can't be told apart statistically.
 
 ## Decisions
 
