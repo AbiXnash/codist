@@ -274,6 +274,9 @@ func (s *Service) run(sha string) {
 	switch {
 	case len(targets) == 0:
 		r.Summary = "No reviewable source changes in this commit."
+		if len(a.Commit.Parents) > 1 {
+			r.Summary = "Merge with nothing of its own to review. Its changes are reviewed in the commits it brought in."
+		}
 	case !s.cfg.ModelReview:
 		r.Summary = "Only the static checks ran: model review is off (CODIST_MODEL_REVIEW)."
 	case problem != "":

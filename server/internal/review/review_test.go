@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -649,7 +650,7 @@ func TestTeamHistoryRevertMergeAndConflicts(t *testing.T) {
 		t.Fatalf("the revert should reopen the issue Bob fixed: %+v", is)
 	}
 
-	// A merge: the feature branch changes v(), main changes w() (clean) and both change the same line of v() (conflict).
+	// A merge: both branches change v() and w(), which are next to each other, so they conflict as one.
 	git("Ann", "checkout", "-qb", "feature")
 	write("src/main/java/shop/B.java", "class B {\n    int v() { return 10; }\n    int w() { return 2; }\n}\n")
 	git("Ann", "commit", "-qam", "feature v")
@@ -682,8 +683,9 @@ func TestTeamHistoryRevertMergeAndConflicts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 1 || len(files[0].AddedLines) != 1 || files[0].AddedLines[0] != 2 {
-		t.Fatalf("a merge should be reviewed only for its conflict resolution (line 2 of B): %+v", files)
+	// Both sides changed v() and w(), so git conflicts on both: line 2 is new and line 3 is the side Bob kept.
+	if len(files) != 1 || !slices.Equal(files[0].AddedLines, []int{2, 3}) {
+		t.Fatalf("a merge should be reviewed only for its conflict resolution (lines 2 and 3 of B): %+v", files)
 	}
 }
 

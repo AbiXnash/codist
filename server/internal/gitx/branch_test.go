@@ -4,6 +4,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
 	"codist/internal/config"
@@ -128,5 +130,71 @@ func TestAuthorHistoryAndBlameCountLines(t *testing.T) {
 	owned := r.BlameCounts(r.Head(), "A.java")
 	if owned["Ana"] != 2 || owned["Ravi"] != 2 {
 		t.Errorf("owned = %v", owned)
+	}
+}
+
+func TestMergeReviewsOnlyWhatAPersonDecided(t *testing.T) {
+	dir := t.TempDir()
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=T", "-c", "user.email=t@t"}, args...)...)
+		out, _ := cmd.CombinedOutput() // a conflicting merge exits non-zero on purpose
+		return string(out)
+	}
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git("init", "-q", "-b", "main")
+	write("A.java", "a\nb\nc\n")
+	write("B.java", "1\n2\n3\n")
+	git("add", ".")
+	git("commit", "-qm", "base")
+	git("checkout", "-qb", "side")
+	write("A.java", "a\nside\nc\n")
+	write("B.java", "1\n2\n3\n4\n")
+	git("commit", "-qam", "side")
+	git("checkout", "-q", "main")
+	write("A.java", "a\nmine\nc\n")
+	git("commit", "-qam", "mine")
+	git("merge", "-q", "side")
+	write("A.java", "a\nmine\nside\nc\n") // keeps both sides, so no line is new to both parents
+	git("add", ".")
+	git("commit", "-qm", "merge with a resolved conflict")
+
+	r, err := Open(config.Config{RepoPath: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := r.Commit(strings.TrimSpace(git("rev-parse", "main")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := r.Diff(resolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 || files[0].Path != "A.java" || !reflect.DeepEqual(files[0].AddedLines, []int{2, 3}) {
+		t.Fatalf("a resolved conflict must be reviewed on the lines kept, and only there: %+v", files)
+	}
+
+	git("checkout", "-q", "main")
+	git("checkout", "-qb", "plain", "main~1")
+	write("D.java", "d\n")
+	git("add", ".")
+	git("commit", "-qm", "d")
+	git("checkout", "-qb", "plain2", "main~1")
+	write("E.java", "e\n")
+	git("add", ".")
+	git("commit", "-qm", "e")
+	git("merge", "-q", "--no-ff", "-m", "clean", "plain")
+	clean, err := r.Commit(strings.TrimSpace(git("rev-parse", "plain2")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files, err := r.Diff(clean); err != nil || len(files) != 0 {
+		t.Fatalf("a clean merge has nothing of its own: %+v %v", files, err)
 	}
 }

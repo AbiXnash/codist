@@ -546,10 +546,80 @@ func (r *Repo) Diff(c Commit) ([]FileChange, error) {
 	return parseDiff(out), nil
 }
 
-// mergeDiff is what a merge commit itself adds: lines that differ from EVERY parent, which is where
-// conflict resolutions (and "evil merge" edits) live. Changes that merged in cleanly were made, and
-// are reviewed, in the commits of the branch they came from.
+// resolvedMerge is what a person decided in a two-parent merge: git redoes the automatic merge and
+// compares it with the commit, so a clean merge shows nothing and a conflict shows its resolution.
+// It fails on git older than 2.36, which has no --remerge-diff.
+func (r *Repo) resolvedMerge(c Commit) ([]FileChange, error) {
+	out, err := r.git("show", "--remerge-diff", "--format=", "--no-color", "-U3", c.SHA)
+	if err != nil {
+		return nil, err
+	}
+	decided := resolvedLines(out)
+	files := []FileChange{}
+	for _, p := range c.Parents {
+		diff, err := r.git("diff", "-M", "--no-color", "-U3", p, c.SHA)
+		if err != nil {
+			return nil, err
+		}
+		for _, f := range parseDiff(diff) {
+			if lines := decided[f.Path]; len(lines) > 0 && !f.Deleted() {
+				f.AddedLines = lines
+				files = append(files, f)
+				delete(decided, f.Path)
+			}
+		}
+	}
+	return files, nil
+}
+
+var hunkStart = regexp.MustCompile(`^@@ -\S+ \+(\d+)`)
+
+// resolvedLines reads a remerge diff into the lines of the final file a person chose, by path. Lines
+// added are chosen, and so are lines kept between conflict markers: keeping both sides of a conflict
+// shows up only as the markers going away.
+func resolvedLines(out string) map[string][]int {
+	lines := map[string][]int{}
+	path, line, inConflict := "", 0, false
+	for _, l := range strings.Split(out, "\n") {
+		if m := hunkStart.FindStringSubmatch(l); m != nil {
+			line, _ = strconv.Atoi(m[1])
+			inConflict = false
+			continue
+		}
+		switch {
+		case strings.HasPrefix(l, "diff --git "):
+			path, line = "", 0
+		case line == 0:
+			if strings.HasPrefix(l, "+++ b/") {
+				path = strings.TrimPrefix(l, "+++ b/")
+			}
+		case strings.HasPrefix(l, "-<<<<<<<"):
+			inConflict = true
+		case strings.HasPrefix(l, "->>>>>>>"):
+			inConflict = false
+		case strings.HasPrefix(l, "-"):
+		case strings.HasPrefix(l, "+"):
+			lines[path] = append(lines[path], line)
+			line++
+		case strings.HasPrefix(l, " "):
+			if inConflict {
+				lines[path] = append(lines[path], line)
+			}
+			line++
+		}
+	}
+	return lines
+}
+
+// mergeDiff is what a merge commit itself adds, which is where conflict resolutions (and "evil merge"
+// edits) live. Changes that merged in cleanly were made, and are reviewed, in the commits of the branch
+// they came from. Octopus merges and older git fall back to the lines that differ from EVERY parent.
 func (r *Repo) mergeDiff(c Commit) ([]FileChange, error) {
+	if len(c.Parents) == 2 {
+		if files, err := r.resolvedMerge(c); err == nil {
+			return files, nil
+		}
+	}
 	var per [][]FileChange
 	for _, p := range c.Parents {
 		out, err := r.git("diff", "-M", "--no-color", "-U3", p, c.SHA)
