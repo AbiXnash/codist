@@ -31,6 +31,17 @@ milestone 1 of the [rebuild plan](Rebuild-plan.md).
 
 The current results are in the [rebuild plan](Rebuild-plan.md#results-from-milestone-0).
 
+## Watch a simulated team
+
+`eval/sample/simulate_team.py` builds a Spring Boot project with seven services and a shared library, about 25,000 lines, playing six developers in real Git. It covers feature branches, pull-request style merges, real conflicts, a clean merge that breaks the build, reverts, squash, rebase, force-push, cherry-pick, tags and uncommitted work. Point Codist at the folder to watch it live. Planted bugs are listed in `<project>-notes/seeded-bugs.jsonl`.
+
+```bash
+python3 eval/sample/simulate_team.py ~/dev/orbit-commerce --pace 15
+codist ~/dev/orbit-commerce
+```
+
+The code comes from templates, so it is realistic in shape rather than hand-written, and pull requests are merge commits with a pull request message. The project compiles at the end, but it isn't expected to pass its tests while planted bugs remain.
+
 ## What was measured
 
 On a 16 GB Apple Silicon Mac, with the 15 bugs labelled at the time. One run of each, so treat the times as rough.
