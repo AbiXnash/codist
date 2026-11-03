@@ -1,0 +1,1852 @@
+{
+ "gitbugCommit": "fe986fb7919be62c2a6f611ee16659e849646798",
+ "defects4jCommit": "8c16da8230843cdc918eaf4ddb449637f02b83c6",
+ "seed": "codist-holdout-1",
+ "maxChanged": 30,
+ "maxFiles": 3,
+ "perProject": 10,
+ "bugs": [
+  {
+   "id": "AuthMe-ConfigMe-aa91a6b3",
+   "source": "gitbug-java",
+   "repo": "AuthMe/ConfigMe",
+   "cloneUrl": "https://github.com/AuthMe/ConfigMe.git",
+   "fixed": "aa91a6b315ec1ca94780459cc9d697218aea24cb",
+   "split": "holdout"
+  },
+  {
+   "id": "Bindambc-whatsapp-business-java-api-362caf5e",
+   "source": "gitbug-java",
+   "repo": "Bindambc/whatsapp-business-java-api",
+   "cloneUrl": "https://github.com/Bindambc/whatsapp-business-java-api.git",
+   "fixed": "362caf5eb33c0f23bbb29ba689112dee3750b30c",
+   "split": "holdout"
+  },
+  {
+   "id": "BrightSpots-rcv-076f75e2",
+   "source": "gitbug-java",
+   "repo": "BrightSpots/rcv",
+   "cloneUrl": "https://github.com/BrightSpots/rcv.git",
+   "fixed": "076f75e2417ac2001171f51f359dfcd15d71ee66",
+   "split": "dev"
+  },
+  {
+   "id": "BrightSpots-rcv-c80e6272",
+   "source": "gitbug-java",
+   "repo": "BrightSpots/rcv",
+   "cloneUrl": "https://github.com/BrightSpots/rcv.git",
+   "fixed": "c80e6272c83a67999bce67e3a5c9b5a9120fe2c2",
+   "split": "dev"
+  },
+  {
+   "id": "Cli-15",
+   "source": "defects4j",
+   "repo": "apache/commons-cli",
+   "cloneUrl": "https://github.com/apache/commons-cli.git",
+   "fixed": "a93139165b160af1c908c85a06b0af6b3dda3387",
+   "project": "Cli",
+   "number": "15",
+   "split": "dev"
+  },
+  {
+   "id": "Cli-18",
+   "source": "defects4j",
+   "repo": "apache/commons-cli",
+   "cloneUrl": "https://github.com/apache/commons-cli.git",
+   "fixed": "c8606251c904dfaf5303f71b788e12f7fff15fab",
+   "project": "Cli",
+   "number": "18",
+   "split": "dev"
+  },
+  {
+   "id": "Cli-26",
+   "source": "defects4j",
+   "repo": "apache/commons-cli",
+   "cloneUrl": "https://github.com/apache/commons-cli.git",
+   "fixed": "aa2434d301c49d100f50af544333886a6767ce9d",
+   "project": "Cli",
+   "number": "26",
+   "split": "dev"
+  },
+  {
+   "id": "Cli-27",
+   "source": "defects4j",
+   "repo": "apache/commons-cli",
+   "cloneUrl": "https://github.com/apache/commons-cli.git",
+   "fixed": "4c971f08861e8cefb8ca9ac20799bfdad4e973a4",
+   "project": "Cli",
+   "number": "27",
+   "split": "dev"
+  },
+  {
+   "id": "Cli-32",
+   "source": "defects4j",
+   "repo": "apache/commons-cli",
+   "cloneUrl": "https://github.com/apache/commons-cli.git",
+   "fixed": "777cb81088d47472df21a452edd5ba568d4b3fdf",
+   "project": "Cli",
+   "number": "32",
+   "split": "dev"
+  },
+  {
+   "id": "Cli-36",
+   "source": "defects4j",
+   "repo": "apache/commons-cli",
+   "cloneUrl": "https://github.com/apache/commons-cli.git",
+   "fixed": "afc13c445a4c80432e52d735685b272fadfeeddf",
+   "project": "Cli",
+   "number": "36",
+   "split": "dev"
+  },
+  {
+   "id": "Cli-38",
+   "source": "defects4j",
+   "repo": "apache/commons-cli",
+   "cloneUrl": "https://github.com/apache/commons-cli.git",
+   "fixed": "ac2a1c85616f0140418de9190389fe7b80296c39",
+   "project": "Cli",
+   "number": "38",
+   "split": "dev"
+  },
+  {
+   "id": "Cli-4",
+   "source": "defects4j",
+   "repo": "apache/commons-cli",
+   "cloneUrl": "https://github.com/apache/commons-cli.git",
+   "fixed": "f78959477b207bf710049aa35730ef7659f0a1b9",
+   "project": "Cli",
+   "number": "4",
+   "split": "dev"
+  },
+  {
+   "id": "Cli-7",
+   "source": "defects4j",
+   "repo": "apache/commons-cli",
+   "cloneUrl": "https://github.com/apache/commons-cli.git",
+   "fixed": "4ee0d6c4f1b553858aeabf3ee6fb37d764f263e2",
+   "project": "Cli",
+   "number": "7",
+   "split": "dev"
+  },
+  {
+   "id": "Cli-9",
+   "source": "defects4j",
+   "repo": "apache/commons-cli",
+   "cloneUrl": "https://github.com/apache/commons-cli.git",
+   "fixed": "fea35870b69c0d37ab36ab6783edbc7aacc0842c",
+   "project": "Cli",
+   "number": "9",
+   "split": "dev"
+  },
+  {
+   "id": "Codec-10",
+   "source": "defects4j",
+   "repo": "apache/commons-codec",
+   "cloneUrl": "https://github.com/apache/commons-codec.git",
+   "fixed": "41c68e9ef470696009d72133c7f05a20e2728e34",
+   "project": "Codec",
+   "number": "10",
+   "split": "holdout"
+  },
+  {
+   "id": "Codec-15",
+   "source": "defects4j",
+   "repo": "apache/commons-codec",
+   "cloneUrl": "https://github.com/apache/commons-codec.git",
+   "fixed": "28b7b958d39730fc278fd1919bf335c52133a1a2",
+   "project": "Codec",
+   "number": "15",
+   "split": "holdout"
+  },
+  {
+   "id": "Codec-16",
+   "source": "defects4j",
+   "repo": "apache/commons-codec",
+   "cloneUrl": "https://github.com/apache/commons-codec.git",
+   "fixed": "c82fe35c48bd0082c16644d16d82d1be79d6b9d1",
+   "project": "Codec",
+   "number": "16",
+   "split": "holdout"
+  },
+  {
+   "id": "Codec-17",
+   "source": "defects4j",
+   "repo": "apache/commons-codec",
+   "cloneUrl": "https://github.com/apache/commons-codec.git",
+   "fixed": "d2f27093d7d95a07da901902f894d88b4ecc3e95",
+   "project": "Codec",
+   "number": "17",
+   "split": "holdout"
+  },
+  {
+   "id": "Codec-18",
+   "source": "defects4j",
+   "repo": "apache/commons-codec",
+   "cloneUrl": "https://github.com/apache/commons-codec.git",
+   "fixed": "5ef5bd199a4e3df74479b4b363fa29b0b3092547",
+   "project": "Codec",
+   "number": "18",
+   "split": "holdout"
+  },
+  {
+   "id": "Codec-2",
+   "source": "defects4j",
+   "repo": "apache/commons-codec",
+   "cloneUrl": "https://github.com/apache/commons-codec.git",
+   "fixed": "b8c2d9d9dc9aab45f83cf49ac93cfa8546e4c08e",
+   "project": "Codec",
+   "number": "2",
+   "split": "holdout"
+  },
+  {
+   "id": "Codec-4",
+   "source": "defects4j",
+   "repo": "apache/commons-codec",
+   "cloneUrl": "https://github.com/apache/commons-codec.git",
+   "fixed": "bcfef8906931a7929a6db14b9d82d387fd3f17f6",
+   "project": "Codec",
+   "number": "4",
+   "split": "holdout"
+  },
+  {
+   "id": "Codec-6",
+   "source": "defects4j",
+   "repo": "apache/commons-codec",
+   "cloneUrl": "https://github.com/apache/commons-codec.git",
+   "fixed": "d74fc31604c805a47c44d7853f63a3b06ad6c016",
+   "project": "Codec",
+   "number": "6",
+   "split": "holdout"
+  },
+  {
+   "id": "Codec-8",
+   "source": "defects4j",
+   "repo": "apache/commons-codec",
+   "cloneUrl": "https://github.com/apache/commons-codec.git",
+   "fixed": "2c13032a16e37b7bc9e0272d25fc185b5c82b42e",
+   "project": "Codec",
+   "number": "8",
+   "split": "holdout"
+  },
+  {
+   "id": "Codec-9",
+   "source": "defects4j",
+   "repo": "apache/commons-codec",
+   "cloneUrl": "https://github.com/apache/commons-codec.git",
+   "fixed": "c5291ab1ca4d4d7a041874a66b1c05b7d5c02ccb",
+   "project": "Codec",
+   "number": "9",
+   "split": "holdout"
+  },
+  {
+   "id": "Collections-25",
+   "source": "defects4j",
+   "repo": "apache/commons-collections",
+   "cloneUrl": "https://github.com/apache/commons-collections.git",
+   "fixed": "73d69dfe8677210e44049bc1a2a7d1ff85bc1ca7",
+   "project": "Collections",
+   "number": "25",
+   "split": "holdout"
+  },
+  {
+   "id": "Collections-26",
+   "source": "defects4j",
+   "repo": "apache/commons-collections",
+   "cloneUrl": "https://github.com/apache/commons-collections.git",
+   "fixed": "f8bd75d37ca12c5d49c1b628c33c0b45e2d082eb",
+   "project": "Collections",
+   "number": "26",
+   "split": "holdout"
+  },
+  {
+   "id": "Compress-10",
+   "source": "defects4j",
+   "repo": "apache/commons-compress",
+   "cloneUrl": "https://github.com/apache/commons-compress.git",
+   "fixed": "347660646cfad588481c13058842d49fa3779f84",
+   "project": "Compress",
+   "number": "10",
+   "split": "holdout"
+  },
+  {
+   "id": "Compress-15",
+   "source": "defects4j",
+   "repo": "apache/commons-compress",
+   "cloneUrl": "https://github.com/apache/commons-compress.git",
+   "fixed": "4becc32881aa983d69359b475892a4f2bc6e5b89",
+   "project": "Compress",
+   "number": "15",
+   "split": "holdout"
+  },
+  {
+   "id": "Compress-19",
+   "source": "defects4j",
+   "repo": "apache/commons-compress",
+   "cloneUrl": "https://github.com/apache/commons-compress.git",
+   "fixed": "e860d2f3eb16d84e146a8a700d9dbd3af01df4ba",
+   "project": "Compress",
+   "number": "19",
+   "split": "holdout"
+  },
+  {
+   "id": "Compress-24",
+   "source": "defects4j",
+   "repo": "apache/commons-compress",
+   "cloneUrl": "https://github.com/apache/commons-compress.git",
+   "fixed": "8da377299d085b4ce1f15dbc0732232ea32e601d",
+   "project": "Compress",
+   "number": "24",
+   "split": "holdout"
+  },
+  {
+   "id": "Compress-28",
+   "source": "defects4j",
+   "repo": "apache/commons-compress",
+   "cloneUrl": "https://github.com/apache/commons-compress.git",
+   "fixed": "ddb5fd6d8e4d5fa9f7fa659c93fb6eb04f238689",
+   "project": "Compress",
+   "number": "28",
+   "split": "holdout"
+  },
+  {
+   "id": "Compress-32",
+   "source": "defects4j",
+   "repo": "apache/commons-compress",
+   "cloneUrl": "https://github.com/apache/commons-compress.git",
+   "fixed": "3c4a09bf28e7cd600b919b8c799fbbfd19a94c0b",
+   "project": "Compress",
+   "number": "32",
+   "split": "holdout"
+  },
+  {
+   "id": "Compress-35",
+   "source": "defects4j",
+   "repo": "apache/commons-compress",
+   "cloneUrl": "https://github.com/apache/commons-compress.git",
+   "fixed": "7250daa429020181bb5a4c40d1aaa169631b8496",
+   "project": "Compress",
+   "number": "35",
+   "split": "holdout"
+  },
+  {
+   "id": "Compress-38",
+   "source": "defects4j",
+   "repo": "apache/commons-compress",
+   "cloneUrl": "https://github.com/apache/commons-compress.git",
+   "fixed": "823cdee9b18508e9e51913d110a20a406f55582b",
+   "project": "Compress",
+   "number": "38",
+   "split": "holdout"
+  },
+  {
+   "id": "Compress-47",
+   "source": "defects4j",
+   "repo": "apache/commons-compress",
+   "cloneUrl": "https://github.com/apache/commons-compress.git",
+   "fixed": "c66db899cb061c79934986f0efa19a50ca33703f",
+   "project": "Compress",
+   "number": "47",
+   "split": "holdout"
+  },
+  {
+   "id": "Compress-5",
+   "source": "defects4j",
+   "repo": "apache/commons-compress",
+   "cloneUrl": "https://github.com/apache/commons-compress.git",
+   "fixed": "dc3fc4703211876fb38cccf55adc92ee5cbc28d0",
+   "project": "Compress",
+   "number": "5",
+   "split": "holdout"
+  },
+  {
+   "id": "Csv-1",
+   "source": "defects4j",
+   "repo": "apache/commons-csv",
+   "cloneUrl": "https://github.com/apache/commons-csv.git",
+   "fixed": "de1838ea067f3fbc4c7c21b9eeae077c739ecb73",
+   "project": "Csv",
+   "number": "1",
+   "split": "dev"
+  },
+  {
+   "id": "Csv-11",
+   "source": "defects4j",
+   "repo": "apache/commons-csv",
+   "cloneUrl": "https://github.com/apache/commons-csv.git",
+   "fixed": "b67524da7fd146634c7112b23e95d1d45c398b82",
+   "project": "Csv",
+   "number": "11",
+   "split": "dev"
+  },
+  {
+   "id": "Csv-12",
+   "source": "defects4j",
+   "repo": "apache/commons-csv",
+   "cloneUrl": "https://github.com/apache/commons-csv.git",
+   "fixed": "c81ad0328eefb438cc875b9c9f081be93f9fdcc2",
+   "project": "Csv",
+   "number": "12",
+   "split": "dev"
+  },
+  {
+   "id": "Csv-13",
+   "source": "defects4j",
+   "repo": "apache/commons-csv",
+   "cloneUrl": "https://github.com/apache/commons-csv.git",
+   "fixed": "f8b80e83417c3c7eeed1282118f64fa0e85c4787",
+   "project": "Csv",
+   "number": "13",
+   "split": "dev"
+  },
+  {
+   "id": "Csv-14",
+   "source": "defects4j",
+   "repo": "apache/commons-csv",
+   "cloneUrl": "https://github.com/apache/commons-csv.git",
+   "fixed": "190390bf5dd83d6137ca3045902fcecbeafa3227",
+   "project": "Csv",
+   "number": "14",
+   "split": "dev"
+  },
+  {
+   "id": "Csv-15",
+   "source": "defects4j",
+   "repo": "apache/commons-csv",
+   "cloneUrl": "https://github.com/apache/commons-csv.git",
+   "fixed": "8b3de71fd99d0fa07cb6a3a35b583bbb170aab66",
+   "project": "Csv",
+   "number": "15",
+   "split": "dev"
+  },
+  {
+   "id": "Csv-16",
+   "source": "defects4j",
+   "repo": "apache/commons-csv",
+   "cloneUrl": "https://github.com/apache/commons-csv.git",
+   "fixed": "f368f64fa7f9acdcc01084f676e8b9c2b86f946e",
+   "project": "Csv",
+   "number": "16",
+   "split": "dev"
+  },
+  {
+   "id": "Csv-4",
+   "source": "defects4j",
+   "repo": "apache/commons-csv",
+   "cloneUrl": "https://github.com/apache/commons-csv.git",
+   "fixed": "22601f647f2ce9a05fa4ce20ea356492c670940c",
+   "project": "Csv",
+   "number": "4",
+   "split": "dev"
+  },
+  {
+   "id": "Csv-8",
+   "source": "defects4j",
+   "repo": "apache/commons-csv",
+   "cloneUrl": "https://github.com/apache/commons-csv.git",
+   "fixed": "35d101c2adecd51730f88e43941d85d16034886f",
+   "project": "Csv",
+   "number": "8",
+   "split": "dev"
+  },
+  {
+   "id": "Gson-10",
+   "source": "defects4j",
+   "repo": "google/gson",
+   "cloneUrl": "https://github.com/google/gson.git",
+   "fixed": "bb451eac43313ae08b30ac0916718ca00c39656d",
+   "project": "Gson",
+   "number": "10",
+   "split": "dev"
+  },
+  {
+   "id": "Gson-13",
+   "source": "defects4j",
+   "repo": "google/gson",
+   "cloneUrl": "https://github.com/google/gson.git",
+   "fixed": "9a2421997e83ec803c88ea370a2d102052699d3b",
+   "project": "Gson",
+   "number": "13",
+   "split": "dev"
+  },
+  {
+   "id": "Gson-15",
+   "source": "defects4j",
+   "repo": "google/gson",
+   "cloneUrl": "https://github.com/google/gson.git",
+   "fixed": "ada597e69a78b8b99f79f79493cbf51e16045202",
+   "project": "Gson",
+   "number": "15",
+   "split": "dev"
+  },
+  {
+   "id": "Gson-17",
+   "source": "defects4j",
+   "repo": "google/gson",
+   "cloneUrl": "https://github.com/google/gson.git",
+   "fixed": "7a9fd5962dce7f277efa15fcc996606be0733bac",
+   "project": "Gson",
+   "number": "17",
+   "split": "dev"
+  },
+  {
+   "id": "Gson-2",
+   "source": "defects4j",
+   "repo": "google/gson",
+   "cloneUrl": "https://github.com/google/gson.git",
+   "fixed": "fe101c10bc3597d8e715a31d94d2cc0cc54b660f",
+   "project": "Gson",
+   "number": "2",
+   "split": "dev"
+  },
+  {
+   "id": "Gson-3",
+   "source": "defects4j",
+   "repo": "google/gson",
+   "cloneUrl": "https://github.com/google/gson.git",
+   "fixed": "64107353a37e623ed1f8fecb4422c24212cf6fe1",
+   "project": "Gson",
+   "number": "3",
+   "split": "dev"
+  },
+  {
+   "id": "Gson-4",
+   "source": "defects4j",
+   "repo": "google/gson",
+   "cloneUrl": "https://github.com/google/gson.git",
+   "fixed": "af68d70cd55826fa7149effd7397d64667ca264c",
+   "project": "Gson",
+   "number": "4",
+   "split": "dev"
+  },
+  {
+   "id": "Gson-7",
+   "source": "defects4j",
+   "repo": "google/gson",
+   "cloneUrl": "https://github.com/google/gson.git",
+   "fixed": "2b08c88c09d14e0b1a68a982bab0bb18206df76b",
+   "project": "Gson",
+   "number": "7",
+   "split": "dev"
+  },
+  {
+   "id": "Gson-9",
+   "source": "defects4j",
+   "repo": "google/gson",
+   "cloneUrl": "https://github.com/google/gson.git",
+   "fixed": "874e74a3072f7ff0d2533296698ad126321516d1",
+   "project": "Gson",
+   "number": "9",
+   "split": "dev"
+  },
+  {
+   "id": "JacksonCore-10",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-core",
+   "cloneUrl": "https://github.com/FasterXML/jackson-core.git",
+   "fixed": "c2823b4de28120d86aeba9215f0231d990a8eb47",
+   "project": "JacksonCore",
+   "number": "10",
+   "split": "holdout"
+  },
+  {
+   "id": "JacksonCore-12",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-core",
+   "cloneUrl": "https://github.com/FasterXML/jackson-core.git",
+   "fixed": "fede6c9df74d370f2e728b5c46e14bd570abb83c",
+   "project": "JacksonCore",
+   "number": "12",
+   "split": "holdout"
+  },
+  {
+   "id": "JacksonCore-14",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-core",
+   "cloneUrl": "https://github.com/FasterXML/jackson-core.git",
+   "fixed": "3c2c9610b6c76e2b348eb057d0a8268681d573a6",
+   "project": "JacksonCore",
+   "number": "14",
+   "split": "holdout"
+  },
+  {
+   "id": "JacksonCore-16",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-core",
+   "cloneUrl": "https://github.com/FasterXML/jackson-core.git",
+   "fixed": "e052c319eccd6086c28fa5371807d887ebe302cf",
+   "project": "JacksonCore",
+   "number": "16",
+   "split": "holdout"
+  },
+  {
+   "id": "JacksonCore-18",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-core",
+   "cloneUrl": "https://github.com/FasterXML/jackson-core.git",
+   "fixed": "96642978dcf1b69cba68ec72cb2f652d59a8b5be",
+   "project": "JacksonCore",
+   "number": "18",
+   "split": "holdout"
+  },
+  {
+   "id": "JacksonCore-20",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-core",
+   "cloneUrl": "https://github.com/FasterXML/jackson-core.git",
+   "fixed": "fa64390b1bd5f1435daa9d2b17a58594cfb22817",
+   "project": "JacksonCore",
+   "number": "20",
+   "split": "holdout"
+  },
+  {
+   "id": "JacksonCore-22",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-core",
+   "cloneUrl": "https://github.com/FasterXML/jackson-core.git",
+   "fixed": "6feec20c842586056aa5b19c402b26be08c88ca3",
+   "project": "JacksonCore",
+   "number": "22",
+   "split": "holdout"
+  },
+  {
+   "id": "JacksonCore-24",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-core",
+   "cloneUrl": "https://github.com/FasterXML/jackson-core.git",
+   "fixed": "c4dd84e4d505baa90d8d1675c1f60f8d6ce90db8",
+   "project": "JacksonCore",
+   "number": "24",
+   "split": "holdout"
+  },
+  {
+   "id": "JacksonCore-25",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-core",
+   "cloneUrl": "https://github.com/FasterXML/jackson-core.git",
+   "fixed": "ad47c206f4fbf22f439f3d66871757891f549f6a",
+   "project": "JacksonCore",
+   "number": "25",
+   "split": "holdout"
+  },
+  {
+   "id": "JacksonCore-8",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-core",
+   "cloneUrl": "https://github.com/FasterXML/jackson-core.git",
+   "fixed": "11f0b4090937b2aa998734aa2bf032ee8c428e84",
+   "project": "JacksonCore",
+   "number": "8",
+   "split": "holdout"
+  },
+  {
+   "id": "JacksonDatabind-102",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-databind",
+   "cloneUrl": "https://github.com/FasterXML/jackson-databind.git",
+   "fixed": "323cd0b309697021f1883de1e53038d2d09fc160",
+   "project": "JacksonDatabind",
+   "number": "102",
+   "split": "dev"
+  },
+  {
+   "id": "JacksonDatabind-17",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-databind",
+   "cloneUrl": "https://github.com/FasterXML/jackson-databind.git",
+   "fixed": "a143c05db7a911f98f8bf59beb13cfcb7689395d",
+   "project": "JacksonDatabind",
+   "number": "17",
+   "split": "dev"
+  },
+  {
+   "id": "JacksonDatabind-3",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-databind",
+   "cloneUrl": "https://github.com/FasterXML/jackson-databind.git",
+   "fixed": "fa1d99255915f21c868f28307fd6e3adb2029ea0",
+   "project": "JacksonDatabind",
+   "number": "3",
+   "split": "dev"
+  },
+  {
+   "id": "JacksonDatabind-57",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-databind",
+   "cloneUrl": "https://github.com/FasterXML/jackson-databind.git",
+   "fixed": "bbd8190030022df404a8f7c47c1bc32e990cb0d2",
+   "project": "JacksonDatabind",
+   "number": "57",
+   "split": "dev"
+  },
+  {
+   "id": "JacksonDatabind-69",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-databind",
+   "cloneUrl": "https://github.com/FasterXML/jackson-databind.git",
+   "fixed": "d44600d3750e5dba9fac68aee7248ed2a80a2225",
+   "project": "JacksonDatabind",
+   "number": "69",
+   "split": "dev"
+  },
+  {
+   "id": "JacksonDatabind-72",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-databind",
+   "cloneUrl": "https://github.com/FasterXML/jackson-databind.git",
+   "fixed": "63afa5297a0b8bcbf31b9c91e5d15537e0fdbdd5",
+   "project": "JacksonDatabind",
+   "number": "72",
+   "split": "dev"
+  },
+  {
+   "id": "JacksonDatabind-73",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-databind",
+   "cloneUrl": "https://github.com/FasterXML/jackson-databind.git",
+   "fixed": "4d34006e4d8a566c6c64a3a0e04c17e50d63bb82",
+   "project": "JacksonDatabind",
+   "number": "73",
+   "split": "dev"
+  },
+  {
+   "id": "JacksonDatabind-79",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-databind",
+   "cloneUrl": "https://github.com/FasterXML/jackson-databind.git",
+   "fixed": "ec859af181fa5b2da62077d00154e3c13c9d8f28",
+   "project": "JacksonDatabind",
+   "number": "79",
+   "split": "dev"
+  },
+  {
+   "id": "JacksonDatabind-87",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-databind",
+   "cloneUrl": "https://github.com/FasterXML/jackson-databind.git",
+   "fixed": "5a0ce57b5d3a6d30420267b56b3d2282c76df581",
+   "project": "JacksonDatabind",
+   "number": "87",
+   "split": "dev"
+  },
+  {
+   "id": "JacksonDatabind-93",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-databind",
+   "cloneUrl": "https://github.com/FasterXML/jackson-databind.git",
+   "fixed": "755e3bc0cbea30de0102f6a88519a0c34d571bbd",
+   "project": "JacksonDatabind",
+   "number": "93",
+   "split": "dev"
+  },
+  {
+   "id": "JacksonXml-1",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-dataformat-xml",
+   "cloneUrl": "https://github.com/FasterXML/jackson-dataformat-xml.git",
+   "fixed": "2d7683ed820116b77cba9b4b290cd7ce7dfa5cf4",
+   "project": "JacksonXml",
+   "number": "1",
+   "split": "holdout"
+  },
+  {
+   "id": "JacksonXml-2",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-dataformat-xml",
+   "cloneUrl": "https://github.com/FasterXML/jackson-dataformat-xml.git",
+   "fixed": "37eb331acce08142ad027f127c355f9b462fe9e0",
+   "project": "JacksonXml",
+   "number": "2",
+   "split": "holdout"
+  },
+  {
+   "id": "JacksonXml-3",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-dataformat-xml",
+   "cloneUrl": "https://github.com/FasterXML/jackson-dataformat-xml.git",
+   "fixed": "79a4b57f2bbe08ce46e6dabb0a8b76f4a787141c",
+   "project": "JacksonXml",
+   "number": "3",
+   "split": "holdout"
+  },
+  {
+   "id": "JacksonXml-4",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-dataformat-xml",
+   "cloneUrl": "https://github.com/FasterXML/jackson-dataformat-xml.git",
+   "fixed": "2c5f6f4e0f7bbcfa566fbc91ee57baf8dd7a371a",
+   "project": "JacksonXml",
+   "number": "4",
+   "split": "holdout"
+  },
+  {
+   "id": "JacksonXml-5",
+   "source": "defects4j",
+   "repo": "FasterXML/jackson-dataformat-xml",
+   "cloneUrl": "https://github.com/FasterXML/jackson-dataformat-xml.git",
+   "fixed": "8aa276ba6b2092a562195f9a94eb562686a3352c",
+   "project": "JacksonXml",
+   "number": "5",
+   "split": "holdout"
+  },
+  {
+   "id": "JxPath-1",
+   "source": "defects4j",
+   "repo": "apache/commons-jxpath",
+   "cloneUrl": "https://github.com/apache/commons-jxpath.git",
+   "fixed": "fab38abb27f2f92b9340cfc232eb5517434bf138",
+   "project": "JxPath",
+   "number": "1",
+   "split": "dev"
+  },
+  {
+   "id": "JxPath-10",
+   "source": "defects4j",
+   "repo": "apache/commons-jxpath",
+   "cloneUrl": "https://github.com/apache/commons-jxpath.git",
+   "fixed": "3b3e58d3d35aaa7e8e35c0856611f4bfc3f291c7",
+   "project": "JxPath",
+   "number": "10",
+   "split": "dev"
+  },
+  {
+   "id": "JxPath-11",
+   "source": "defects4j",
+   "repo": "apache/commons-jxpath",
+   "cloneUrl": "https://github.com/apache/commons-jxpath.git",
+   "fixed": "52d73022820d163104c6419f25ca955f86464f63",
+   "project": "JxPath",
+   "number": "11",
+   "split": "dev"
+  },
+  {
+   "id": "JxPath-16",
+   "source": "defects4j",
+   "repo": "apache/commons-jxpath",
+   "cloneUrl": "https://github.com/apache/commons-jxpath.git",
+   "fixed": "6cf7092809515b6add5f0e83fd837b8e013c5256",
+   "project": "JxPath",
+   "number": "16",
+   "split": "dev"
+  },
+  {
+   "id": "JxPath-17",
+   "source": "defects4j",
+   "repo": "apache/commons-jxpath",
+   "cloneUrl": "https://github.com/apache/commons-jxpath.git",
+   "fixed": "a1bc20f2af31730caa12faa116e14a964354f28d",
+   "project": "JxPath",
+   "number": "17",
+   "split": "dev"
+  },
+  {
+   "id": "JxPath-18",
+   "source": "defects4j",
+   "repo": "apache/commons-jxpath",
+   "cloneUrl": "https://github.com/apache/commons-jxpath.git",
+   "fixed": "4882e4423ae7bfb80c65da4aa547ef5aed16a007",
+   "project": "JxPath",
+   "number": "18",
+   "split": "dev"
+  },
+  {
+   "id": "JxPath-22",
+   "source": "defects4j",
+   "repo": "apache/commons-jxpath",
+   "cloneUrl": "https://github.com/apache/commons-jxpath.git",
+   "fixed": "afa2deca94436837e785b89362cfaaf84a8ca1bd",
+   "project": "JxPath",
+   "number": "22",
+   "split": "dev"
+  },
+  {
+   "id": "JxPath-3",
+   "source": "defects4j",
+   "repo": "apache/commons-jxpath",
+   "cloneUrl": "https://github.com/apache/commons-jxpath.git",
+   "fixed": "984778f3c264df5d608eb9697df2a268122ac66f",
+   "project": "JxPath",
+   "number": "3",
+   "split": "dev"
+  },
+  {
+   "id": "JxPath-5",
+   "source": "defects4j",
+   "repo": "apache/commons-jxpath",
+   "cloneUrl": "https://github.com/apache/commons-jxpath.git",
+   "fixed": "2a01dfaf8d6abbabc7e4cd5cfd05d2e0b4886708",
+   "project": "JxPath",
+   "number": "5",
+   "split": "dev"
+  },
+  {
+   "id": "JxPath-6",
+   "source": "defects4j",
+   "repo": "apache/commons-jxpath",
+   "cloneUrl": "https://github.com/apache/commons-jxpath.git",
+   "fixed": "9b6406bf37af48e843b02fa8fd53dc673f3cbd1e",
+   "project": "JxPath",
+   "number": "6",
+   "split": "dev"
+  },
+  {
+   "id": "LMAX-Exchange-Simple-DSL-7d81cd9e",
+   "source": "gitbug-java",
+   "repo": "LMAX-Exchange/Simple-DSL",
+   "cloneUrl": "https://github.com/LMAX-Exchange/Simple-DSL.git",
+   "fixed": "7d81cd9e2951eb4c90243f62d92b4f365a16fbc1",
+   "split": "holdout"
+  },
+  {
+   "id": "LMAX-Exchange-Simple-DSL-81182e58",
+   "source": "gitbug-java",
+   "repo": "LMAX-Exchange/Simple-DSL",
+   "cloneUrl": "https://github.com/LMAX-Exchange/Simple-DSL.git",
+   "fixed": "81182e58bd8036e09ac7cea8c169ec427133d0eb",
+   "split": "holdout"
+  },
+  {
+   "id": "Lang-16",
+   "source": "defects4j",
+   "repo": "apache/commons-lang",
+   "cloneUrl": "https://github.com/apache/commons-lang.git",
+   "fixed": "41326bf5266ecc6472bab28481b77cecd6f7fb5c",
+   "project": "Lang",
+   "number": "16",
+   "split": "dev"
+  },
+  {
+   "id": "Lang-17",
+   "source": "defects4j",
+   "repo": "apache/commons-lang",
+   "cloneUrl": "https://github.com/apache/commons-lang.git",
+   "fixed": "2c1b5be146585dc8b27aedebca959f92da19094e",
+   "project": "Lang",
+   "number": "17",
+   "split": "dev"
+  },
+  {
+   "id": "Lang-20",
+   "source": "defects4j",
+   "repo": "apache/commons-lang",
+   "cloneUrl": "https://github.com/apache/commons-lang.git",
+   "fixed": "a80f11cf9d02d2517c7f230f24949cbebaafc0c2",
+   "project": "Lang",
+   "number": "20",
+   "split": "dev"
+  },
+  {
+   "id": "Lang-27",
+   "source": "defects4j",
+   "repo": "apache/commons-lang",
+   "cloneUrl": "https://github.com/apache/commons-lang.git",
+   "fixed": "50c1fdecb4ed33ec1bb0d449f294c299d5369701",
+   "project": "Lang",
+   "number": "27",
+   "split": "dev"
+  },
+  {
+   "id": "Lang-34",
+   "source": "defects4j",
+   "repo": "apache/commons-lang",
+   "cloneUrl": "https://github.com/apache/commons-lang.git",
+   "fixed": "a2bb711aee6621b21cdd22e6d7e4bff2f7236235",
+   "project": "Lang",
+   "number": "34",
+   "split": "dev"
+  },
+  {
+   "id": "Lang-36",
+   "source": "defects4j",
+   "repo": "apache/commons-lang",
+   "cloneUrl": "https://github.com/apache/commons-lang.git",
+   "fixed": "26bc3fe010d5154d3ccac526ec22c429fc3af499",
+   "project": "Lang",
+   "number": "36",
+   "split": "dev"
+  },
+  {
+   "id": "Lang-41",
+   "source": "defects4j",
+   "repo": "apache/commons-lang",
+   "cloneUrl": "https://github.com/apache/commons-lang.git",
+   "fixed": "2dc56182579703153e5c9886b3ecd22bbc348b49",
+   "project": "Lang",
+   "number": "41",
+   "split": "dev"
+  },
+  {
+   "id": "Lang-48",
+   "source": "defects4j",
+   "repo": "apache/commons-lang",
+   "cloneUrl": "https://github.com/apache/commons-lang.git",
+   "fixed": "e199d381f8c199801fee2d40a7f3ea1380700631",
+   "project": "Lang",
+   "number": "48",
+   "split": "dev"
+  },
+  {
+   "id": "Lang-58",
+   "source": "defects4j",
+   "repo": "apache/commons-lang",
+   "cloneUrl": "https://github.com/apache/commons-lang.git",
+   "fixed": "15360774099b2a7230e020751acdf6979b6e3f58",
+   "project": "Lang",
+   "number": "58",
+   "split": "dev"
+  },
+  {
+   "id": "Lang-7",
+   "source": "defects4j",
+   "repo": "apache/commons-lang",
+   "cloneUrl": "https://github.com/apache/commons-lang.git",
+   "fixed": "350cf8c2da08ccde6b4d71b19bb3df97256ea368",
+   "project": "Lang",
+   "number": "7",
+   "split": "dev"
+  },
+  {
+   "id": "Math-30",
+   "source": "defects4j",
+   "repo": "apache/commons-math",
+   "cloneUrl": "https://github.com/apache/commons-math.git",
+   "fixed": "33169dcf75724f6190b5c14148553b52899936e0",
+   "project": "Math",
+   "number": "30",
+   "split": "dev"
+  },
+  {
+   "id": "Math-44",
+   "source": "defects4j",
+   "repo": "apache/commons-math",
+   "cloneUrl": "https://github.com/apache/commons-math.git",
+   "fixed": "7980a24266d463bacc8f1271a83865a7d5638891",
+   "project": "Math",
+   "number": "44",
+   "split": "dev"
+  },
+  {
+   "id": "Math-56",
+   "source": "defects4j",
+   "repo": "apache/commons-math",
+   "cloneUrl": "https://github.com/apache/commons-math.git",
+   "fixed": "368f17d194d3d03c73cc459f1af6fcc1a1b7d598",
+   "project": "Math",
+   "number": "56",
+   "split": "dev"
+  },
+  {
+   "id": "Math-58",
+   "source": "defects4j",
+   "repo": "apache/commons-math",
+   "cloneUrl": "https://github.com/apache/commons-math.git",
+   "fixed": "26a610776cefacb898994e8e4ea493b6b1263022",
+   "project": "Math",
+   "number": "58",
+   "split": "dev"
+  },
+  {
+   "id": "Math-59",
+   "source": "defects4j",
+   "repo": "apache/commons-math",
+   "cloneUrl": "https://github.com/apache/commons-math.git",
+   "fixed": "6d6649ef6932053a9cb1854cec65b60b1e445999",
+   "project": "Math",
+   "number": "59",
+   "split": "dev"
+  },
+  {
+   "id": "Math-62",
+   "source": "defects4j",
+   "repo": "apache/commons-math",
+   "cloneUrl": "https://github.com/apache/commons-math.git",
+   "fixed": "51aa6e6ca29a8265784c037bc3a42455329ee4ab",
+   "project": "Math",
+   "number": "62",
+   "split": "dev"
+  },
+  {
+   "id": "Math-63",
+   "source": "defects4j",
+   "repo": "apache/commons-math",
+   "cloneUrl": "https://github.com/apache/commons-math.git",
+   "fixed": "495f04bcda902b73118cc6b30afd36465762b259",
+   "project": "Math",
+   "number": "63",
+   "split": "dev"
+  },
+  {
+   "id": "Math-69",
+   "source": "defects4j",
+   "repo": "apache/commons-math",
+   "cloneUrl": "https://github.com/apache/commons-math.git",
+   "fixed": "bb005b56ca0739c4c212804ba7a483c8164e78f1",
+   "project": "Math",
+   "number": "69",
+   "split": "dev"
+  },
+  {
+   "id": "Math-82",
+   "source": "defects4j",
+   "repo": "apache/commons-math",
+   "cloneUrl": "https://github.com/apache/commons-math.git",
+   "fixed": "38983e820763c882e778c7d5c68b673fb45a210e",
+   "project": "Math",
+   "number": "82",
+   "split": "dev"
+  },
+  {
+   "id": "Math-87",
+   "source": "defects4j",
+   "repo": "apache/commons-math",
+   "cloneUrl": "https://github.com/apache/commons-math.git",
+   "fixed": "59434c2dce49e0104b4c7d51b7502e4eae7d2773",
+   "project": "Math",
+   "number": "87",
+   "split": "dev"
+  },
+  {
+   "id": "Mockito-22",
+   "source": "defects4j",
+   "repo": "mockito/mockito",
+   "cloneUrl": "https://github.com/mockito/mockito.git",
+   "fixed": "d0c872e4b0837aef1e1635bf5f15d33c3d8d9698",
+   "project": "Mockito",
+   "number": "22",
+   "split": "dev"
+  },
+  {
+   "id": "Mockito-24",
+   "source": "defects4j",
+   "repo": "mockito/mockito",
+   "cloneUrl": "https://github.com/mockito/mockito.git",
+   "fixed": "c17169c2cbb0b3d055d64ec2c4859122ca919c42",
+   "project": "Mockito",
+   "number": "24",
+   "split": "dev"
+  },
+  {
+   "id": "Mockito-26",
+   "source": "defects4j",
+   "repo": "mockito/mockito",
+   "cloneUrl": "https://github.com/mockito/mockito.git",
+   "fixed": "af44738c7de74f24e37ea0c1242e73b07c3f4362",
+   "project": "Mockito",
+   "number": "26",
+   "split": "dev"
+  },
+  {
+   "id": "Mockito-28",
+   "source": "defects4j",
+   "repo": "mockito/mockito",
+   "cloneUrl": "https://github.com/mockito/mockito.git",
+   "fixed": "0464f5657dc8c76a4ff209a2cf7fd6312885cdc3",
+   "project": "Mockito",
+   "number": "28",
+   "split": "dev"
+  },
+  {
+   "id": "Mockito-3",
+   "source": "defects4j",
+   "repo": "mockito/mockito",
+   "cloneUrl": "https://github.com/mockito/mockito.git",
+   "fixed": "3eec7451d6c83c280743c39b39c77a179abb30f9",
+   "project": "Mockito",
+   "number": "3",
+   "split": "dev"
+  },
+  {
+   "id": "Mockito-30",
+   "source": "defects4j",
+   "repo": "mockito/mockito",
+   "cloneUrl": "https://github.com/mockito/mockito.git",
+   "fixed": "3c924f80a4db3692a13341f0da4517052ab77a2a",
+   "project": "Mockito",
+   "number": "30",
+   "split": "dev"
+  },
+  {
+   "id": "Mockito-31",
+   "source": "defects4j",
+   "repo": "mockito/mockito",
+   "cloneUrl": "https://github.com/mockito/mockito.git",
+   "fixed": "62b6bdf44baeee172b2b1684835fb995bad2a47d",
+   "project": "Mockito",
+   "number": "31",
+   "split": "dev"
+  },
+  {
+   "id": "Mockito-34",
+   "source": "defects4j",
+   "repo": "mockito/mockito",
+   "cloneUrl": "https://github.com/mockito/mockito.git",
+   "fixed": "e8cebe01abae49a09aadd6a26c6f7e2f90e5e772",
+   "project": "Mockito",
+   "number": "34",
+   "split": "dev"
+  },
+  {
+   "id": "Mockito-35",
+   "source": "defects4j",
+   "repo": "mockito/mockito",
+   "cloneUrl": "https://github.com/mockito/mockito.git",
+   "fixed": "27a2f515197d4688c4df82afb791bf8ce20a5504",
+   "project": "Mockito",
+   "number": "35",
+   "split": "dev"
+  },
+  {
+   "id": "Mockito-4",
+   "source": "defects4j",
+   "repo": "mockito/mockito",
+   "cloneUrl": "https://github.com/mockito/mockito.git",
+   "fixed": "42b391d4209024292b6101048389570e4ec36b2a",
+   "project": "Mockito",
+   "number": "4",
+   "split": "dev"
+  },
+  {
+   "id": "Moderocky-ByteSkript-1dce2997",
+   "source": "gitbug-java",
+   "repo": "Moderocky/ByteSkript",
+   "cloneUrl": "https://github.com/Moderocky/ByteSkript.git",
+   "fixed": "1dce2997df7f55536293234a04b666de3d6b2a85",
+   "split": "dev"
+  },
+  {
+   "id": "Netflix-frigga-126b52a5",
+   "source": "gitbug-java",
+   "repo": "Netflix/frigga",
+   "cloneUrl": "https://github.com/Netflix/frigga.git",
+   "fixed": "126b52a5586381684c0ac975ac3d2ab37b6f7596",
+   "split": "holdout"
+  },
+  {
+   "id": "TheAlgorithms-Java-4f151498",
+   "source": "gitbug-java",
+   "repo": "TheAlgorithms/Java",
+   "cloneUrl": "https://github.com/TheAlgorithms/Java.git",
+   "fixed": "4f1514980495c4daaae2eb060228a87e14cbae11",
+   "split": "dev"
+  },
+  {
+   "id": "TheAlgorithms-Java-96c1a966",
+   "source": "gitbug-java",
+   "repo": "TheAlgorithms/Java",
+   "cloneUrl": "https://github.com/TheAlgorithms/Java.git",
+   "fixed": "96c1a96647c947f8f0c531ade3bc18967359e0ea",
+   "split": "dev"
+  },
+  {
+   "id": "Time-12",
+   "source": "defects4j",
+   "repo": "JodaOrg/joda-time",
+   "cloneUrl": "https://github.com/JodaOrg/joda-time.git",
+   "fixed": "77a6b3a44da7ae4af62e88b4b27eeefec2d768c2",
+   "project": "Time",
+   "number": "12",
+   "split": "holdout"
+  },
+  {
+   "id": "Time-13",
+   "source": "defects4j",
+   "repo": "JodaOrg/joda-time",
+   "cloneUrl": "https://github.com/JodaOrg/joda-time.git",
+   "fixed": "5d08a1cdbfa6ce86a0baf637493c464e91e91968",
+   "project": "Time",
+   "number": "13",
+   "split": "holdout"
+  },
+  {
+   "id": "Time-17",
+   "source": "defects4j",
+   "repo": "JodaOrg/joda-time",
+   "cloneUrl": "https://github.com/JodaOrg/joda-time.git",
+   "fixed": "a8913f5ad5dfde59263c981c9e9eb28e43fd2e00",
+   "project": "Time",
+   "number": "17",
+   "split": "holdout"
+  },
+  {
+   "id": "Time-19",
+   "source": "defects4j",
+   "repo": "JodaOrg/joda-time",
+   "cloneUrl": "https://github.com/JodaOrg/joda-time.git",
+   "fixed": "82c5e4f9550e4df36e07b66f35f7c3e9d7eb5eba",
+   "project": "Time",
+   "number": "19",
+   "split": "holdout"
+  },
+  {
+   "id": "Time-2",
+   "source": "defects4j",
+   "repo": "JodaOrg/joda-time",
+   "cloneUrl": "https://github.com/JodaOrg/joda-time.git",
+   "fixed": "8612f9e5b88c1bea933ef9ab1e431f5db3006b48",
+   "project": "Time",
+   "number": "2",
+   "split": "holdout"
+  },
+  {
+   "id": "Time-20",
+   "source": "defects4j",
+   "repo": "JodaOrg/joda-time",
+   "cloneUrl": "https://github.com/JodaOrg/joda-time.git",
+   "fixed": "a92450e88df85d6b7a0fa53517da46286c24f53f",
+   "project": "Time",
+   "number": "20",
+   "split": "holdout"
+  },
+  {
+   "id": "Time-23",
+   "source": "defects4j",
+   "repo": "JodaOrg/joda-time",
+   "cloneUrl": "https://github.com/JodaOrg/joda-time.git",
+   "fixed": "14dedcbc04682c1b1b6c5ebe91bc930b79eeb572",
+   "project": "Time",
+   "number": "23",
+   "split": "holdout"
+  },
+  {
+   "id": "Time-5",
+   "source": "defects4j",
+   "repo": "JodaOrg/joda-time",
+   "cloneUrl": "https://github.com/JodaOrg/joda-time.git",
+   "fixed": "a6cb59ed2280ab0a32995fa8b5f1a7b0d47cb815",
+   "project": "Time",
+   "number": "5",
+   "split": "holdout"
+  },
+  {
+   "id": "Time-7",
+   "source": "defects4j",
+   "repo": "JodaOrg/joda-time",
+   "cloneUrl": "https://github.com/JodaOrg/joda-time.git",
+   "fixed": "1adb1e69863dcd1ff282692bf1452c422528eeb9",
+   "project": "Time",
+   "number": "7",
+   "split": "holdout"
+  },
+  {
+   "id": "Time-9",
+   "source": "defects4j",
+   "repo": "JodaOrg/joda-time",
+   "cloneUrl": "https://github.com/JodaOrg/joda-time.git",
+   "fixed": "96f586cb8dac7eee62e9be519a3eab125c47bb23",
+   "project": "Time",
+   "number": "9",
+   "split": "holdout"
+  },
+  {
+   "id": "aws-aws-secretsmanager-jdbc-d25e52d6",
+   "source": "gitbug-java",
+   "repo": "aws/aws-secretsmanager-jdbc",
+   "cloneUrl": "https://github.com/aws/aws-secretsmanager-jdbc.git",
+   "fixed": "d25e52d637cff0b8fc971738d514522074ba4e6e",
+   "split": "dev"
+  },
+  {
+   "id": "aws-event-ruler-68481127",
+   "source": "gitbug-java",
+   "repo": "aws/event-ruler",
+   "cloneUrl": "https://github.com/aws/event-ruler.git",
+   "fixed": "68481127e05057f46f51ab9a665161c77f42c5e6",
+   "split": "dev"
+  },
+  {
+   "id": "awslabs-aws-java-nio-spi-for-s3-ea1044d5",
+   "source": "gitbug-java",
+   "repo": "awslabs/aws-java-nio-spi-for-s3",
+   "cloneUrl": "https://github.com/awslabs/aws-java-nio-spi-for-s3.git",
+   "fixed": "ea1044d51bb4f61af05b6651539a719b7a03c529",
+   "split": "holdout"
+  },
+  {
+   "id": "ballerina-platform-lsp4intellij-8b03edde",
+   "source": "gitbug-java",
+   "repo": "ballerina-platform/lsp4intellij",
+   "cloneUrl": "https://github.com/ballerina-platform/lsp4intellij.git",
+   "fixed": "8b03eddead47f04da18c51534a558654206eeae6",
+   "split": "holdout"
+  },
+  {
+   "id": "beanshell-beanshell-f345606a",
+   "source": "gitbug-java",
+   "repo": "beanshell/beanshell",
+   "cloneUrl": "https://github.com/beanshell/beanshell.git",
+   "fixed": "f345606a29bd6a9485dfcf395f40191af5c5c9ef",
+   "split": "dev"
+  },
+  {
+   "id": "c-rack-cbor-java-cabd70d0",
+   "source": "gitbug-java",
+   "repo": "c-rack/cbor-java",
+   "cloneUrl": "https://github.com/c-rack/cbor-java.git",
+   "fixed": "cabd70d02e864354117d73d96d70ab021d748188",
+   "split": "holdout"
+  },
+  {
+   "id": "cdimascio-dotenv-java-bbfbcfa6",
+   "source": "gitbug-java",
+   "repo": "cdimascio/dotenv-java",
+   "cloneUrl": "https://github.com/cdimascio/dotenv-java.git",
+   "fixed": "bbfbcfa63e3ab0bb76fbacb51833daec9f6c4fa9",
+   "split": "dev"
+  },
+  {
+   "id": "cloudsimplus-cloudsimplus-61c8b942",
+   "source": "gitbug-java",
+   "repo": "cloudsimplus/cloudsimplus",
+   "cloneUrl": "https://github.com/cloudsimplus/cloudsimplus.git",
+   "fixed": "61c8b942d1ec07ff6e7369326450d22086a2678e",
+   "split": "dev"
+  },
+  {
+   "id": "crawler-commons-crawler-commons-2c2cb3bf",
+   "source": "gitbug-java",
+   "repo": "crawler-commons/crawler-commons",
+   "cloneUrl": "https://github.com/crawler-commons/crawler-commons.git",
+   "fixed": "2c2cb3bf7a95c9dde49f8f9b93abc858b8c9311f",
+   "split": "dev"
+  },
+  {
+   "id": "crowdin-crowdin-api-client-java-f0f22b2b",
+   "source": "gitbug-java",
+   "repo": "crowdin/crowdin-api-client-java",
+   "cloneUrl": "https://github.com/crowdin/crowdin-api-client-java.git",
+   "fixed": "f0f22b2b56d76d631224688193feed6eb501af30",
+   "split": "dev"
+  },
+  {
+   "id": "davidmoten-openapi-to-plantuml-77334086",
+   "source": "gitbug-java",
+   "repo": "davidmoten/openapi-to-plantuml",
+   "cloneUrl": "https://github.com/davidmoten/openapi-to-plantuml.git",
+   "fixed": "77334086198150825c3eefd7118c0b75ceaa0366",
+   "split": "holdout"
+  },
+  {
+   "id": "dmak-jaxb-xew-plugin-f4893513",
+   "source": "gitbug-java",
+   "repo": "dmak/jaxb-xew-plugin",
+   "cloneUrl": "https://github.com/dmak/jaxb-xew-plugin.git",
+   "fixed": "f48935133d6ad30ad31613fca3b64db50f77fd26",
+   "split": "dev"
+  },
+  {
+   "id": "fishercoder1534-Leetcode-2110c6b0",
+   "source": "gitbug-java",
+   "repo": "fishercoder1534/Leetcode",
+   "cloneUrl": "https://github.com/fishercoder1534/Leetcode.git",
+   "fixed": "2110c6b023b7c5623b2603dae9979201f2b2c3ac",
+   "split": "holdout"
+  },
+  {
+   "id": "giraud-reasonml-idea-plugin-11d991db",
+   "source": "gitbug-java",
+   "repo": "giraud/reasonml-idea-plugin",
+   "cloneUrl": "https://github.com/giraud/reasonml-idea-plugin.git",
+   "fixed": "11d991db162a2d61de7c1b24a45246d09d6b2e86",
+   "split": "holdout"
+  },
+  {
+   "id": "giraud-reasonml-idea-plugin-f665f0fc",
+   "source": "gitbug-java",
+   "repo": "giraud/reasonml-idea-plugin",
+   "cloneUrl": "https://github.com/giraud/reasonml-idea-plugin.git",
+   "fixed": "f665f0fc21e68d9b18df66ccfed299e898d8ee93",
+   "split": "holdout"
+  },
+  {
+   "id": "gitbucket-markedj-2dce74e1",
+   "source": "gitbug-java",
+   "repo": "gitbucket/markedj",
+   "cloneUrl": "https://github.com/gitbucket/markedj.git",
+   "fixed": "2dce74e1208340c7738970613f435185d71f640e",
+   "split": "holdout"
+  },
+  {
+   "id": "gradle-common-custom-user-data-gradle-plugin-982c7798",
+   "source": "gitbug-java",
+   "repo": "gradle/common-custom-user-data-gradle-plugin",
+   "cloneUrl": "https://github.com/gradle/common-custom-user-data-gradle-plugin.git",
+   "fixed": "982c77984b5e263fe8abf40fb0b8ed7dfd0a5b82",
+   "split": "dev"
+  },
+  {
+   "id": "iipc-jwarc-d47a479c",
+   "source": "gitbug-java",
+   "repo": "iipc/jwarc",
+   "cloneUrl": "https://github.com/iipc/jwarc.git",
+   "fixed": "d47a479c9025ee8fa9fe7e494b33df5b48d802c7",
+   "split": "dev"
+  },
+  {
+   "id": "iipc-jwarc-e00ce46c",
+   "source": "gitbug-java",
+   "repo": "iipc/jwarc",
+   "cloneUrl": "https://github.com/iipc/jwarc.git",
+   "fixed": "e00ce46c1e36d68ccec59e8c510fc0f1b50da424",
+   "split": "dev"
+  },
+  {
+   "id": "jhy-jsoup-11191925",
+   "source": "gitbug-java",
+   "repo": "jhy/jsoup",
+   "cloneUrl": "https://github.com/jhy/jsoup.git",
+   "fixed": "111919256590a37b74d2caa119c4965d1a25124a",
+   "split": "dev"
+  },
+  {
+   "id": "jhy-jsoup-195f484b",
+   "source": "gitbug-java",
+   "repo": "jhy/jsoup",
+   "cloneUrl": "https://github.com/jhy/jsoup.git",
+   "fixed": "195f484ba5de224a3c1be6086e8c0dab066557d9",
+   "split": "dev"
+  },
+  {
+   "id": "jhy-jsoup-1e69577e",
+   "source": "gitbug-java",
+   "repo": "jhy/jsoup",
+   "cloneUrl": "https://github.com/jhy/jsoup.git",
+   "fixed": "1e69577e358c75a85b769583f0cf860eedb18a5e",
+   "split": "dev"
+  },
+  {
+   "id": "jhy-jsoup-220a3b21",
+   "source": "gitbug-java",
+   "repo": "jhy/jsoup",
+   "cloneUrl": "https://github.com/jhy/jsoup.git",
+   "fixed": "220a3b21be3b3d50ed90f5665aff031a989572f4",
+   "split": "dev"
+  },
+  {
+   "id": "jhy-jsoup-401c8b01",
+   "source": "gitbug-java",
+   "repo": "jhy/jsoup",
+   "cloneUrl": "https://github.com/jhy/jsoup.git",
+   "fixed": "401c8b010e01a03d5af00b88387e0dc3a8c1c8a4",
+   "split": "dev"
+  },
+  {
+   "id": "jhy-jsoup-45ed0023",
+   "source": "gitbug-java",
+   "repo": "jhy/jsoup",
+   "cloneUrl": "https://github.com/jhy/jsoup.git",
+   "fixed": "45ed00232722efacafdf58cb0e2bdcc751585f84",
+   "split": "dev"
+  },
+  {
+   "id": "jhy-jsoup-4a278e9b",
+   "source": "gitbug-java",
+   "repo": "jhy/jsoup",
+   "cloneUrl": "https://github.com/jhy/jsoup.git",
+   "fixed": "4a278e9b8e9c0515ee005775703a40d7b0a86d2f",
+   "split": "dev"
+  },
+  {
+   "id": "jhy-jsoup-a3495822",
+   "source": "gitbug-java",
+   "repo": "jhy/jsoup",
+   "cloneUrl": "https://github.com/jhy/jsoup.git",
+   "fixed": "a349582236a7e69ce341f3b4ee913cb8cd19b955",
+   "split": "dev"
+  },
+  {
+   "id": "jhy-jsoup-a96ebc95",
+   "source": "gitbug-java",
+   "repo": "jhy/jsoup",
+   "cloneUrl": "https://github.com/jhy/jsoup.git",
+   "fixed": "a96ebc95f9ad681c3a8bb70a4d83020bf8812395",
+   "split": "dev"
+  },
+  {
+   "id": "jhy-jsoup-d126488d",
+   "source": "gitbug-java",
+   "repo": "jhy/jsoup",
+   "cloneUrl": "https://github.com/jhy/jsoup.git",
+   "fixed": "d126488db626790a69ce99bb96bf3cfe9c591534",
+   "split": "dev"
+  },
+  {
+   "id": "jitterted-ensembler-0963194c",
+   "source": "gitbug-java",
+   "repo": "jitterted/ensembler",
+   "cloneUrl": "https://github.com/jitterted/ensembler.git",
+   "fixed": "0963194c9ebcb9998b912a2f78e232de2282709a",
+   "split": "dev"
+  },
+  {
+   "id": "jitterted-ensembler-0e512e5b",
+   "source": "gitbug-java",
+   "repo": "jitterted/ensembler",
+   "cloneUrl": "https://github.com/jitterted/ensembler.git",
+   "fixed": "0e512e5b36777672409a6dc283575f11b44138a1",
+   "split": "dev"
+  },
+  {
+   "id": "jitterted-ensembler-6207c9d4",
+   "source": "gitbug-java",
+   "repo": "jitterted/ensembler",
+   "cloneUrl": "https://github.com/jitterted/ensembler.git",
+   "fixed": "6207c9d46460fd0ce2d67305ea250c50672bce80",
+   "split": "dev"
+  },
+  {
+   "id": "jitterted-ensembler-c9faf3fb",
+   "source": "gitbug-java",
+   "repo": "jitterted/ensembler",
+   "cloneUrl": "https://github.com/jitterted/ensembler.git",
+   "fixed": "c9faf3fba5244b0c6bfab3717d8ff2f666bc58a6",
+   "split": "dev"
+  },
+  {
+   "id": "klausbrunner-solarpositioning-4d35aecb",
+   "source": "gitbug-java",
+   "repo": "klausbrunner/solarpositioning",
+   "cloneUrl": "https://github.com/klausbrunner/solarpositioning.git",
+   "fixed": "4d35aecb484006f9949a1dfeaa4607dc62097854",
+   "split": "dev"
+  },
+  {
+   "id": "mthmulders-mcs-12a39786",
+   "source": "gitbug-java",
+   "repo": "mthmulders/mcs",
+   "cloneUrl": "https://github.com/mthmulders/mcs.git",
+   "fixed": "12a39786d7533a368462d3c46be77072948c6e48",
+   "split": "holdout"
+  },
+  {
+   "id": "mthmulders-mcs-eff905be",
+   "source": "gitbug-java",
+   "repo": "mthmulders/mcs",
+   "cloneUrl": "https://github.com/mthmulders/mcs.git",
+   "fixed": "eff905bef8d83a3ca49683eb3c246ab600f8fadc",
+   "split": "holdout"
+  },
+  {
+   "id": "nikoo28-java-solutions-8d81307e",
+   "source": "gitbug-java",
+   "repo": "nikoo28/java-solutions",
+   "cloneUrl": "https://github.com/nikoo28/java-solutions.git",
+   "fixed": "8d81307ea1651f3dffe2d9d620378c08f04463ee",
+   "split": "holdout"
+  },
+  {
+   "id": "retel-io-ari-proxy-610e9b67",
+   "source": "gitbug-java",
+   "repo": "retel-io/ari-proxy",
+   "cloneUrl": "https://github.com/retel-io/ari-proxy.git",
+   "fixed": "610e9b6725e1aab80abb5866a07d50aabc4e8874",
+   "split": "dev"
+  },
+  {
+   "id": "salesforce-grammaticus-cdf67a1a",
+   "source": "gitbug-java",
+   "repo": "salesforce/grammaticus",
+   "cloneUrl": "https://github.com/salesforce/grammaticus.git",
+   "fixed": "cdf67a1ad578e17f22695299d840aab2901c5609",
+   "split": "dev"
+  },
+  {
+   "id": "semver4j-semver4j-10102b37",
+   "source": "gitbug-java",
+   "repo": "semver4j/semver4j",
+   "cloneUrl": "https://github.com/semver4j/semver4j.git",
+   "fixed": "10102b3742981d6a554972abfc525a1cf848feb8",
+   "split": "holdout"
+  },
+  {
+   "id": "semver4j-semver4j-beb7e5d4",
+   "source": "gitbug-java",
+   "repo": "semver4j/semver4j",
+   "cloneUrl": "https://github.com/semver4j/semver4j.git",
+   "fixed": "beb7e5d466c708721740f6fe99ca33ca9f4ed9ea",
+   "split": "holdout"
+  },
+  {
+   "id": "semver4j-semver4j-de7dadc7",
+   "source": "gitbug-java",
+   "repo": "semver4j/semver4j",
+   "cloneUrl": "https://github.com/semver4j/semver4j.git",
+   "fixed": "de7dadc7ece69328c712c239ae9671000df57d20",
+   "split": "holdout"
+  },
+  {
+   "id": "slub-urnlib-106be8d1",
+   "source": "gitbug-java",
+   "repo": "slub/urnlib",
+   "cloneUrl": "https://github.com/slub/urnlib.git",
+   "fixed": "106be8d1b8047f93a715edc03fdc1b17c3aacc4b",
+   "split": "holdout"
+  },
+  {
+   "id": "snowflakedb-snowflake-jdbc-002bc9bb",
+   "source": "gitbug-java",
+   "repo": "snowflakedb/snowflake-jdbc",
+   "cloneUrl": "https://github.com/snowflakedb/snowflake-jdbc.git",
+   "fixed": "002bc9bb528a71b0233742240d02ce4677fb75d6",
+   "split": "dev"
+  },
+  {
+   "id": "snowflakedb-snowflake-jdbc-15a45aca",
+   "source": "gitbug-java",
+   "repo": "snowflakedb/snowflake-jdbc",
+   "cloneUrl": "https://github.com/snowflakedb/snowflake-jdbc.git",
+   "fixed": "15a45aca6bcd42e354ee6cb6ccd822b75647351d",
+   "split": "dev"
+  },
+  {
+   "id": "snowflakedb-snowflake-jdbc-7444f58c",
+   "source": "gitbug-java",
+   "repo": "snowflakedb/snowflake-jdbc",
+   "cloneUrl": "https://github.com/snowflakedb/snowflake-jdbc.git",
+   "fixed": "7444f58c2aef1110463030f0d8200ec9f2b0e9ff",
+   "split": "dev"
+  },
+  {
+   "id": "spring-projects-spring-retry-e6091f79",
+   "source": "gitbug-java",
+   "repo": "spring-projects/spring-retry",
+   "cloneUrl": "https://github.com/spring-projects/spring-retry.git",
+   "fixed": "e6091f790c64394508591052f962b833e2459346",
+   "split": "dev"
+  },
+  {
+   "id": "stellar-java-stellar-sdk-1461c2fc",
+   "source": "gitbug-java",
+   "repo": "stellar/java-stellar-sdk",
+   "cloneUrl": "https://github.com/stellar/java-stellar-sdk.git",
+   "fixed": "1461c2fc5b89ab2210237bcabb9d4fe0c0d2fa97",
+   "split": "dev"
+  },
+  {
+   "id": "stellar-java-stellar-sdk-15cc6d2c",
+   "source": "gitbug-java",
+   "repo": "stellar/java-stellar-sdk",
+   "cloneUrl": "https://github.com/stellar/java-stellar-sdk.git",
+   "fixed": "15cc6d2c813117a27e23ed571b1842258968c049",
+   "split": "dev"
+  },
+  {
+   "id": "traccar-traccar-046076ae",
+   "source": "gitbug-java",
+   "repo": "traccar/traccar",
+   "cloneUrl": "https://github.com/traccar/traccar.git",
+   "fixed": "046076aeb6f0c79bb59ef9aead4ebbc23e286c63",
+   "split": "holdout"
+  },
+  {
+   "id": "traccar-traccar-3642b952",
+   "source": "gitbug-java",
+   "repo": "traccar/traccar",
+   "cloneUrl": "https://github.com/traccar/traccar.git",
+   "fixed": "3642b952086355f5f2a52f7dc9b2cdfea4c02e31",
+   "split": "holdout"
+  },
+  {
+   "id": "traccar-traccar-37ed3947",
+   "source": "gitbug-java",
+   "repo": "traccar/traccar",
+   "cloneUrl": "https://github.com/traccar/traccar.git",
+   "fixed": "37ed394724c0bdcc6f98f421e71d76916206ed30",
+   "split": "holdout"
+  },
+  {
+   "id": "traccar-traccar-514582dd",
+   "source": "gitbug-java",
+   "repo": "traccar/traccar",
+   "cloneUrl": "https://github.com/traccar/traccar.git",
+   "fixed": "514582dd83c4520948c03eb3fc84444e0d7f5a49",
+   "split": "holdout"
+  },
+  {
+   "id": "traccar-traccar-5e18cb58",
+   "source": "gitbug-java",
+   "repo": "traccar/traccar",
+   "cloneUrl": "https://github.com/traccar/traccar.git",
+   "fixed": "5e18cb586d34aa3db0417cef9635bf1d9cae6e18",
+   "split": "holdout"
+  },
+  {
+   "id": "traccar-traccar-a9c31185",
+   "source": "gitbug-java",
+   "repo": "traccar/traccar",
+   "cloneUrl": "https://github.com/traccar/traccar.git",
+   "fixed": "a9c311855a495901935c2cb70252fa917fd88232",
+   "split": "holdout"
+  },
+  {
+   "id": "traccar-traccar-c68e9204",
+   "source": "gitbug-java",
+   "repo": "traccar/traccar",
+   "cloneUrl": "https://github.com/traccar/traccar.git",
+   "fixed": "c68e92043cb52f859de724781f2e5774c60d465b",
+   "split": "holdout"
+  },
+  {
+   "id": "traccar-traccar-ec2b7b64",
+   "source": "gitbug-java",
+   "repo": "traccar/traccar",
+   "cloneUrl": "https://github.com/traccar/traccar.git",
+   "fixed": "ec2b7b64a83aa1c3dcd0cd69c1ae7b2d0d8a7864",
+   "split": "holdout"
+  },
+  {
+   "id": "traccar-traccar-ed3950fb",
+   "source": "gitbug-java",
+   "repo": "traccar/traccar",
+   "cloneUrl": "https://github.com/traccar/traccar.git",
+   "fixed": "ed3950fbdccfbd118ed898066fc74c93e7542ec4",
+   "split": "holdout"
+  },
+  {
+   "id": "traccar-traccar-fdbd269b",
+   "source": "gitbug-java",
+   "repo": "traccar/traccar",
+   "cloneUrl": "https://github.com/traccar/traccar.git",
+   "fixed": "fdbd269b9b99de074e2fd9d99d1702620102801b",
+   "split": "holdout"
+  },
+  {
+   "id": "vmzakharov-dataframe-ec-12af9919",
+   "source": "gitbug-java",
+   "repo": "vmzakharov/dataframe-ec",
+   "cloneUrl": "https://github.com/vmzakharov/dataframe-ec.git",
+   "fixed": "12af99192d241ff9e4dcf78e92cef31117b7d05a",
+   "split": "holdout"
+  },
+  {
+   "id": "vmzakharov-dataframe-ec-e9eb4dbe",
+   "source": "gitbug-java",
+   "repo": "vmzakharov/dataframe-ec",
+   "cloneUrl": "https://github.com/vmzakharov/dataframe-ec.git",
+   "fixed": "e9eb4dbe0e703e13f8597be61fde10e604de127d",
+   "split": "holdout"
+  },
+  {
+   "id": "w3c-epubcheck-0759a82a",
+   "source": "gitbug-java",
+   "repo": "w3c/epubcheck",
+   "cloneUrl": "https://github.com/w3c/epubcheck.git",
+   "fixed": "0759a82ae40706269aa3c88e9a175bf8ce7a2f54",
+   "split": "dev"
+  },
+  {
+   "id": "w3c-epubcheck-49aacb23",
+   "source": "gitbug-java",
+   "repo": "w3c/epubcheck",
+   "cloneUrl": "https://github.com/w3c/epubcheck.git",
+   "fixed": "49aacb238c3edddedb45abba813bbf7c9efa54de",
+   "split": "dev"
+  },
+  {
+   "id": "xtremexp-UT4X-Converter-e719841e",
+   "source": "gitbug-java",
+   "repo": "xtremexp/UT4X-Converter",
+   "cloneUrl": "https://github.com/xtremexp/UT4X-Converter.git",
+   "fixed": "e719841eb2603a1db7d33d2e922fcb42a13e608f",
+   "split": "dev"
+  }
+ ]
+}
