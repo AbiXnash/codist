@@ -21,6 +21,26 @@ func TestQuotesCode(t *testing.T) {
 	}
 }
 
+func TestQuotesCodeAcrossLines(t *testing.T) {
+	lines := []string{"    if (request.priority() > 0) {", "        throw new IllegalArgumentException(\"priority must not be negative\");", "    }", "    save();"}
+	for _, q := range []string{
+		`if (request.priority() > 0) { throw new IllegalArgumentException("priority must not be negative"); }`,
+		"if (request.priority() > 0) {\n  throw new IllegalArgumentException(\"priority must not be negative\");\n}",
+		" 1 | if (request.priority() > 0) {\n>> 2 | throw new IllegalArgumentException(\"priority must not be negative\");",
+	} {
+		if !quotesCode(lines, q) {
+			t.Errorf("%q spans lines of the file", q)
+		}
+	}
+	chained := []string{"return repository.findAll().stream()", "        .limit(5)", "        .toList();"}
+	if !quotesCode(chained, "return repository.findAll().stream().limit(5).toList();") {
+		t.Error("a chain joined without spaces is still the same code")
+	}
+	if quotesCode(lines, `if (request.priority() < 0) { throw new IllegalArgumentException("priority must not be negative"); }`) {
+		t.Error("a quote with different code is not in the file")
+	}
+}
+
 func TestCodeFactsAnswersFromTheCode(t *testing.T) {
 	sources := map[string][]byte{
 		"src/main/java/a/PlanService.java": []byte(`package a;

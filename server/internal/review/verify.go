@@ -24,18 +24,18 @@ func vagueAdvice(title string) bool {
 	return false
 }
 
-// quotesCode says a line the model quoted really is in the file, ignoring spacing.
+// quotesCode says what the model quoted really is in the file, ignoring all spacing and line breaks: a
+// model often joins a statement that spans several lines into one.
 func quotesCode(lines []string, quote string) bool {
-	want := strings.Join(strings.Fields(numberedPrefix.ReplaceAllString(quote, "")), " ")
+	var parts []string
+	for _, l := range strings.Split(quote, "\n") {
+		parts = append(parts, numberedPrefix.ReplaceAllString(l, ""))
+	}
+	want := strings.Join(strings.Fields(strings.Join(parts, " ")), "")
 	if want == "" {
 		return false
 	}
-	for _, l := range lines {
-		if strings.Contains(strings.Join(strings.Fields(l), " "), want) {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(strings.Join(strings.Fields(strings.Join(lines, " ")), ""), want)
 }
 
 // repoStandards reads what the repository says about how its code should be written, with the
