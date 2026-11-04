@@ -98,7 +98,7 @@ flowchart LR
 
 | Memory | Models to test | Evidence so far |
 |---|---|---|
-| 16 GB (design target) | `qwen2.5-coder:14b` (current default), `qwen2.5-coder:7b` (baseline), `qwen3.5:9b`, `gemma4:12b` | `7b` scored 12 of 16. `14b` has no full result. The others are untested on Java review |
+| 16 GB (design target) | `qwen2.5-coder:14b` (current default), `qwen2.5-coder:7b` (baseline), `qwen3.5:9b`, `gemma4:12b` | On 118 real bugs, `14b` located at most 95 and `7b` 74. The others are untested on Java review |
 | 32 GB (also reported) | `qwen3.8:27b`, `qwen3.6:27b` | Published scores are for other tasks and settings |
 
 A sceptical second call that can delete findings stays out. It removed every model finding in Codist's own test. Retest it only as a rank or a label.

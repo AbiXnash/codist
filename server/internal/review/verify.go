@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -99,4 +100,56 @@ func readStandards(repo *gitx.Repo) string {
 		}
 	}
 	return ""
+}
+
+var (
+	nullClaim = regexp.MustCompile(`(?i)\bnull|\bnpe\b|nullpointer`)
+	// A model describing what the change did has named no problem. "Removed ..." stays out: a removed
+	// check is often the bug itself.
+	changeTitle = regexp.MustCompile(`(?i)^(improved|simplified|added|adding|renamed|refactored|updated|changed|moved|replaced|introduced|extracted|explicitly passing|use of)\b`)
+	receiver    = regexp.MustCompile(`\b([A-Za-z_]\w*)\s*(?:\.\s*[A-Za-z_]\w*|\[)`)
+	removedNull = regexp.MustCompile(`(?m)^-[^-].*\bnull\b`)
+)
+
+// weakCeiling is the highest severity a claim Codist could not back keeps, so it lands among the notes
+// without being thrown away: in the evaluation, these sometimes were the real bug.
+const weakCeiling = "low"
+
+// weighClaim checks a model finding against the code. It returns the severity to show and, when the
+// code does not back the claim, why. Hand-reading 95 located bugs found 0 real catches among those
+// flagged only by the title copied from the null pattern, and 0 among those that only described a change.
+func weighClaim(severity, title, ref, evidence string, lines []string, line int, patch string) (string, string) {
+	doubt := ""
+	switch {
+	case changeTitle.MatchString(strings.TrimSpace(title)):
+		doubt = "This describes the change and names no problem in it."
+	case (ref == "null-dereference" || nullClaim.MatchString(title)) && !nullBacked(evidence, lines, line, patch):
+		doubt = "Codist could not find where this value becomes null in this code."
+	}
+	if doubt == "" {
+		return severity, ""
+	}
+	if slices.Index(severities, severity) < slices.Index(severities, weakCeiling) {
+		severity = weakCeiling
+	}
+	return severity, doubt
+}
+
+// nullBacked says the code gives a value a way to be null: the change removed a null check, or nearby
+// code tests the value for null, sets it to null, or takes it from a call that returns null on a miss.
+func nullBacked(evidence string, lines []string, line int, patch string) bool {
+	if removedNull.MatchString(patch) {
+		return true
+	}
+	from, to := max(0, line-31), min(len(lines), line+30)
+	near := strings.Join(lines[from:to], "\n")
+	for _, m := range receiver.FindAllStringSubmatch(evidence, -1) {
+		v := regexp.QuoteMeta(m[1])
+		source := `(?m)\b` + v + `\s*[!=]=\s*null\b|\bnull\s*[!=]=\s*` + v + `\b|\b` + v + `\s*=\s*null\b|@Nullable\b[^;\n]*\b` + v +
+			`\b|\b` + v + `\s*=[^;\n]*\.(get|find\w*|remove|poll|peek\w*|getProperty|getenv|getParameter|getHeader|getAttribute|lookup)\(`
+		if regexp.MustCompile(source).MatchString(near) {
+			return true
+		}
+	}
+	return false
 }

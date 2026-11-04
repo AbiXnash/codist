@@ -74,7 +74,17 @@ A sceptical second model call on each finding was also tried, as some cloud revi
 
 ## Current score
 
-The default model is now `qwen2.5-coder:14b`, chosen by the project owner. **It has not had the full evaluation yet**, so the `7b` score below is the last measured one.
+The default model is `qwen2.5-coder:14b`. Measured on 3 and 4 November 2026 on 118 real bugs from Defects4J and GitBug-Java. "Located" means a finding within 3 lines of the bug, so it is a best case: a finding can sit near a bug without describing it. These runs predate the fix that stopped multi-line quotes being dropped, so a re-score is due.
+
+| Setup | Located, at most | Possible false alarms on the fixed versions | Time |
+|---|---|---|---|
+| Rules only | 6 of 118 (2-11%) | 11, on 10 fixes | 4 min |
+| `7b` | 74 of 118 (54-71%) | 97, on 75 fixes | 5.5 h |
+| `14b` | 95 of 118 (72-87%) | 131, on 87 fixes | 12.9 h |
+
+On the same 118 bugs, `14b` located 24 that `7b` missed and `7b` located 3 that `14b` missed (McNemar exact test, p < 0.001). It also raises more possible false alarms.
+
+The older test below used 16 labelled bugs:
 
 With facts in the prompt and answers checked, on 16 labelled bugs. The same result repeated across two runs.
 
@@ -97,8 +107,8 @@ Noise counts every finding the labels do not cover, including info. Still missed
 
 1. **Add a rule when you find a kind of bug that can be detected.** It is free, instant and never forgets.
 2. **Teach it your conventions** in Memory, and reject bad fixes with a reason.
-3. **Try a bigger model.** Logic needs reasoning, and that comes with size. `ollama pull qwen2.5-coder:14b` is about 9 GB,
-   which is tight on 16 GB. Run the evaluation on it before switching.
+3. **Choose the model by your time.** `14b` finds the most, and is slower and tight on 16 GB at about 9 GB. `7b` is about
+   twice as fast and finds less.
 4. **Fine-tune last.**
 
 ## Training
@@ -140,3 +150,23 @@ Then compare, and keep it only if it wins:
 ollama create codist-java -f Modelfile
 python3 eval/run.py qwen2.5-coder:3b codist-java
 ```
+
+## How many located bugs were really named
+
+"Located" only means a finding landed on a changed line. One reader (Claude) compared the title of every
+located `14b` finding with the real fix: `eval/bench/labels-14b.json`, scored by `eval/bench/score_labels.py`.
+Only titles were saved, so this is judgement, not ground truth.
+
+| 95 located of 118 | Bugs |
+|---|---|
+| Named the bug | 51 (43% of 118) |
+| Related to it | 13 |
+| Only on the right line | 31 |
+
+Weak findings are now notes: low and info findings, change descriptions, and null claims the code does not back.
+Replayed on the labels, the title copied from the null pattern and change descriptions, with low and info, cost 1
+named bug of 51, and removed 16 of the 31 line-only hits. Fixes with a false alarm go from 87 to 63. The code check
+on null claims itself has no replay, because evidence was not saved; runs now keep it in `details`.
+
+Four weak bugs re-run on `14b` with the new prompt (chosen, without the fix side, so not a score): `Csv-11`
+stayed correct, `JacksonDatabind-57` and `Gson-4` now name the bug, and `Cli-38` moved closer.

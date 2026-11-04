@@ -151,6 +151,7 @@ def run_bug(bug, config, args, manifest):
         hits = located(found, targets)
         out = {"found": bool(hits), "kind": "real", "by": sorted({h.get("source", "") for h in hits}), "status": rv.get("status"), "seconds": rv.get("seconds"),
                "findings": len(found), "hits": [describe(h) for h in hits], "all": [describe(f) for f in found], "targets": targets,
+               "details": [{k: f.get(k) for k in ("path", "line", "severity", "source", "title", "detail", "snippet", "ref", "doubt")} for f in found],
                "calls": harness.model_calls(activity), "drops": harness.drops(activity), "failedFiles": [f["path"] for f in rv.get("files") or [] if f.get("error")]}
         if not args.no_clean:
             sh("apply", *["--ignore-whitespace", "--whitespace=nowarn"] + ([] if reverse else ["-R"]), pfile, cwd=tree)

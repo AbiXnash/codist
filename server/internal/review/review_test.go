@@ -1193,3 +1193,43 @@ func TestIdenticalModelCallsAreMadeOnce(t *testing.T) {
 		t.Errorf("a different prompt needs its own call: %d", count())
 	}
 }
+
+func TestWeighClaim(t *testing.T) {
+	code := strings.Split(`class A {
+  String a(Map<String, B> m, String k) {
+    B b = m.get(k);
+    return b.name();
+  }
+  String c(C c) {
+    return c.name();
+  }
+  String d(D d) {
+    if (d == null) { log(); }
+    return d.name();
+  }
+}`, "\n")
+	cases := []struct {
+		name, severity, title, ref, evidence, patch string
+		line                                        int
+		want                                        string
+		doubted                                     bool
+	}{
+		{"value from a map lookup", "high", "Null dereference on some path", "null-dereference", "return b.name();", "", 4, "high", false},
+		{"value tested for null nearby", "high", "Null dereference on some path", "", "return d.name();", "", 11, "high", false},
+		{"nothing makes it null", "high", "Null dereference on some path", "null-dereference", "return c.name();", "", 7, "low", true},
+		{"no quote to check", "critical", "Potential NullPointerException", "", "", "", 7, "low", true},
+		{"the change removed a null check", "high", "Null header not handled", "", "return c.name();", "--- a\n+++ b\n-  if (c == null) return;\n", 7, "high", false},
+		{"a +++ header is not a removal", "high", "Potential NPE", "", "return c.name();", "--- null\n+++ b\n", 7, "low", true},
+		{"only describes the change", "medium", "Improved variable naming for clarity", "", "return c.name();", "", 7, "low", true},
+		{"already low stays low", "info", "Simplified the method", "", "return c.name();", "", 7, "info", true},
+		{"a removed check is a real claim", "high", "Removed br tag check", "", "return c.name();", "", 7, "high", false},
+		{"an ordinary claim is untouched", "high", "Wrong index used for the last item", "", "return c.name();", "", 7, "high", false},
+		{"a word holding null is not a null claim", "high", "Annulled order still charged", "", "return c.name();", "", 7, "high", false},
+	}
+	for _, c := range cases {
+		got, doubt := weighClaim(c.severity, c.title, c.ref, c.evidence, code, c.line, c.patch)
+		if got != c.want || (doubt != "") != c.doubted {
+			t.Errorf("%s: got %q, doubt %q", c.name, got, doubt)
+		}
+	}
+}

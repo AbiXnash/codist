@@ -31,6 +31,8 @@ Rules:
 - Never report what a change does, that something was added or changed, general advice to "review" or "consider"
   something, or matters of taste. Each finding names what goes wrong at run time or a specific improvement and its gain.
 - "evidence" must be one line of code copied exactly from the numbered file, without its line number. It is checked.
+- Report a null problem only when you can say in "detail" where the null comes from in this code. Otherwise leave it out.
+- Write each title about this code: what goes wrong and where. Do not copy the title of a Knowledge entry.
 - "line" and "endLine" must be line numbers from the numbered file.
 - "suggestion" must be a concrete fix: corrected Java code where possible.
 - When a finding is an instance of a knowledge entry, set "ref" to that entry's id; otherwise leave it empty.

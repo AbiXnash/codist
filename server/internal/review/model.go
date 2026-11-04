@@ -66,6 +66,7 @@ type Finding struct {
 	Severity      string `json:"severity"`
 	Category      string `json:"category"`
 	Title         string `json:"title"`
+	Doubt         string `json:"doubt,omitempty"` // why Codist could not back the model's claim; such a finding is shown as a note
 	Detail        string `json:"detail"`
 	Suggestion    string `json:"suggestion"`
 	NodeID        string `json:"nodeId"`

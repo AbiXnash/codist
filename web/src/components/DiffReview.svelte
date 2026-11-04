@@ -20,12 +20,16 @@
   const done = $derived(review?.files.filter((f) => !f.pending).length ?? 0);
   const running = $derived(review?.status === 'running' || review?.status === 'queued');
   const worstOf = (g: FindingWithPath[]) => SEVERITIES.find((s) => g.some((f) => f.severity === s)) ?? 'info';
-  const counts = $derived(SEVERITIES.map((s) => [s, issues.filter((g) => worstOf(g) === s).length] as const).filter(([, n]) => n));
+  // Low and info findings, and claims Codist could not back, wait behind one button so serious ones stand out.
+  const isNote = (g: FindingWithPath[]) => worstOf(g) === 'low' || worstOf(g) === 'info';
+  const noteCount = $derived(issues.filter(isNote).length);
+  let showNotes = $state(false);
+  const counts = $derived(SEVERITIES.map((s) => [s, issues.filter((g) => worstOf(g) === s && !isNote(g)).length] as const).filter(([, n]) => n));
   // The order j and k walk through, which is the order issues appear on the page.
   const order = $derived(files.flatMap((f) => inFile(f.path).sort((a, b) => a[0].line - b[0].line)));
 
   function inFile(path: string) {
-    return issues.filter((g) => g[0].path === path);
+    return issues.filter((g) => g[0].path === path && (showNotes || !isNote(g)));
   }
   const isClosed = (path: string) => closed[path] ?? files.length > MANY_FILES;
 
@@ -122,8 +126,9 @@
         {:else if review.status === 'failed'}
           <span class="bad">The review failed: {review.error ?? 'no reason given'}</span>
           <button class="btn secondary sm" onclick={() => requestReview(d.analysis.commit.sha)}>Review again</button>
-        {:else if counts.length}
+        {:else if counts.length || noteCount}
           {#each counts as [s, n]}<span class="sev {s}">{n} {s}</span>{/each}
+          {#if noteCount}<button class="btn secondary sm" aria-pressed={showNotes} title="Low and info findings, and claims Codist could not confirm in the code" onclick={() => (showNotes = !showNotes)}>{showNotes ? 'Hide' : 'Show'} {noteCount} {noteCount === 1 ? 'note' : 'notes'}</button>{/if}
           <span class="faint"><kbd>j</kbd> <kbd>k</kbd> to move between issues</span>
         {:else}
           <span class="good">No issues found</span>

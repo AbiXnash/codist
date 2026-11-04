@@ -702,8 +702,12 @@ func (s *Service) modelPass(a Analysis, f gitx.FileChange, fr FileReview, in fil
 		if title == "" {
 			title = "Issue"
 		}
+		severity, doubt := normalise(str(x["severity"]), severities, "info"), ""
+		if !s.cfg.NoFilters {
+			severity, doubt = weighClaim(severity, title, str(x["ref"]), str(x["evidence"]), in.lines, line, f.Patch)
+		}
 		fr.Findings = append(fr.Findings, Finding{
-			Line: line, EndLine: end, Severity: normalise(str(x["severity"]), severities, "info"),
+			Line: line, EndLine: end, Severity: severity, Doubt: doubt,
 			Category: strings.ToLower(orDefault(str(x["category"]), "design")), Title: title,
 			Detail: str(x["detail"]), Suggestion: str(x["suggestion"]), NodeID: innermost(in.types, line),
 			OnChangedLine: onChange, Source: "llm", Ref: str(x["ref"]), Snippet: lineAt(in.lines, line),
