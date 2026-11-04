@@ -651,3 +651,48 @@ class S {
 		t.Errorf("a real remote call must still be flagged:\n%s", all)
 	}
 }
+
+// Each method has a known answer, including the names that only look like slow calls.
+func TestMethodCostKnownAnswers(t *testing.T) {
+	src := `package a;
+class T {
+  void nPlusOne(List<Long> ids){ for(Long i:ids){ orderRepository.findById(i); } }
+  void streamLambda(List<Long> ids){ ids.stream().map(i -> orderRepository.findById(i)).toList(); }
+  void plainForEach(List<Long> ids){ ids.forEach(i -> orderRepository.save(i)); }
+  void whileRemote(){ while(more()){ paymentClient.charge(1); } }
+  void onceThenLoop(){ for(Order o: orderRepository.findAll()){ o.touch(); } }
+  void streamOnce(){ orderRepository.findAll().stream().map(x->x.id()).filter(x->x>0).toList(); }
+  void nested(int[][] m){ for(int[] r:m){ for(int v:r){ use(v); } } }
+  void mapGet(List<String> k){ for(String s:k){ cache.get(s); } }
+  void notDb(List<String> k){ for(String s:k){ item.save(s); } }
+  void smallFixed(){ for(int i=0;i<3;i++){ for(int j=0;j<3;j++){ use(i+j); } } }
+  void largeFixed(){ for(int i=0;i<1000;i++){ orderRepository.save(i); } }
+  void notRemote(List<String> k){ for(String s:k){ stringTemplate.render(s); } }
+  void kafka(List<String> k){ for(String s:k){ kafkaTemplate.send(s); } }
+}`
+	want := map[string]struct {
+		depth, io int
+		estimate  string
+	}{
+		"nPlusOne": {1, 1, "O(n) round trips"}, "streamLambda": {1, 1, "O(n) round trips"},
+		"plainForEach": {1, 1, "O(n) round trips"}, "whileRemote": {1, 1, "O(n) round trips"},
+		"onceThenLoop": {1, 0, "O(n)"}, "streamOnce": {1, 0, "O(n)"}, "nested": {2, 0, "O(n²)"},
+		"mapGet": {1, 0, "O(n)"}, "notDb": {1, 0, "O(n)"}, "smallFixed": {0, 0, "O(1)"},
+		"largeFixed": {1, 1, "O(n) round trips"}, "notRemote": {1, 0, "O(n)"}, "kafka": {1, 1, "O(n) round trips"},
+	}
+	g := Index(map[string][]byte{"src/main/java/a/T.java": []byte(src)}, "t")
+	seen := 0
+	for _, m := range g.Nodes[0].Members {
+		w, ok := want[m.Name]
+		if !ok || m.Cost == nil {
+			continue
+		}
+		seen++
+		if m.Cost.LoopDepth != w.depth || m.Cost.LoopIO != w.io || m.Cost.Estimate != w.estimate {
+			t.Errorf("%s: got depth %d, loop calls %d, %s; want %+v", m.Name, m.Cost.LoopDepth, m.Cost.LoopIO, m.Cost.Estimate, w)
+		}
+	}
+	if seen != len(want) {
+		t.Errorf("measured %d methods, want %d", seen, len(want))
+	}
+}

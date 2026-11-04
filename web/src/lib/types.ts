@@ -149,6 +149,7 @@ export interface Finding {
   suggestion: string;
   nodeId: string;
   onChangedLine: boolean;
+  doubt?: string;
   source: 'rule' | 'llm';
   ref?: string;
   snippet?: string;
@@ -381,8 +382,8 @@ export interface RepoReport {
   calls: { from: string; to: string; client: string; node: string; routes: string[] }[];
   hotspots: { path: string; commits: number; open: number; lines: number }[];
   costly: { class: string; node: string; method: string; file: string; line: number; cost: MethodCost }[];
+  costlyTotal: number;
   largest: { Name: string; Node: string; File: string; Lines: number; Members: number }[];
-  constants: { class: string; name: string; value: string; file: string; line: number }[];
   issues: Record<string, number>; urgency: Record<string, number>; severity: Record<string, number>;
 }
 

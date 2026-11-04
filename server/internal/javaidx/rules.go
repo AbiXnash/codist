@@ -631,7 +631,7 @@ func ruleID(title string) string {
 var (
 	logReceiver   = regexp.MustCompile(`^(?i)(log|logger|LOG|LOGGER|slf4jLogger)$`)
 	loudLevels    = map[string]bool{"info": true, "warn": true, "error": true}
-	remoteObject  = regexp.MustCompile(`(?i)(client|resttemplate|webclient|restclient|feign|gateway|api|http|template|stub|proxy)$`)
+	remoteObject  = regexp.MustCompile(`(?i)(client|resttemplate|kafkatemplate|rabbittemplate|redistemplate|mongotemplate|webclient|restclient|feign|gateway|api|http|stub|proxy)$`)
 	remoteMethods = map[string]bool{"getForObject": true, "getForEntity": true, "postForObject": true, "postForEntity": true,
 		"exchange": true, "retrieve": true, "execute": true, "send": true, "call": true, "invoke": true}
 	repoObject = regexp.MustCompile(`(?i)(repo|repository|dao|jdbc|jdbctemplate|entitymanager)$|^em$`) // "em" alone: item and system are not databases

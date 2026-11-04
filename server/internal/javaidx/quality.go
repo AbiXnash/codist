@@ -3,6 +3,7 @@ package javaidx
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
@@ -433,6 +434,24 @@ func runsOnce(n, kid *sitter.Node) bool {
 	return once != nil && once.Equal(kid)
 }
 
+// smallFixedLoop reports a counting loop with a small literal limit, such as i < 3. It repeats a
+// set number of times however much data there is, so it does not make a method grow with its input.
+func smallFixedLoop(f *file, n *sitter.Node) bool {
+	if n.Type() != "for_statement" {
+		return false
+	}
+	cond := n.ChildByFieldName("condition")
+	if cond == nil || cond.Type() != "binary_expression" {
+		return false
+	}
+	limit := cond.ChildByFieldName("right")
+	if limit == nil || limit.Type() != "decimal_integer_literal" {
+		return false
+	}
+	v, err := strconv.Atoi(f.text(limit))
+	return err == nil && v <= 16
+}
+
 func MethodCost(f *file, m *sitter.Node) Cost {
 	cost := Cost{Complexity: 1, Lines: endLine(m) - startLine(m) + 1}
 	if ps := m.ChildByFieldName("parameters"); ps != nil {
@@ -455,13 +474,13 @@ func MethodCost(f *file, m *sitter.Node) Cost {
 			}
 		}
 		inner := depth
-		if loopTypes[t] {
+		if loopTypes[t] && !smallFixedLoop(f, n) {
 			inner++
 		}
 		if t == "method_invocation" {
 			name := f.text(n.ChildByFieldName("name"))
 			obj := f.text(n.ChildByFieldName("object"))
-			if streamLoops[name] && strings.Contains(obj, "stream()") {
+			if name == "forEach" || streamLoops[name] && strings.Contains(obj, "stream()") {
 				inner++
 			}
 			if i := strings.LastIndex(obj, "."); i >= 0 {

@@ -31,8 +31,8 @@ type RepoReport struct {
 	Calls        []RepoCall         `json:"calls"`
 	Hotspots     []RepoHotspot      `json:"hotspots"`
 	Costly       []RepoMethod       `json:"costly"`
+	CostlyTotal  int                `json:"costlyTotal"`
 	Largest      []RepoClass        `json:"largest"`
-	Constants    []RepoConstant     `json:"constants"`
 	Issues       map[string]int     `json:"issues"` // open by kind
 	Urgency      map[string]int     `json:"urgency"`
 	Severity     map[string]int     `json:"severity"`
@@ -93,14 +93,6 @@ type RepoClass struct {
 	Lines, Members   int
 }
 
-type RepoConstant struct {
-	Class string `json:"class"`
-	Name  string `json:"name"`
-	Value string `json:"value"`
-	File  string `json:"file"`
-	Line  int    `json:"line"`
-}
-
 var serverPort = regexp.MustCompile(`(?m)^\s*server\.port\s*[=:]\s*(\S+)|^server:\s*\n\s+port:\s*(\S+)`)
 
 // Repo builds the report from the graph, the tracker and git.
@@ -108,7 +100,7 @@ func Repo(repo *gitx.Repo, g *javaidx.Graph, issues []Issue) RepoReport {
 	head := repo.Head()
 	r := RepoReport{Name: repo.Name(), Head: head, Branch: repo.Tracking(), Contributors: repo.Contributors(), Languages: map[string]int{}, Roles: map[string]int{},
 		Services: []RepoService{}, Endpoints: []RepoEndpoint{}, Calls: []RepoCall{}, Hotspots: []RepoHotspot{}, Costly: []RepoMethod{}, Largest: []RepoClass{},
-		Constants: []RepoConstant{}, Issues: map[string]int{}, Urgency: map[string]int{}, Severity: map[string]int{}}
+		Issues: map[string]int{}, Urgency: map[string]int{}, Severity: map[string]int{}}
 	for _, c := range r.Contributors {
 		r.Commits += c.Commits
 	}
@@ -214,9 +206,6 @@ func Repo(repo *gitx.Repo, g *javaidx.Graph, issues []Issue) RepoReport {
 		total := max(1, n.EndLine-n.StartLine+1)
 		r.Largest = append(r.Largest, RepoClass{Name: n.Name, Node: n.ID, File: n.File, Lines: total, Members: len(n.Members)})
 		for _, m := range n.Members {
-			if m.Value != "" {
-				r.Constants = append(r.Constants, RepoConstant{Class: n.Name, Name: m.Name, Value: m.Value, File: n.File, Line: m.StartLine})
-			}
 			if m.Cost != nil {
 				r.Methods++
 				if m.Cost.LoopIO > 0 || m.Cost.LoopDepth >= 2 || m.Cost.Complexity >= 8 {
@@ -263,6 +252,7 @@ func Repo(repo *gitx.Repo, g *javaidx.Graph, issues []Issue) RepoReport {
 		}
 		return a.Complexity > b.Complexity
 	})
+	r.CostlyTotal = len(r.Costly)
 	if len(r.Costly) > 15 {
 		r.Costly = r.Costly[:15]
 	}
@@ -277,9 +267,6 @@ func Repo(repo *gitx.Repo, g *javaidx.Graph, issues []Issue) RepoReport {
 		return r.Endpoints[i].Route < r.Endpoints[j].Route
 	})
 	sort.Slice(r.Calls, func(i, j int) bool { return r.Calls[i].From+r.Calls[i].To < r.Calls[j].From+r.Calls[j].To })
-	sort.Slice(r.Constants, func(i, j int) bool {
-		return r.Constants[i].Class+r.Constants[i].Name < r.Constants[j].Class+r.Constants[j].Name
-	})
 	for _, s := range services {
 		if s.Files > 0 || s.Types > 0 {
 			sort.Strings(s.Calls)
