@@ -33,6 +33,7 @@ type Config struct {
 	AutoReview bool
 	// Switches for measuring what each part earns; see eval/run.py. All off in normal use.
 	NoRules, NoRAG, NoFacts, NoFilters bool
+	KnowledgeEntries                   int // bug patterns given to the model per file
 
 	ModelReview  bool // false: reviews run rules and analysers only; fixes and Ask still use the model
 	MaxFiles     int
@@ -66,15 +67,16 @@ func Load() Config {
 		NumCtx:       envInt("CODIST_NUM_CTX", 8192),
 		LLMTimeout:   10 * time.Minute,
 
-		AutoReview:   envBool("CODIST_AUTO_REVIEW", true),
-		ModelReview:  envBool("CODIST_MODEL_REVIEW", true),
-		NoRules:      envBool("CODIST_NO_RULES", false),
-		NoRAG:        envBool("CODIST_NO_RAG", false),
-		NoFacts:      envBool("CODIST_NO_FACTS", false),
-		NoFilters:    envBool("CODIST_NO_FILTERS", false),
-		MaxFiles:     envInt("CODIST_MAX_FILES", 8),
-		Tools:        env("CODIST_TOOLS", "auto"),
-		MaxFileLines: 600,
+		AutoReview:       envBool("CODIST_AUTO_REVIEW", true),
+		ModelReview:      envBool("CODIST_MODEL_REVIEW", true),
+		NoRules:          envBool("CODIST_NO_RULES", false),
+		NoRAG:            envBool("CODIST_NO_RAG", false),
+		KnowledgeEntries: envInt("CODIST_KNOWLEDGE_ENTRIES", 6),
+		NoFacts:          envBool("CODIST_NO_FACTS", false),
+		NoFilters:        envBool("CODIST_NO_FILTERS", false),
+		MaxFiles:         envInt("CODIST_MAX_FILES", 8),
+		Tools:            env("CODIST_TOOLS", "auto"),
+		MaxFileLines:     600,
 
 		Addr:   env("CODIST_ADDR", "127.0.0.1:"+env("PORT", "8080")),
 		WebDir: os.Getenv("CODIST_WEB_DIR"),

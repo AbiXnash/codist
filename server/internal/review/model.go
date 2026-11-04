@@ -36,6 +36,7 @@ type Review struct {
 	Model      string       `json:"model"`
 	StartedAt  int64        `json:"startedAt"`
 	FinishedAt int64        `json:"finishedAt"`
+	FileMs     int64        `json:"fileMs,omitempty"` // while running: how long a file usually takes on this machine
 	Summary    string       `json:"summary"`
 	Risk       string       `json:"risk"`
 	Highlights []string     `json:"highlights"`

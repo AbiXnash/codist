@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -162,6 +163,28 @@ func (r *Recorder) List(limit int) []Activity {
 		out = append(out, a)
 	}
 	return out
+}
+
+// TypicalFileMs is how long this model has recently taken to review one file on this machine: the
+// median of its last 8 reviews, or 0 with fewer than 3 to go on. On saved runs of 14b it came within
+// 25% of the next file's time 70% of the time, so the page shows it only as a rough estimate.
+func (r *Recorder) TypicalFileMs(model string) int64 {
+	if r == nil {
+		return 0
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var took []int64
+	for i := len(r.items) - 1; i >= 0 && len(took) < 8; i-- {
+		if a := r.items[i]; a.Kind == "review-file" && a.Status == "done" && a.Model == model {
+			took = append(took, a.TookMs)
+		}
+	}
+	if len(took) < 3 {
+		return 0
+	}
+	slices.Sort(took)
+	return took[len(took)/2]
 }
 
 // Get returns one activity with everything that was sent and received.

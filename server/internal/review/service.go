@@ -655,7 +655,7 @@ func (s *Service) modelPass(a Analysis, f gitx.FileChange, fr FileReview, in fil
 	}
 	var known []knowledge.Entry
 	if !s.cfg.NoRAG {
-		known = kb.Retrieve(f.NewPath, in.src, in.added, 6) // RAG: the bug patterns most like this code
+		known = kb.Retrieve(f.NewPath, in.src, in.added, s.cfg.KnowledgeEntries) // RAG: the bug patterns most like this code
 	}
 	prompt := s.fileContext(a, f, in, fr.Findings, known, build)
 

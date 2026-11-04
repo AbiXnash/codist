@@ -1233,3 +1233,22 @@ func TestWeighClaim(t *testing.T) {
 		}
 	}
 }
+
+func TestTypicalFileMs(t *testing.T) {
+	r := &Recorder{}
+	add := func(kind, status, model string, ms int64) {
+		r.items = append(r.items, &Activity{Kind: kind, Status: status, Model: model, TookMs: ms})
+	}
+	add("review-file", "done", "m", 100)
+	add("review-file", "done", "m", 300)
+	if got := r.TypicalFileMs("m"); got != 0 {
+		t.Errorf("two reviews are too few: %d", got)
+	}
+	add("review-file", "done", "m", 200)
+	add("review-file", "failed", "m", 9000)
+	add("review-commit", "done", "m", 9000)
+	add("review-file", "done", "other", 9000)
+	if got := r.TypicalFileMs("m"); got != 200 {
+		t.Errorf("median of the same model's finished file reviews: %d", got)
+	}
+}

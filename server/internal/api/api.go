@@ -449,6 +449,9 @@ func (s *Server) commit(w http.ResponseWriter, r *http.Request) {
 	if found, ok := s.Store.Get(a.Commit.SHA); ok {
 		issues := s.Tracker.Issues()
 		annotated := s.Tracker.Annotate(review.AssignGroups(s.Reviews.Ignores.Decorate(found)), issues)
+		if annotated.Status == "running" || annotated.Status == "queued" {
+			annotated.FileMs = review.Activities.TypicalFileMs(annotated.Model)
+		}
 		rv = annotated
 		ready := s.Fixer.Ready(found.SHA)
 		for _, fr := range annotated.Files {

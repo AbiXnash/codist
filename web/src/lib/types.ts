@@ -222,6 +222,7 @@ export interface FileReview {
 
 export interface Review {
   sha: string;
+  fileMs?: number;
   status: ReviewStatus;
   model: string;
   startedAt: number;

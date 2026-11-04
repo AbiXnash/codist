@@ -19,6 +19,13 @@
   const issues = $derived(app.issues);
   const done = $derived(review?.files.filter((f) => !f.pending).length ?? 0);
   const running = $derived(review?.status === 'running' || review?.status === 'queued');
+  // Only a rough guide: recent files on this machine, times the files still waiting for the model.
+  const timeLeft = $derived.by(() => {
+    const waiting = review?.files.filter((f) => f.pending).length ?? 0;
+    if (!review?.fileMs || !waiting) return '';
+    const min = Math.ceil((review.fileMs * waiting) / 60000);
+    return `about ${min} min left`;
+  });
   const worstOf = (g: FindingWithPath[]) => SEVERITIES.find((s) => g.some((f) => f.severity === s)) ?? 'info';
   // Low and info findings, and claims Codist could not back, wait behind one button so serious ones stand out.
   const isNote = (g: FindingWithPath[]) => worstOf(g) === 'low' || worstOf(g) === 'info';
@@ -119,7 +126,7 @@
       <div class="state" role="status">
         {#if running}
           <span class="spinner"></span>
-          <span>Reviewing, {done} of {files.length} files done</span>
+          <span>Reviewing, {done} of {files.length} files done{#if timeLeft}, {timeLeft}{/if}</span>
         {:else if !review}
           <span class="muted">Not reviewed yet</span>
           <button class="btn sm" onclick={() => requestReview(d.analysis.commit.sha)}>Review this commit</button>
