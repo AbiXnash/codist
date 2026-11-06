@@ -104,4 +104,5 @@ func (a *App) routes() {
 		a.web.Render(w, r, "home", "review", "Review", nil)
 	})
 	a.repoRoutes()
+	a.graphRoutes()
 }
