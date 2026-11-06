@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} · Codist</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body hx-boost="true">
+  <aside class="side">
+    <a class="brand" href="/">Codist</a>
+    <nav>
+      <a href="/" {{if eq .Nav "review"}}class="on" aria-current="page"{{end}}>Review</a>
+      <a href="/graph" {{if eq .Nav "graph"}}class="on" aria-current="page"{{end}}>Graph</a>
+      <a href="/incidents" {{if eq .Nav "incidents"}}class="on" aria-current="page"{{end}}>Incidents</a>
+      <a href="/repo" {{if eq .Nav "repo"}}class="on" aria-current="page"{{end}}>Repository</a>
+    </nav>
+    <div class="model" title="{{.ModelNote}}">
+      <i class="dot {{if .ModelOK}}ok{{end}}"></i>{{if .Model}}{{.Model}}{{else}}rules only{{end}}
+      {{if not .ModelOK}}<span class="faint">{{.ModelNote}}</span>{{end}}
+    </div>
+  </aside>
+  <main>
+    <header class="top">
+      <b>{{.Repo}}</b>
+      <span class="chip mono">{{.Branch}}</span>
+      <span class="mono faint">{{.Head}}</span>
+    </header>
+    <div id="content" class="content">
+      {{block "content" .}}{{end}}
+    </div>
+  </main>
+</body>
+</html>

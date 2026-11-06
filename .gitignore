@@ -1,11 +1,7 @@
-server/bin/
-web/node_modules/
-web/dist/
+/codist
+/bin/
+/dist/
+*.db
+*.db-wal
+*.db-shm
 .DS_Store
-.idea/
-server/internal/webui/dist/*
-!server/internal/webui/dist/.gitkeep
-dist/
-eval/results/
-__pycache__/
-research_notes/
