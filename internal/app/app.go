@@ -17,14 +17,16 @@ import (
 
 // App is one running Codist for one repository.
 type App struct {
-	cfg    config.Config
-	repo   *git.Repo
-	model  *model.Client
-	store  *store.Store
-	mux    *http.ServeMux
-	queue  *queue
-	events *hub
-	ctx    context.Context
+	cfg      config.Config
+	repo     *git.Repo
+	model    *model.Client
+	store    *store.Store
+	mux      *http.ServeMux
+	checks   *queue // code checks: fast, never wait for the model
+	models   *queue // the model, one commit at a time
+	events   *hub
+	shaLocks sync.Map
+	ctx      context.Context
 
 	mu        sync.RWMutex
 	modelOK   bool
@@ -43,18 +45,19 @@ func New(ctx context.Context, cfg config.Config, repo *git.Repo) (*App, error) {
 		return nil, err
 	}
 	a := &App{cfg: cfg, repo: repo, model: model.New(cfg.ModelURL, cfg.Model, cfg.ModelCtx), store: st,
-		mux: http.NewServeMux(), queue: newQueue(), events: newHub(), ctx: ctx}
+		mux: http.NewServeMux(), checks: newQueue(), models: newQueue(), events: newHub(), ctx: ctx}
 	a.modelOK, a.modelNote = a.model.Status(ctx)
 	a.routes()
 	go a.watchModel(ctx)
 	go a.index() // warm up, so the first graph is quick
-	go a.work(ctx)
+	go a.work(ctx, a.checks, false)
+	go a.work(ctx, a.models, true)
 	go a.watch(ctx)
 	return a, nil
 }
 
 // Handler serves the API and the interface.
-func (a *App) Handler() http.Handler { return a.mux }
+func (a *App) Handler() http.Handler { return gzipped(a.mux) }
 
 // Close stops background work.
 func (a *App) Close() { _ = a.store.Close() }

@@ -25,6 +25,7 @@ type Config struct {
 	ModelOff  bool   // review with rules only
 	PollMs    int    // how often to look for new commits
 	MaxFiles  int    // files per commit the model reviews; rules see all of them
+	History   int    // how many commits back the model reviews in the background; 0 means all
 	Ignore    []string
 	OpenPage  bool
 	FromLua   bool // a config.lua was found and read
@@ -108,6 +109,7 @@ func (c *Config) applyLua(src string) error {
 	str("addr", &c.Addr)
 	num("poll_ms", &c.PollMs)
 	num("max_files", &c.MaxFiles)
+	num("history", &c.History)
 	if t, ok := L.GetGlobal("ignore").(*lua.LTable); ok {
 		c.Ignore = nil
 		t.ForEach(func(_, v lua.LValue) {
@@ -132,6 +134,9 @@ func (c *Config) applyEnv() {
 	set("CODIST_MODEL", &c.Model)
 	if v := os.Getenv("PORT"); v != "" {
 		c.Addr = "127.0.0.1:" + v
+	}
+	if v, err := strconv.Atoi(os.Getenv("CODIST_HISTORY")); err == nil && v >= 0 {
+		c.History = v
 	}
 	if v, err := strconv.Atoi(os.Getenv("CODIST_POLL_MS")); err == nil && v > 0 {
 		c.PollMs = v

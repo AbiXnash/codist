@@ -57,10 +57,10 @@ func (a *App) commitInfo(sha string) (git.Commit, bool) {
 // reviewStatus is a commit's review state as the interface knows it.
 func (a *App) reviewStatus(sha string, reviews map[string]store.Review) string {
 	rv, ok := reviews[sha]
-	if ok && rv.Status == "running" {
+	if ok && rv.Status == "running" || a.models.running(sha) {
 		return "running"
 	}
-	if a.queue.waiting(sha) {
+	if a.models.waiting(sha) || a.checks.waiting(sha) {
 		return "queued"
 	}
 	if ok {
@@ -89,6 +89,9 @@ func (a *App) commits(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]any, 0, len(log))
 	for _, c := range log {
 		item := map[string]any{"commit": commitOf(c)}
+		if rv, ok := reviews[c.SHA]; ok && rv.Model != "" {
+			item["model"] = rv.Model
+		}
 		if st := a.reviewStatus(c.SHA, reviews); st != "" {
 			item["status"] = st
 		}
@@ -244,12 +247,14 @@ func category(rule, source string) string {
 
 func (a *App) reviewJSON(c git.Commit, changes []git.FileChange) any {
 	rv, ok := a.store.GetReview(c.SHA)
-	waiting := a.queue.waiting(c.SHA)
+	waiting := a.models.waiting(c.SHA) || a.checks.waiting(c.SHA)
 	if !ok && !waiting {
 		return nil
 	}
 	status := rv.Status
-	if waiting && status != "running" {
+	if a.models.running(c.SHA) {
+		status = "running"
+	} else if waiting && status != "running" {
 		status = "queued"
 	}
 	findings := a.store.Findings(c.SHA)
@@ -315,7 +320,7 @@ func (a *App) requestReview(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, http.StatusNotFound, "That commit is not in the repository.")
 		return
 	}
-	a.queue.push(job{sha: c.SHA, opt: review.Options{}}, true)
+	a.models.push(job{sha: c.SHA, opt: review.Options{}}, true)
 	a.events.publish("review", map[string]any{"sha": c.SHA, "status": "queued"})
 	web.JSON(w, map[string]any{"sha": c.SHA, "queued": true})
 }
@@ -347,7 +352,7 @@ func (a *App) issueJSON(is store.TrackedIssue) map[string]any {
 	cat := category(f.Rule, f.Source)
 	j := map[string]any{"id": is.Key, "state": is.State, "severity": f.Severity, "category": cat, "kind": kinds[cat], "urgency": urgency(f.Severity),
 		"title": f.Title, "detail": f.Detail, "suggestion": f.Suggestion, "source": source, "path": is.Path, "line": f.Line,
-		"snippet": f.Snippet, "firstSeen": is.FirstSHA, "lastSeen": f.SHA, "commits": orEmptyS(is.Commits), "reviewLine": f.Line}
+		"snippet": f.Snippet, "firstSeen": is.FirstSHA, "lastSeen": lastSeen(f.SHA, is.FirstSHA), "commits": orEmptyS(is.Commits), "reviewLine": f.Line}
 	if f.Rule != "" {
 		j["ref"] = f.Rule
 	}
@@ -390,4 +395,13 @@ func (a *App) setIssue(w http.ResponseWriter, r *http.Request, state string) {
 		return
 	}
 	web.JSON(w, map[string]string{"state": state})
+}
+
+// lastSeen is the commit an issue was last reported in. The first-run scan of the whole code is not
+// a commit, so its issues count as last seen where they started.
+func lastSeen(sha, first string) string {
+	if sha == review.BaselineSHA {
+		return first
+	}
+	return sha
 }

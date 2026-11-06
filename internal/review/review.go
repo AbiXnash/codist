@@ -173,3 +173,33 @@ func (r *Reviewer) resolve(sha string, changes []git.FileChange) {
 		}
 	}
 }
+
+// BaselineSHA names the first-run scan of the whole code, which is stored like a review.
+const BaselineSHA = "baseline"
+
+// Baseline checks every file in full and records what it finds as open issues, each credited to
+// the commit that last changed its line. It returns how many it found.
+func (r *Reviewer) Baseline(files map[string][]byte) (int, error) {
+	started := time.Now()
+	var findings []store.Finding
+	for path, src := range files {
+		if r.Ignored != nil && r.Ignored(path) {
+			continue
+		}
+		f := java.Parse(path, src)
+		for _, is := range java.Check(f, nil) {
+			fd := finding(BaselineSHA, path, f, is.Line, is.End, is.Severity, "rule", is.Rule, is.Title, is.Detail, is.Suggestion, "")
+			if c, ok := r.Repo.LastChange(path, is.Line); ok {
+				fd.FirstSHA = c.SHA
+			}
+			findings = append(findings, fd)
+		}
+	}
+	if err := r.Store.SetReview(store.Review{SHA: BaselineSHA, Status: "running", Started: started}); err != nil {
+		return 0, err
+	}
+	if err := r.Store.ReplaceFindings(BaselineSHA, findings); err != nil {
+		return 0, err
+	}
+	return len(findings), r.Store.SetReview(store.Review{SHA: BaselineSHA, Status: "done", Note: "Checked the whole code on first run.", Started: started, Finished: time.Now()})
+}

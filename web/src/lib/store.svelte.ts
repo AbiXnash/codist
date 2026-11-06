@@ -158,7 +158,7 @@ class AppState {
   featureOn = (name: string) => this.flags?.features[name] !== false;
   /** The centre of Review: how the code connects, or how the branches relate. */
   centre = $state<'code' | 'branches'>(prefStr('centre', ['code', 'branches'] as const, 'code'));
-  layoutMode = $state<'natural' | 'layers' | 'services'>(prefStr('layoutMode', ['natural', 'layers', 'services'] as const, 'natural'));
+  layoutMode = $state<'natural' | 'layers' | 'services'>(prefStr('layoutMode', ['natural', 'layers', 'services'] as const, 'services'));
   sizeBy = $state<'links' | 'lines' | 'issues'>(prefStr('sizeBy', ['links', 'lines', 'issues'] as const, 'links'));
   showLabels = $state(pref('labels', true));
   /** Analysis drawn over the graph. */

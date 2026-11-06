@@ -9,16 +9,16 @@ import (
 	"codist/internal/review"
 )
 
-// catchUp is how many recent unreviewed commits are checked at start. The model is slow on a
-// laptop, so catching up uses code checks only; the newest commit still gets the model.
-const catchUp = 30
+// Reviews run in two lanes. Code checks take milliseconds, so they have their own lane and never
+// wait behind the model. The model lane works through every commit, newest first, in the
+// background; new commits and reviews a person asks for go to the front.
 
 type job struct {
 	sha string
 	opt review.Options
 }
 
-// queue holds commits waiting for review, one worker at a time: there is one model.
+// queue holds commits waiting in one lane, worked one at a time.
 type queue struct {
 	mu      sync.Mutex
 	jobs    []job
@@ -29,12 +29,21 @@ type queue struct {
 
 func newQueue() *queue { return &queue{queued: map[string]bool{}, wake: make(chan struct{}, 1)} }
 
-// push adds a job; first puts it at the front, for a review a person asked for.
+// push adds a job; first puts it at the front. A job already waiting moves to the front when
+// pushed again with first.
 func (q *queue) push(j job, first bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.queued[j.sha] {
-		return
+		if !first || q.current == j.sha {
+			return
+		}
+		for i, x := range q.jobs {
+			if x.sha == j.sha {
+				q.jobs = append(q.jobs[:i], q.jobs[i+1:]...)
+				break
+			}
+		}
 	}
 	q.queued[j.sha] = true
 	if first {
@@ -67,52 +76,133 @@ func (q *queue) done(sha string) {
 	q.current = ""
 }
 
-// waiting says whether a commit is queued or being reviewed.
+// waiting says whether a commit is queued or being worked on in this lane.
 func (q *queue) waiting(sha string) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	return q.queued[sha]
 }
 
-func (a *App) work(ctx context.Context) {
+// running says whether this lane is working on the commit right now.
+func (q *queue) running(sha string) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.current == sha
+}
+
+// length is how many jobs are waiting.
+func (q *queue) length() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return len(q.jobs)
+}
+
+// lockSHA keeps the two lanes from writing the same commit's results at once.
+func (a *App) lockSHA(sha string) func() {
+	m, _ := a.shaLocks.LoadOrStore(sha, &sync.Mutex{})
+	mu := m.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
+
+// work runs one lane. The model lane waits while the model server is away instead of failing
+// every commit in the backlog.
+func (a *App) work(ctx context.Context, q *queue, model bool) {
 	for {
-		j, ok := a.queue.pop()
+		if model && !a.modelReady() {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(10 * time.Second):
+				continue
+			}
+		}
+		j, ok := q.pop()
 		if !ok {
 			select {
 			case <-ctx.Done():
 				return
-			case <-a.queue.wake:
+			case <-q.wake:
 				continue
 			}
 		}
 		start := time.Now()
-		a.events.publish("review", map[string]any{"sha": j.sha, "status": "running"})
-		status := "done"
-		if err := a.reviewer().Review(ctx, j.sha, j.opt); err != nil {
-			status = "failed"
-			slog.Warn("review failed", "sha", j.sha[:7], "err", err)
-		} else {
-			slog.Info("reviewed", "sha", j.sha[:7], "rulesOnly", j.opt.RulesOnly, "took", time.Since(start).Round(time.Millisecond))
+		if model {
+			a.events.publish("review", map[string]any{"sha": j.sha, "status": "running"})
 		}
-		a.queue.done(j.sha)
-		a.events.publish("review", map[string]any{"sha": j.sha, "status": status, "counts": a.store.Counts()[j.sha]})
+		var err error
+		if model {
+			unlock := a.lockSHA(j.sha)
+			err = a.reviewer(model).Review(ctx, j.sha, j.opt)
+			unlock()
+		} else if m, _ := a.shaLocks.LoadOrStore(j.sha, &sync.Mutex{}); m.(*sync.Mutex).TryLock() {
+			err = a.reviewer(model).Review(ctx, j.sha, j.opt)
+			m.(*sync.Mutex).Unlock()
+		} // otherwise the model is reviewing it, which runs the checks too: the fast lane moves on
+		q.done(j.sha)
+		status := "done"
+		if err != nil {
+			status = "failed"
+			slog.Warn("review failed", "sha", short(j.sha), "err", err)
+		} else {
+			slog.Info("reviewed", "sha", short(j.sha), "model", model, "took", time.Since(start).Round(time.Millisecond), "left", q.length())
+		}
+		a.events.publish("review", map[string]any{"sha": j.sha, "status": a.statusOf(j.sha, status), "counts": a.store.Counts()[j.sha]})
 	}
 }
 
-// watch queues recent unreviewed commits, then new ones as they arrive.
-func (a *App) watch(ctx context.Context) {
-	reviewed := a.store.Reviews()
-	log, _ := a.repo.Log(catchUp)
-	for i, c := range log {
-		if _, ok := reviewed[c.SHA]; ok {
-			continue
-		}
-		opt := review.Options{RulesOnly: true, Why: "Checked with code checks only while catching up. Review again for a model review."}
-		if i == 0 {
-			opt = review.Options{}
-		}
-		a.queue.push(job{sha: c.SHA, opt: opt}, false)
+func short(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
 	}
+	return sha
+}
+
+// statusOf is a commit's state after one lane finished: still queued if the other lane has it.
+func (a *App) statusOf(sha, finished string) string {
+	if a.models.running(sha) {
+		return "running"
+	}
+	if a.models.waiting(sha) || a.checks.waiting(sha) {
+		return "queued"
+	}
+	return finished
+}
+
+func (a *App) modelReady() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.modelOK && !a.cfg.ModelOff
+}
+
+// backlog queues what each lane still has to do: code checks for commits never reviewed, and the
+// model for commits it has not read yet. It runs at start, so a restart picks up where it stopped.
+func (a *App) backlog() {
+	reviews := a.store.Reviews()
+	log, _ := a.repo.LogRef("HEAD", a.historyLimit())
+	for _, c := range log { // newest first
+		rv, seen := reviews[c.SHA]
+		if !seen {
+			a.checks.push(job{sha: c.SHA, opt: review.Options{RulesOnly: true}}, false)
+		}
+		if !a.cfg.ModelOff && (!seen || rv.Model == "") {
+			a.models.push(job{sha: c.SHA}, false)
+		}
+	}
+	slog.Info("backlog", "checks", a.checks.length(), "model", a.models.length())
+}
+
+func (a *App) historyLimit() int {
+	if a.cfg.History > 0 {
+		return a.cfg.History
+	}
+	return 1_000_000
+}
+
+// watch queues the backlog, then each new commit at the front of both lanes.
+func (a *App) watch(ctx context.Context) {
+	a.baseline()
+	a.backlog()
 	last := a.repo.Head()
 	for {
 		select {
@@ -125,7 +215,7 @@ func (a *App) watch(ctx context.Context) {
 			continue
 		}
 		recent, _ := a.repo.Log(50)
-		var fresh []string
+		fresh := []string{}
 		for _, c := range recent {
 			if c.SHA == last {
 				break
@@ -134,28 +224,50 @@ func (a *App) watch(ctx context.Context) {
 				fresh = append(fresh, c.SHA)
 			}
 		}
-		for _, sha := range fresh { // newest first
-			a.queue.push(job{sha: sha}, false)
+		for i := len(fresh) - 1; i >= 0; i-- { // pushing to the front in reverse keeps the newest first
+			a.checks.push(job{sha: fresh[i], opt: review.Options{RulesOnly: true}}, true)
+			if !a.cfg.ModelOff {
+				a.models.push(job{sha: fresh[i]}, true)
+			}
 		}
 		last = head
 		go func() {
 			a.index() // rebuild the graph for the new code before telling the pages
 			a.events.publish("graph", map[string]string{"head": head})
 		}()
-		if fresh == nil {
-			fresh = []string{}
-		}
 		a.events.publish("commits", map[string]any{"head": head, "new": fresh})
 	}
 }
 
-func (a *App) reviewer() *review.Reviewer {
+func (a *App) reviewer(model bool) *review.Reviewer {
 	r := &review.Reviewer{Repo: a.repo, Store: a.store, MaxFiles: a.cfg.MaxFiles, Ignored: a.cfg.Ignored}
-	a.mu.RLock()
-	ok := a.modelOK
-	a.mu.RUnlock()
-	if !a.cfg.ModelOff && ok {
+	if model && a.modelReady() {
 		r.Model = a.model
 	}
 	return r
+}
+
+// baseline checks the whole code once, the first time Codist runs on a repository, so problems
+// already in the code show as issues and not only those in commits it reviews. Each is credited to
+// the commit that last changed its line.
+func (a *App) baseline() {
+	if _, done := a.store.GetReview(review.BaselineSHA); done {
+		return
+	}
+	start := time.Now()
+	ix := a.index()
+	files := map[string][]byte{}
+	for _, t := range ix.Types {
+		if _, ok := files[t.File]; !ok {
+			if src, ok := a.source(t.File, ""); ok {
+				files[t.File] = src
+			}
+		}
+	}
+	n, err := a.reviewer(false).Baseline(files)
+	if err != nil {
+		slog.Warn("baseline failed", "err", err)
+		return
+	}
+	slog.Info("baseline", "files", len(files), "issues", n, "took", time.Since(start).Round(time.Millisecond))
 }

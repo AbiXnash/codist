@@ -99,6 +99,7 @@ type Finding struct {
 	Detail, Suggestion, Snippet   string
 	Doubt, Key                    string
 	State                         string // filled when read: open or resolved
+	FirstSHA                      string // the commit the issue started in, when not this one (the first-run scan)
 }
 
 // SetReview creates or updates a review.
@@ -173,8 +174,12 @@ func (s *Store) ReplaceFindings(sha string, fs []Finding) error {
 			f.Detail, f.Suggestion, f.Snippet, f.Doubt, f.Key); err != nil {
 			return err
 		}
+		first := sha
+		if f.FirstSHA != "" {
+			first = f.FirstSHA
+		}
 		if _, err := tx.Exec(`INSERT INTO issues (key, path, first_sha, rule, snippet, state) VALUES (?,?,?,?,?, 'open') ON CONFLICT(key) DO NOTHING`,
-			f.Key, f.Path, sha, f.Rule, f.Snippet); err != nil {
+			f.Key, f.Path, first, f.Rule, f.Snippet); err != nil {
 			return err
 		}
 	}
