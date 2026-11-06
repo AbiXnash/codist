@@ -56,15 +56,16 @@ func (a *App) commitInfo(sha string) (git.Commit, bool) {
 
 // reviewStatus is a commit's review state as the interface knows it.
 func (a *App) reviewStatus(sha string, reviews map[string]store.Review) string {
+	// A commit whose checks are done shows their result; the model reading it later is shown in the
+	// review itself, so a long backlog does not hide every result behind "queued".
 	rv, ok := reviews[sha]
-	if ok && rv.Status == "running" || a.models.running(sha) {
+	switch {
+	case a.models.running(sha) || ok && rv.Status == "running":
 		return "running"
-	}
-	if a.models.waiting(sha) || a.checks.waiting(sha) {
-		return "queued"
-	}
-	if ok {
+	case ok:
 		return rv.Status
+	case a.models.waiting(sha) || a.checks.waiting(sha):
+		return "queued"
 	}
 	return ""
 }
@@ -252,10 +253,14 @@ func (a *App) reviewJSON(c git.Commit, changes []git.FileChange) any {
 		return nil
 	}
 	status := rv.Status
-	if a.models.running(c.SHA) {
+	note := rv.Note
+	switch {
+	case a.models.running(c.SHA):
 		status = "running"
-	} else if waiting && status != "running" {
+	case !ok:
 		status = "queued"
+	case a.models.waiting(c.SHA):
+		note = strings.TrimSpace(note + " Code checks are done; the model has not read this commit yet and will in the background.")
 	}
 	findings := a.store.Findings(c.SHA)
 	issues := map[string]store.TrackedIssue{}
@@ -307,7 +312,7 @@ func (a *App) reviewJSON(c git.Commit, changes []git.FileChange) any {
 		files = append(files, map[string]any{"path": ch.Path, "summary": "", "findings": fs, "pending": status == "running" || status == "queued"})
 	}
 	out := map[string]any{"sha": c.SHA, "status": status, "model": rv.Model, "startedAt": ms(rv.Started), "finishedAt": ms(rv.Finished),
-		"summary": rv.Note, "risk": "", "highlights": []string{}, "files": files}
+		"summary": note, "risk": "", "highlights": []string{}, "files": files}
 	if rv.Status == "failed" {
 		out["error"] = rv.Note
 	}
