@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -57,6 +58,15 @@ func TestLogAndChanges(t *testing.T) {
 	}
 	if c, ok := r.LastChange("A.java", 5); !ok || c.SHA != log[0].SHA {
 		t.Errorf("blame: %+v", c)
+	}
+	if all := r.ReadAll(log[1].SHA, []string{"A.java", "missing.java"}); len(all) != 1 || !strings.Contains(string(all["A.java"]), "return 1;") {
+		t.Errorf("ReadAll: %q", all)
+	}
+	if refs := r.Refs(); len(refs) != 1 || refs[0].SHA != log[0].SHA || r.Resolve(refs[0].Name) != log[0].SHA {
+		t.Errorf("refs: %+v", refs)
+	}
+	if r.Authors("HEAD")["T"] != 2 || r.CountRef("HEAD") != 2 {
+		t.Error("authors or count wrong")
 	}
 	if r.Count() != 2 || r.Churn(10)["A.java"] != 2 {
 		t.Error("count or churn wrong")

@@ -337,3 +337,100 @@ func (s *Store) Incidents() []Incident {
 	}
 	return out
 }
+
+// Issue is an open issue with where it was last seen.
+type Issue struct {
+	Key, Path, Severity, Title, Source, Rule, FirstSHA string
+	Line                                               int
+}
+
+// OpenIssueList lists every open issue, most severe first, each with its latest finding.
+func (s *Store) OpenIssueList() []Issue {
+	rows, err := s.db.Query(`SELECT i.key, i.path, f.line, f.severity, f.title, f.source, f.rule, i.first_sha
+		FROM issues i JOIN findings f ON f.id = (SELECT MAX(id) FROM findings WHERE key = i.key)
+		WHERE i.state = 'open'
+		ORDER BY CASE f.severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END, i.path, f.line`)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out []Issue
+	for rows.Next() {
+		var is Issue
+		if rows.Scan(&is.Key, &is.Path, &is.Line, &is.Severity, &is.Title, &is.Source, &is.Rule, &is.FirstSHA) == nil {
+			out = append(out, is)
+		}
+	}
+	return out
+}
+
+// TrackedIssue is an issue in any state, with its latest finding and the commits that reported it.
+type TrackedIssue struct {
+	Key, Path, State, FirstSHA, FixedSHA string
+	Latest                               Finding
+	Commits                              []string
+}
+
+// AllIssues lists every issue, most severe first.
+func (s *Store) AllIssues() []TrackedIssue {
+	rows, err := s.db.Query(`SELECT i.key, i.path, i.state, i.first_sha, i.fixed_sha,
+		f.id, f.sha, f.line, f.end_line, f.severity, f.source, f.rule, f.title, f.detail, f.suggestion, f.snippet, f.doubt
+		FROM issues i JOIN findings f ON f.id = (SELECT MAX(id) FROM findings WHERE key = i.key)
+		ORDER BY CASE f.severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END, i.path, f.line`)
+	if err != nil {
+		return nil
+	}
+	var out []TrackedIssue
+	byKey := map[string]int{}
+	for rows.Next() {
+		var t TrackedIssue
+		f := &t.Latest
+		if rows.Scan(&t.Key, &t.Path, &t.State, &t.FirstSHA, &t.FixedSHA, &f.ID, &f.SHA, &f.Line, &f.EndLine, &f.Severity, &f.Source,
+			&f.Rule, &f.Title, &f.Detail, &f.Suggestion, &f.Snippet, &f.Doubt) == nil {
+			f.Key, f.Path, f.State = t.Key, t.Path, t.State
+			byKey[t.Key] = len(out)
+			out = append(out, t)
+		}
+	}
+	rows.Close()
+	if shas, err := s.db.Query(`SELECT DISTINCT key, sha FROM findings`); err == nil {
+		defer shas.Close()
+		for shas.Next() {
+			var k, sha string
+			if shas.Scan(&k, &sha) == nil {
+				if i, ok := byKey[k]; ok {
+					out[i].Commits = append(out[i].Commits, sha)
+				}
+			}
+		}
+	}
+	return out
+}
+
+// SetIssueState marks an issue open or resolved by hand. A manual fix has no commit.
+func (s *Store) SetIssueState(key, state string) error {
+	fixed := ""
+	if state == "resolved" {
+		fixed = "manual"
+	}
+	res, err := s.db.Exec(`UPDATE issues SET state=?, fixed_sha=? WHERE key=?`, state, fixed, key)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("no issue %s", key)
+	}
+	return nil
+}
+
+// DeleteIncident removes an incident.
+func (s *Store) DeleteIncident(id int64) error {
+	_, err := s.db.Exec(`DELETE FROM incidents WHERE id=?`, id)
+	return err
+}
+
+// SetIncidentTitle renames an incident.
+func (s *Store) SetIncidentTitle(id int64, title string) error {
+	_, err := s.db.Exec(`UPDATE incidents SET title=? WHERE id=?`, title, id)
+	return err
+}

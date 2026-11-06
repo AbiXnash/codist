@@ -4,8 +4,9 @@ Codist reviews a Java and Spring Boot repository on your own machine. It has fou
 
 - **Review**: every new commit is checked on its changed lines, then read by a local model. Each model claim is
   checked against the code before it is shown, and issues are followed until a later commit fixes them.
-- **Graph**: services and the calls between them, then the classes in a service by layer, then a class's methods
-  with what calls them and what they call.
+- **Graph**: one canvas with four levels (microservice, service, layer, method), class roles as shapes, issues as
+  rings, the selected commit's changes and their impact, filters, a legend, elastic dragging and a right-click menu
+  for blast radius, paths and isolating a class.
 - **Incidents**: paste production logs to see each error, the line of your code it came from, and the commit
   that last changed that line. The model can suggest a cause.
 - **Repository**: modules, HTTP routes, Feign calls, hotspots, the largest classes and methods that may be slow.
@@ -45,5 +46,10 @@ The script runs with no file, network or OS access. Environment variables overri
 
 ## Build
 
-`make build` makes `bin/codist`; `make dist` makes one file each for macOS, Linux and Windows. No C compiler is
-needed. `make test` runs the tests. Data is kept in `~/.codist/<repo>.db`, a SQLite file.
+`make build` builds the interface in `web/` (Svelte; needs Node) and embeds it in `bin/codist`; `make dist` makes
+one file each for macOS, Linux and Windows. No C compiler is needed, and people who run Codist need neither Node nor
+Go. `make dev` runs the server with a live-reloading interface. `make test` runs the tests. Data is kept in
+`~/.codist/<repo>.db`, a SQLite file.
+
+The branch picker in the top bar shows any local or remote branch read-only: its commits, graph and repository
+report, read from git, while your checkout stays as it is.

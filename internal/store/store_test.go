@@ -30,11 +30,23 @@ func TestReviewsFindingsAndIssues(t *testing.T) {
 	if s.OpenByFile()["A.java"] != 2 || len(s.OpenIssues("A.java")) != 2 {
 		t.Error("issues not recorded")
 	}
+	if list := s.OpenIssueList(); len(list) != 2 || list[0].Title != "High one" || list[0].Line != 9 {
+		t.Errorf("open issue list: %+v", list)
+	}
 	if err := s.Resolve([]string{"k1"}, "b"); err != nil {
 		t.Fatal(err)
 	}
 	if s.OpenByFile()["A.java"] != 1 || s.Findings("a")[1].State != "resolved" {
 		t.Error("resolve did not stick")
+	}
+	if all := s.AllIssues(); len(all) != 2 || all[1].State != "resolved" || all[1].FixedSHA != "b" || len(all[0].Commits) != 1 {
+		t.Errorf("all issues: %+v", all)
+	}
+	if err := s.SetIssueState("k2", "resolved"); err != nil || s.OpenByFile()["A.java"] != 0 {
+		t.Errorf("manual resolve: %v", err)
+	}
+	if err := s.SetIssueState("nope", "open"); err == nil {
+		t.Error("unknown issue accepted")
 	}
 	if err := s.ReplaceFindings("a", fs[:1]); err != nil || len(s.Findings("a")) != 1 {
 		t.Error("replacing findings failed")

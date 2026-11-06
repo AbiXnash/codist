@@ -84,8 +84,11 @@ func (r *Repo) Branch() string {
 const sep, end = "\x1f", "\x1e"
 
 // Log lists up to limit commits reachable from HEAD, newest first.
-func (r *Repo) Log(limit int) ([]Commit, error) {
-	out, err := r.run("log", "-n", strconv.Itoa(limit), "--format=%H"+sep+"%an"+sep+"%at"+sep+"%P"+sep+"%s"+sep+"%b"+end)
+func (r *Repo) Log(limit int) ([]Commit, error) { return r.LogRef("HEAD", limit) }
+
+// LogRef lists up to limit commits reachable from ref, newest first.
+func (r *Repo) LogRef(ref string, limit int) ([]Commit, error) {
+	out, err := r.run("log", "-n", strconv.Itoa(limit), "--format=%H"+sep+"%an"+sep+"%at"+sep+"%P"+sep+"%s"+sep+"%b"+end, ref, "--")
 	if err != nil {
 		return nil, err
 	}
@@ -236,4 +239,126 @@ func (r *Repo) Count() int {
 	}
 	n, _ := strconv.Atoi(strings.TrimSpace(out))
 	return n
+}
+
+// Resolve turns a branch name or commit into a full commit id, or "" if there is none.
+func (r *Repo) Resolve(ref string) string {
+	out, err := r.run("rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+// ReadAll reads many files at one commit through a single git process, which is far faster than
+// one process per file. Files that do not exist are left out.
+func (r *Repo) ReadAll(ref string, paths []string) map[string][]byte {
+	out := map[string][]byte{}
+	if len(paths) == 0 {
+		return out
+	}
+	cmd := exec.Command("git", "-C", r.Root, "cat-file", "--batch")
+	var in bytes.Buffer
+	for _, p := range paths {
+		in.WriteString(ref + ":" + p + "\n")
+	}
+	cmd.Stdin = &in
+	raw, err := cmd.Output()
+	if err != nil {
+		return out
+	}
+	for _, p := range paths {
+		nl := bytes.IndexByte(raw, '\n')
+		if nl < 0 {
+			break
+		}
+		header := strings.Fields(string(raw[:nl]))
+		raw = raw[nl+1:]
+		if len(header) < 3 || header[1] != "blob" {
+			continue // "missing" has no body
+		}
+		size, _ := strconv.Atoi(header[2])
+		if size > len(raw) {
+			break
+		}
+		out[p] = raw[:size]
+		raw = raw[min(size+1, len(raw)):]
+	}
+	return out
+}
+
+// Ref is a branch, local or remote.
+type Ref struct {
+	Name    string    `json:"name"`
+	Remote  bool      `json:"remote"`
+	SHA     string    `json:"sha"`
+	Message string    `json:"message"`
+	By      string    `json:"by"`
+	At      time.Time `json:"-"`
+}
+
+// Refs lists local and remote branches, most recently changed first.
+func (r *Repo) Refs() []Ref {
+	out, err := r.run("for-each-ref", "--sort=-committerdate", "--format=%(refname)"+sep+"%(objectname)"+sep+"%(subject)"+sep+"%(authorname)"+sep+"%(committerdate:unix)", "refs/heads", "refs/remotes")
+	if err != nil {
+		return nil
+	}
+	var refs []Ref
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		f := strings.Split(line, sep)
+		if len(f) < 5 || strings.HasSuffix(f[0], "/HEAD") {
+			continue
+		}
+		at, _ := strconv.ParseInt(f[4], 10, 64)
+		name, remote := strings.TrimPrefix(f[0], "refs/heads/"), strings.HasPrefix(f[0], "refs/remotes/")
+		if remote {
+			name = strings.TrimPrefix(f[0], "refs/remotes/")
+		}
+		refs = append(refs, Ref{Name: name, Remote: remote, SHA: f[1], Message: f[2], By: f[3], At: time.Unix(at, 0)})
+	}
+	return refs
+}
+
+// Authors counts commits per author on ref.
+func (r *Repo) Authors(ref string) map[string]int {
+	out, err := r.run("shortlog", "-sn", "--no-merges", ref, "--")
+	counts := map[string]int{}
+	if err != nil {
+		return counts
+	}
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		n, name, ok := strings.Cut(strings.TrimSpace(line), "\t")
+		if c, err := strconv.Atoi(strings.TrimSpace(n)); ok && err == nil {
+			counts[strings.TrimSpace(name)] = c
+		}
+	}
+	return counts
+}
+
+// CountRef is how many commits ref has.
+func (r *Repo) CountRef(ref string) int {
+	out, err := r.run("rev-list", "--count", ref, "--")
+	if err != nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(strings.TrimSpace(out))
+	return n
+}
+
+// LogFile lists up to limit commits that changed one file, newest first.
+func (r *Repo) LogFile(path string, limit int) []Commit {
+	out, err := r.run("log", "-n", strconv.Itoa(limit), "--format=%H"+sep+"%an"+sep+"%at"+sep+"%P"+sep+"%s"+sep+"%b"+end, "HEAD", "--", path)
+	if err != nil {
+		return nil
+	}
+	var cs []Commit
+	for _, rec := range strings.Split(out, end) {
+		f := strings.Split(strings.TrimLeft(rec, "\n"), sep)
+		if len(f) < 6 {
+			continue
+		}
+		at, _ := strconv.ParseInt(f[2], 10, 64)
+		cs = append(cs, Commit{SHA: f[0], Short: f[0][:min(7, len(f[0]))], Author: f[1], Time: time.Unix(at, 0), Parents: strings.Fields(f[3]), Subject: f[4], Body: strings.TrimSpace(f[5])})
+	}
+	return cs
 }

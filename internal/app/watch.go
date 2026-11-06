@@ -86,12 +86,16 @@ func (a *App) work(ctx context.Context) {
 			}
 		}
 		start := time.Now()
+		a.events.publish("review", map[string]any{"sha": j.sha, "status": "running"})
+		status := "done"
 		if err := a.reviewer().Review(ctx, j.sha, j.opt); err != nil {
+			status = "failed"
 			slog.Warn("review failed", "sha", j.sha[:7], "err", err)
 		} else {
 			slog.Info("reviewed", "sha", j.sha[:7], "rulesOnly", j.opt.RulesOnly, "took", time.Since(start).Round(time.Millisecond))
 		}
 		a.queue.done(j.sha)
+		a.events.publish("review", map[string]any{"sha": j.sha, "status": status, "counts": a.store.Counts()[j.sha]})
 	}
 }
 
@@ -134,6 +138,14 @@ func (a *App) watch(ctx context.Context) {
 			a.queue.push(job{sha: sha}, false)
 		}
 		last = head
+		go func() {
+			a.index() // rebuild the graph for the new code before telling the pages
+			a.events.publish("graph", map[string]string{"head": head})
+		}()
+		if fresh == nil {
+			fresh = []string{}
+		}
+		a.events.publish("commits", map[string]any{"head": head, "new": fresh})
 	}
 }
 

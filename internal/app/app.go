@@ -1,4 +1,4 @@
-// Package app wires the parts together: repository, settings, model and pages.
+// Package app wires the parts together and serves the API the interface reads.
 package app
 
 import (
@@ -17,83 +17,107 @@ import (
 
 // App is one running Codist for one repository.
 type App struct {
-	cfg   config.Config
-	repo  *git.Repo
-	model *model.Client
-	web   *web.Server
-	store *store.Store
+	cfg    config.Config
+	repo   *git.Repo
+	model  *model.Client
+	store  *store.Store
+	mux    *http.ServeMux
+	queue  *queue
+	events *hub
+	ctx    context.Context
 
 	mu        sync.RWMutex
 	modelOK   bool
 	modelNote string
+	view      string // a branch being looked at without checking it out, or "" for the checked-out one
 
-	queue *queue
-
-	ixMu   sync.Mutex
-	ix     *java.Index
-	ixHead string
+	ixMu  sync.Mutex
+	ix    *java.Index
+	ixSHA string
 }
 
-// New starts everything that runs in the background and registers the pages.
+// New starts everything that runs in the background and registers the API.
 func New(ctx context.Context, cfg config.Config, repo *git.Repo) (*App, error) {
-	a := &App{cfg: cfg, repo: repo, model: model.New(cfg.ModelURL, cfg.Model, cfg.ModelCtx), queue: newQueue()}
 	st, err := store.Open(cfg.DataDir, base(repo.Root))
 	if err != nil {
 		return nil, err
 	}
-	a.store = st
-	srv, err := web.New(a.shell)
-	if err != nil {
-		return nil, err
-	}
-	a.web = srv
+	a := &App{cfg: cfg, repo: repo, model: model.New(cfg.ModelURL, cfg.Model, cfg.ModelCtx), store: st,
+		mux: http.NewServeMux(), queue: newQueue(), events: newHub(), ctx: ctx}
+	a.modelOK, a.modelNote = a.model.Status(ctx)
 	a.routes()
-	ok, note := a.model.Status(ctx) // know before the first review whether the model can be used
-	a.modelOK, a.modelNote = ok, note
 	go a.watchModel(ctx)
-	go a.index() // warm up, so the first page is quick
+	go a.index() // warm up, so the first graph is quick
 	go a.work(ctx)
 	go a.watch(ctx)
 	return a, nil
 }
 
-// Handler serves the pages.
-func (a *App) Handler() http.Handler { return a.web }
+// Handler serves the API and the interface.
+func (a *App) Handler() http.Handler { return a.mux }
 
 // Close stops background work.
-func (a *App) Close() {
-	if a.store != nil {
-		_ = a.store.Close()
-	}
+func (a *App) Close() { _ = a.store.Close() }
+
+func (a *App) routes() {
+	h := a.mux.HandleFunc
+	h("GET /api/status", a.status)
+	h("GET /api/features", a.features)
+	h("GET /api/events", a.events.serve)
+	h("GET /api/refs", a.refs)
+	h("POST /api/refs/follow", a.follow)
+	h("GET /api/file", a.file)
+	h("GET /api/working", a.working)
+	h("GET /api/graph", a.graph)
+	h("GET /api/graph/calls", a.calls)
+	h("GET /api/commits", a.commits)
+	h("GET /api/commits/{sha}", a.commit)
+	h("GET /api/commits/{sha}/impact", a.impact)
+	h("POST /api/commits/{sha}/review", a.requestReview)
+	h("GET /api/issues", a.issues)
+	h("POST /api/issues/{id}/resolve", a.resolveIssue)
+	h("DELETE /api/issues/{id}/resolve", a.reopenIssue)
+	h("GET /api/repo", a.repoReport)
+	h("GET /api/incidents", a.incidents)
+	h("POST /api/incidents", a.createIncident)
+	h("GET /api/incidents/{id}", a.incident)
+	h("PUT /api/incidents/{id}", a.updateIncident)
+	h("DELETE /api/incidents/{id}", a.deleteIncident)
+	a.mux.Handle("/api/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		web.Error(w, http.StatusNotFound, "This part of Codist is not in this version.")
+	}))
+	a.mux.Handle("/", web.UI())
 }
 
-func (a *App) shell() web.Shell {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	head := a.repo.Head()
-	if len(head) > 7 {
-		head = head[:7]
-	}
-	s := web.Shell{Repo: base(a.repo.Root), Branch: a.repo.Branch(), Head: head, Model: a.cfg.Model, ModelOK: a.modelOK, ModelNote: a.modelNote}
-	if a.cfg.ModelOff {
-		s.Model, s.ModelOK, s.ModelNote = "", true, "model review is off"
-	}
-	return s
-}
-
-// watchModel checks the model server now and every 30 seconds, so the page says when it goes away.
+// watchModel checks the model server now and every 30 seconds, so the interface says when it goes away.
 func (a *App) watchModel(ctx context.Context) {
 	for {
-		ok, note := a.model.Status(ctx)
-		a.mu.Lock()
-		a.modelOK, a.modelNote = ok, note
-		a.mu.Unlock()
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(30 * time.Second):
 		}
+		ok, note := a.model.Status(ctx)
+		a.mu.Lock()
+		a.modelOK, a.modelNote = ok, note
+		a.mu.Unlock()
 	}
+}
+
+// viewRef is what the interface shows: the branch being viewed, or HEAD.
+func (a *App) viewRef() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.view != "" {
+		return a.view
+	}
+	return "HEAD"
+}
+
+func (a *App) viewing() bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.view != ""
 }
 
 func base(p string) string {
@@ -105,9 +129,9 @@ func base(p string) string {
 	return p
 }
 
-func (a *App) routes() {
-	a.reviewRoutes()
-	a.repoRoutes()
-	a.graphRoutes()
-	a.incidentRoutes()
+func ms(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.UnixMilli()
 }
