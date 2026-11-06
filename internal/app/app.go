@@ -109,4 +109,5 @@ func (a *App) routes() {
 	a.reviewRoutes()
 	a.repoRoutes()
 	a.graphRoutes()
+	a.incidentRoutes()
 }

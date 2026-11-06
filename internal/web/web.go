@@ -58,6 +58,7 @@ var funcs = template.FuncMap{
 	},
 	"add":   func(a, b int) int { return a + b },
 	"sevs":  func() []string { return []string{"critical", "high", "medium", "low", "info"} },
+	"split": strings.Split,
 	"thous": thousands,
 	"pct": func(a, b int) int {
 		if b == 0 {

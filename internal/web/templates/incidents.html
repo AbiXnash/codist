@@ -1,0 +1,23 @@
+{{define "content"}}
+<div class="page">
+  <header>
+    <h1>Incidents</h1>
+    <p>Paste production logs. Codist finds the Java errors, groups repeats, and shows the line of your code each one
+      came from with the commit that last changed it. The model can then explain the likely cause.</p>
+  </header>
+  <form class="card incident-form" method="post" action="/incidents" hx-boost="false">
+    <h2>New incident</h2>
+    <label class="small muted" for="title">Title (optional; the main error is used if empty)</label>
+    <input type="text" id="title" name="title" placeholder="Orders fail at checkout">
+    <label class="small muted" for="logs">Logs</label>
+    <textarea id="logs" name="logs" required placeholder="Paste the log lines with the stack traces…"></textarea>
+    <div><button class="btn" type="submit">Analyse</button></div>
+  </form>
+  <section class="card">
+    <h2>Earlier incidents</h2>
+    {{with .Data.List}}
+    <table class="tbl">{{range .}}<tr><td><a href="/incidents/{{.ID}}">{{.Title}}</a></td><td class="num faint">{{ago .Created}}</td></tr>{{end}}</table>
+    {{else}}<p class="faint">None yet.</p>{{end}}
+  </section>
+</div>
+{{end}}
