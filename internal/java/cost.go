@@ -10,11 +10,11 @@ import (
 
 // Cost is estimated by reading a method, not by running it.
 type Cost struct {
-	Complexity int    `json:"complexity"` // paths through the method: branches + 1
-	LoopDepth  int    `json:"loopDepth"`  // deepest loop nesting
-	DBCalls    int    `json:"dbCalls"`    // repository or JDBC calls
-	Remote     int    `json:"remote"`     // HTTP, Feign and messaging calls
-	LoopIO     int    `json:"loopIo"`     // of those, how many repeat inside a loop
+	Complexity int    `json:"complexity"`  // paths through the method: branches + 1
+	LoopDepth  int    `json:"loopDepth"`   // deepest loop nesting
+	DBCalls    int    `json:"dbCalls"`     // repository or JDBC calls
+	Remote     int    `json:"remoteCalls"` // HTTP, Feign and messaging calls
+	LoopIO     int    `json:"loopIo"`      // of those, how many repeat inside a loop
 	Lines      int    `json:"lines"`
 	Params     int    `json:"params"`
 	Estimate   string `json:"estimate"` // O(1), O(n), O(n²), O(n) round trips

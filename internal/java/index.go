@@ -41,6 +41,7 @@ type Index struct {
 	Links   []Link
 	Lines   int
 	Files   int
+	Sources map[string][]byte // the Java files, kept for the call graph
 }
 
 var buildFiles = []string{"pom.xml", "build.gradle", "build.gradle.kts"}
@@ -48,7 +49,7 @@ var buildFiles = []string{"pom.xml", "build.gradle", "build.gradle.kts"}
 // Build parses every Java file in sources (path to content) and resolves calls between them.
 // other holds the non-Java files that matter: build files and Spring configuration.
 func Build(sources map[string][]byte, other map[string][]byte) *Index {
-	ix := &Index{ByID: map[string]*Type{}, byName: map[string][]*Type{}}
+	ix := &Index{ByID: map[string]*Type{}, byName: map[string][]*Type{}, Sources: sources}
 	dirs := map[string]*Module{}
 	for p := range other {
 		for _, b := range buildFiles {
@@ -383,4 +384,53 @@ func (ix *Index) Callers(target string) []Link {
 		}
 	}
 	return out
+}
+
+// Resolve finds the class a simple name means inside from, the way the first Codist did: an
+// import names it exactly; otherwise the same package, then wildcard imports, then a class nested
+// in this package, then the only class of that name. Classes outside the project resolve to "".
+func (ix *Index) Resolve(simple string, from *Type) string {
+	if simple == "" {
+		return ""
+	}
+	for _, imp := range from.Imports {
+		if strings.HasSuffix(imp, "."+simple) {
+			if ix.ByID[imp] != nil {
+				return imp
+			}
+			return ""
+		}
+	}
+	cands := ix.byName[simple]
+	if len(cands) == 0 {
+		return ""
+	}
+	if t := ix.ByID[from.Package+"."+simple]; t != nil {
+		return t.ID
+	}
+	for _, imp := range from.Imports {
+		if star, ok := strings.CutSuffix(imp, ".*"); ok {
+			if t := ix.ByID[star+"."+simple]; t != nil {
+				return t.ID
+			}
+		}
+	}
+	for _, c := range cands { // a nested class in this package
+		if rest, ok := strings.CutPrefix(c.ID, from.Package+"."); ok && strings.Contains(rest, ".") {
+			return c.ID
+		}
+	}
+	if len(cands) == 1 {
+		return cands[0].ID
+	}
+	var same []*Type
+	for _, c := range cands {
+		if c.Module == from.Module {
+			same = append(same, c)
+		}
+	}
+	if len(same) == 1 {
+		return same[0].ID
+	}
+	return ""
 }

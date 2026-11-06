@@ -23,7 +23,11 @@ type Type struct {
 	Kind        string     `json:"kind"`
 	Stereotype  string     `json:"stereotype"` // controller, service, repository, client, entity, config, component, test, other
 	Annotations []string   `json:"annotations"`
-	Extends     []string   `json:"extends"`
+	Extends     []string   `json:"extends"`    // base types of the superclass and of interfaces an interface extends
+	Implements  []string   `json:"implements"` // base types of interfaces a class implements
+	Uses        []string   `json:"-"`          // every type named in the declaration, and upper-case call receivers
+	Injected    []string   `json:"-"`          // types Spring injects: constructor parameters and injected fields
+	Abstract    bool       `json:"-"`
 	Fields      []Field    `json:"fields"`
 	Methods     []Method   `json:"methods"`
 	Endpoints   []Endpoint `json:"endpoints"`
@@ -36,7 +40,11 @@ type Type struct {
 type Field struct {
 	Name, Type string
 	Line       int
-	Value      string // literal value of a constant, if any
+	End        int
+	Value      string // literal value of a static final constant, if any
+	Signature  string // the declaration as written, without its value: "private static final Logger log"
+	Names      string // all names declared together: "a, b"
+	Component  bool   // a record component, which the graph does not list as a member
 }
 
 // Method is a method or constructor.
@@ -47,6 +55,7 @@ type Method struct {
 	Params      []Field `json:"params"`
 	Returns     string  `json:"returns"`
 	Annotations []string
+	Signature   string // "public Order get(Long id)": modifiers, type and parameters, no annotations
 	Calls       []Call `json:"calls"`
 	Cost        Cost   `json:"cost"`
 }
@@ -146,33 +155,59 @@ func (f *File) readType(n *ts.Node, pkg, outer string, imports []string) {
 					}
 					if annotationName(f.text(a)) == "FeignClient" {
 						t.Feign = feignTarget(f.text(a))
+						if m := feignPath.FindStringSubmatch(f.text(a)); m != nil {
+							mappingBase = m[1]
+						}
 					}
 				}
 			}
-		case "superclass", "super_interfaces", "extends_interfaces":
-			for _, w := range regexp.MustCompile(`[A-Z]\w*`).FindAllString(f.text(c), -1) {
-				t.Extends = append(t.Extends, w)
+		case "superclass", "extends_interfaces":
+			for _, x := range typeList(c) {
+				if b := f.baseType(x); b != "" {
+					t.Extends = append(t.Extends, b)
+				}
+			}
+		case "super_interfaces":
+			for _, x := range typeList(c) {
+				if b := f.baseType(x); b != "" {
+					t.Implements = append(t.Implements, b)
+				}
 			}
 		}
 	}
-	t.Stereotype = stereotype(t.Annotations, name, f.Path)
+	t.Abstract = kind == "class" && hasModifier(n, "abstract")
+	t.Uses = f.uses(n)
+	t.Injected = f.injected(n, t.Annotations)
+	t.Stereotype = f.stereotype(n, t, name)
 	body := field(n, "body")
 	if body == nil {
 		f.Types = append(f.Types, t)
 		return
 	}
-	for _, m := range named(body) {
+	for _, m := range members(body) {
 		switch m.Type(lang) {
 		case "field_declaration", "constant_declaration":
 			typ := f.text(field(m, "type"))
+			var decls []*ts.Node
+			var names []string
 			for _, d := range named(m) {
 				if d.Type(lang) == "variable_declarator" {
-					fl := Field{Name: f.text(field(d, "name")), Type: typ, Line: line(d)}
-					if v := field(d, "value"); v != nil && isLiteral(v.Type(lang)) {
-						fl.Value = f.text(v)
-					}
-					t.Fields = append(t.Fields, fl)
+					decls = append(decls, d)
+					names = append(names, f.text(field(d, "name")))
 				}
+			}
+			sig := f.text(m)
+			if i := strings.Index(sig, "="); i > 0 {
+				sig = sig[:i]
+			}
+			sig = strings.TrimSuffix(collapse(sig), ";")
+			constant := m.Type(lang) == "constant_declaration" || hasModifier(m, "static") && hasModifier(m, "final")
+			for _, d := range decls {
+				fl := Field{Name: f.text(field(d, "name")), Type: typ, Line: line(m), End: endLine(m), Signature: sig, Names: strings.Join(names, ", ")}
+				if v := field(d, "value"); v != nil && isLiteral(v.Type(lang)) && constant && len(decls) == 1 {
+					fl.Value = f.text(v)
+				}
+				t.Fields = append(t.Fields, fl)
 			}
 		case "method_declaration", "constructor_declaration":
 			t.Methods = append(t.Methods, f.readMethod(m, &t, mappingBase))
@@ -186,11 +221,25 @@ func (f *File) readType(n *ts.Node, pkg, outer string, imports []string) {
 	if kind == "record" {
 		if ps := field(n, "parameters"); ps != nil {
 			for _, p := range named(ps) {
-				t.Fields = append(t.Fields, Field{Name: f.text(field(p, "name")), Type: f.text(field(p, "type")), Line: line(p)})
+				t.Fields = append(t.Fields, Field{Name: f.text(field(p, "name")), Type: f.text(field(p, "type")), Line: line(p), Component: true})
 			}
 		}
 	}
 	f.Types = append(f.Types, t)
+}
+
+// members lists a class body's declarations. An enum keeps its fields and methods in a block after
+// its constants.
+func members(body *ts.Node) []*ts.Node {
+	var out []*ts.Node
+	for _, m := range named(body) {
+		if m.Type(lang) == "enum_body_declarations" {
+			out = append(out, named(m)...)
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
 }
 
 func isLiteral(kind string) bool {
@@ -198,7 +247,7 @@ func isLiteral(kind string) bool {
 }
 
 func (f *File) readMethod(n *ts.Node, t *Type, base string) Method {
-	m := Method{Name: f.text(field(n, "name")), Line: line(n), End: endLine(n), Returns: f.text(field(n, "type"))}
+	m := Method{Name: f.text(field(n, "name")), Line: line(n), End: endLine(n), Returns: f.text(field(n, "type")), Signature: f.signature(n)}
 	if ps := field(n, "parameters"); ps != nil {
 		for _, p := range named(ps) {
 			if p.Type(lang) == "formal_parameter" || p.Type(lang) == "spread_parameter" {
@@ -233,6 +282,9 @@ func (f *File) readMethod(n *ts.Node, t *Type, base string) Method {
 		}
 		m.Cost = measure(f, body, types)
 	}
+	if field(n, "body") == nil { // abstract or an interface method: nothing runs here
+		m.Cost = Cost{Complexity: 1, Estimate: "abstract"}
+	}
 	m.Cost.Lines = m.End - m.Line + 1
 	m.Cost.Params = len(m.Params)
 	return m
@@ -254,6 +306,9 @@ func (f *File) calls(n *ts.Node, m *Method) {
 		f.calls(c, m)
 	}
 }
+
+// AnnotationName is an annotation's name without @, package or arguments: @a.b.Service("x") is Service.
+func AnnotationName(text string) string { return annotationName(text) }
 
 func annotationName(text string) string {
 	s := strings.TrimPrefix(text, "@")
@@ -329,6 +384,8 @@ func joinPath(base, p string) string {
 	return out
 }
 
+var feignPath = regexp.MustCompile(`\bpath\s*=\s*"([^"]*)"`)
+
 var feignName = regexp.MustCompile(`(?:name|value)\s*=\s*"([^"]+)"|^@FeignClient\s*\(\s*"([^"]+)"`)
 
 func feignTarget(text string) string {
@@ -341,37 +398,217 @@ func feignTarget(text string) string {
 	return ""
 }
 
-func stereotype(annotations []string, name, path string) string {
-	has := func(names ...string) bool {
-		for _, a := range annotations {
-			for _, n := range names {
-				if annotationName(a) == n {
-					return true
-				}
+var repoBase = regexp.MustCompile(`^((Jpa|Crud|PagingAndSorting|ListCrud|ListPagingAndSorting|Mongo|Reactive\w*|R2dbc)Repository|Repository)$`)
+
+// stereotype is a class's role: its Spring annotation first, then a repository interface it
+// extends, then its name, then whether it is a test. The order matches the first Codist.
+func (f *File) stereotype(n *ts.Node, t Type, name string) string {
+	for _, a := range t.Annotations {
+		switch annotationName(a) {
+		case "RestController", "Controller":
+			return "controller"
+		case "RestControllerAdvice", "ControllerAdvice":
+			return "advice"
+		case "FeignClient":
+			return "client"
+		case "Service":
+			return "service"
+		case "Repository":
+			return "repository"
+		case "Entity", "Embeddable", "MappedSuperclass", "Document", "Table":
+			return "entity"
+		case "Configuration", "SpringBootApplication", "EnableAutoConfiguration", "ConfigurationProperties":
+			return "config"
+		case "Component", "Mapper":
+			return "component"
+		}
+	}
+	if t.Kind == "interface" {
+		for _, b := range t.Extends {
+			if repoBase.MatchString(b) {
+				return "repository"
 			}
 		}
-		return false
 	}
 	switch {
-	case strings.Contains(path, "/src/test/") || strings.HasSuffix(name, "Test") || strings.HasSuffix(name, "Tests"):
+	case strings.HasSuffix(name, "Dto"), strings.HasSuffix(name, "DTO"), strings.HasSuffix(name, "Request"), strings.HasSuffix(name, "Response"):
+		return "dto"
+	case strings.HasSuffix(name, "Exception"):
+		return "exception"
+	case strings.Contains(f.Path, "src/test/"):
 		return "test"
-	case has("RestController", "Controller", "ControllerAdvice", "RestControllerAdvice"):
-		return "controller"
-	case has("FeignClient"):
-		return "client"
-	case has("Repository") || strings.HasSuffix(name, "Repository"):
-		return "repository"
-	case has("Service"):
-		return "service"
-	case has("Entity", "Embeddable", "MappedSuperclass", "Document"):
-		return "entity"
-	case has("Configuration", "SpringBootApplication"):
-		return "config"
-	case has("Component"):
-		return "component"
+	}
+	if body := field(n, "body"); body != nil {
+		for _, m := range members(body) {
+			if m.Type(lang) == "method_declaration" && hasAnnotationNode(f, m, "Test") {
+				return "test"
+			}
+		}
 	}
 	return "other"
 }
+
+func hasAnnotationNode(f *File, n *ts.Node, name string) bool {
+	for _, c := range named(n) {
+		if c.Type(lang) != "modifiers" {
+			continue
+		}
+		for _, a := range named(c) {
+			if strings.HasSuffix(a.Type(lang), "annotation") && annotationName(f.text(a)) == name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasModifier(n *ts.Node, word string) bool {
+	for i := 0; i < n.ChildCount(); i++ {
+		c := n.Child(i)
+		if c.Type(lang) != "modifiers" {
+			continue
+		}
+		for j := 0; j < c.ChildCount(); j++ {
+			if c.Child(j).Type(lang) == word {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// typeList is the types in a superclass, implements or extends clause.
+func typeList(n *ts.Node) []*ts.Node {
+	for _, c := range named(n) {
+		if c.Type(lang) == "type_list" {
+			return named(c)
+		}
+	}
+	return named(n)
+}
+
+// baseType is the simple name of a type without its arguments: List<Order> is List, a.b.C is C.
+func (f *File) baseType(t *ts.Node) string {
+	if t == nil {
+		return ""
+	}
+	switch t.Type(lang) {
+	case "type_identifier":
+		return f.text(t)
+	case "generic_type":
+		for _, c := range named(t) {
+			if c.Type(lang) == "type_identifier" || c.Type(lang) == "scoped_type_identifier" {
+				return f.baseType(c)
+			}
+		}
+	case "scoped_type_identifier":
+		last := ""
+		for _, c := range named(t) {
+			if c.Type(lang) == "type_identifier" {
+				last = f.text(c)
+			}
+		}
+		return last
+	case "array_type":
+		return f.baseType(field(t, "element"))
+	}
+	return ""
+}
+
+// uses lists every type named anywhere in a declaration, and the upper-case receivers of calls and
+// field reads, which are static calls and constants.
+func (f *File) uses(n *ts.Node) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(s string) {
+		if s != "" && !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	var walk func(x *ts.Node)
+	walk = func(x *ts.Node) {
+		switch x.Type(lang) {
+		case "type_identifier":
+			add(f.text(x))
+		case "method_invocation", "field_access":
+			if obj := field(x, "object"); obj != nil && obj.Type(lang) == "identifier" {
+				if s := f.text(obj); s != "" && s[0] >= 'A' && s[0] <= 'Z' {
+					add(s)
+				}
+			}
+		}
+		for i := 0; i < x.NamedChildCount(); i++ {
+			walk(x.NamedChild(i))
+		}
+	}
+	walk(n)
+	return out
+}
+
+// injected lists the types Spring injects: every constructor parameter, and fields marked
+// @Autowired, @Inject or @Resource, or final fields when Lombok writes the constructor.
+func (f *File) injected(n *ts.Node, annotations []string) []string {
+	body := field(n, "body")
+	if body == nil {
+		return nil
+	}
+	lombok := false
+	for _, a := range annotations {
+		if x := annotationName(a); x == "RequiredArgsConstructor" || x == "AllArgsConstructor" {
+			lombok = true
+		}
+	}
+	var out []string
+	for _, m := range members(body) {
+		switch m.Type(lang) {
+		case "constructor_declaration":
+			if ps := field(m, "parameters"); ps != nil {
+				for _, p := range named(ps) {
+					if p.Type(lang) == "formal_parameter" {
+						out = append(out, f.baseType(field(p, "type")))
+					}
+				}
+			}
+		case "field_declaration":
+			if hasModifier(m, "static") {
+				continue
+			}
+			if hasAnnotationNode(f, m, "Autowired") || hasAnnotationNode(f, m, "Inject") || hasAnnotationNode(f, m, "Resource") || lombok && hasModifier(m, "final") {
+				out = append(out, f.baseType(field(m, "type")))
+			}
+		}
+	}
+	return out
+}
+
+// signature is a member's declaration without annotations and body: "public Order get(Long id)".
+func (f *File) signature(m *ts.Node) string {
+	var parts []string
+	for _, c := range named(m) {
+		if c.Type(lang) != "modifiers" {
+			continue
+		}
+		for i := 0; i < c.ChildCount(); i++ {
+			k := c.Child(i)
+			if k.Type(lang) != "annotation" && k.Type(lang) != "marker_annotation" {
+				parts = append(parts, f.text(k))
+			}
+		}
+	}
+	if tp := field(m, "type_parameters"); tp != nil {
+		parts = append(parts, f.text(tp))
+	}
+	if t := field(m, "type"); t != nil {
+		parts = append(parts, f.text(t))
+	}
+	parts = append(parts, f.text(field(m, "name"))+f.text(field(m, "parameters")))
+	return collapse(strings.Join(parts, " "))
+}
+
+var spaces = regexp.MustCompile(`\s+`)
+
+func collapse(s string) string { return strings.TrimSpace(spaces.ReplaceAllString(s, " ")) }
 
 // Lines counts lines of a type for size reports.
 func (t Type) Lines() int { return t.End - t.Line + 1 }
