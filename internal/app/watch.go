@@ -182,10 +182,12 @@ func (a *App) backlog() {
 	log, _ := a.repo.LogRef("HEAD", 1_000_000)
 	for i, c := range log { // newest first
 		rv, seen := reviews[c.SHA]
-		if !seen {
+		// A review still "running" was cut off when Codist stopped, so it is done again.
+		finished := seen && rv.Status != "running"
+		if !finished {
 			a.checks.push(job{sha: c.SHA, opt: review.Options{RulesOnly: true}}, false)
 		}
-		if !a.cfg.ModelOff && i < a.historyLimit() && (!seen || rv.Model == "") {
+		if !a.cfg.ModelOff && i < a.historyLimit() && (!finished || rv.Model == "") {
 			a.models.push(job{sha: c.SHA}, false)
 		}
 	}
