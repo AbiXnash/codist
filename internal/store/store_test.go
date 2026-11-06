@@ -1,0 +1,61 @@
+package store
+
+import (
+	"encoding/json"
+	"testing"
+	"time"
+)
+
+func TestReviewsFindingsAndIssues(t *testing.T) {
+	s, err := Open(t.TempDir(), "repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	now := time.Now()
+	if err := s.SetReview(Review{SHA: "a", Status: "done", Started: now, Finished: now}); err != nil {
+		t.Fatal(err)
+	}
+	fs := []Finding{
+		{Path: "A.java", Line: 3, EndLine: 3, Severity: "low", Source: "rule", Title: "Low one", Key: "k1"},
+		{Path: "A.java", Line: 9, EndLine: 9, Severity: "high", Source: "model", Title: "High one", Key: "k2"},
+	}
+	if err := s.ReplaceFindings("a", fs); err != nil {
+		t.Fatal(err)
+	}
+	got := s.Findings("a")
+	if len(got) != 2 || got[0].Title != "High one" || got[0].State != "open" {
+		t.Fatalf("findings: %+v", got)
+	}
+	if s.OpenByFile()["A.java"] != 2 || !s.OpenIssues("A.java")["k1"] {
+		t.Error("issues not recorded")
+	}
+	if err := s.Resolve([]string{"k1"}, "b"); err != nil {
+		t.Fatal(err)
+	}
+	if s.OpenByFile()["A.java"] != 1 || s.Findings("a")[1].State != "resolved" {
+		t.Error("resolve did not stick")
+	}
+	if err := s.ReplaceFindings("a", fs[:1]); err != nil || len(s.Findings("a")) != 1 {
+		t.Error("replacing findings failed")
+	}
+	if r, ok := s.GetReview("a"); !ok || r.Status != "done" || s.Counts()["a"]["low"] != 1 {
+		t.Errorf("review: %+v", r)
+	}
+}
+
+func TestIncidents(t *testing.T) {
+	s, _ := Open(t.TempDir(), "repo")
+	defer s.Close()
+	id, err := s.AddIncident(Incident{Title: "Orders fail", Logs: "java.lang.NullPointerException"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAnalysis(id, json.RawMessage(`{"cause":"x"}`)); err != nil {
+		t.Fatal(err)
+	}
+	in, err := s.Incident(id)
+	if err != nil || in.Title != "Orders fail" || string(in.Analysis) != `{"cause":"x"}` || len(s.Incidents()) != 1 {
+		t.Errorf("incident: %+v %v", in, err)
+	}
+}

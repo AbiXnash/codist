@@ -11,6 +11,7 @@ import (
 	"codist/internal/git"
 	"codist/internal/java"
 	"codist/internal/model"
+	"codist/internal/store"
 	"codist/internal/web"
 )
 
@@ -20,6 +21,7 @@ type App struct {
 	repo  *git.Repo
 	model *model.Client
 	web   *web.Server
+	store *store.Store
 
 	mu        sync.RWMutex
 	modelOK   bool
@@ -33,6 +35,11 @@ type App struct {
 // New starts everything that runs in the background and registers the pages.
 func New(ctx context.Context, cfg config.Config, repo *git.Repo) (*App, error) {
 	a := &App{cfg: cfg, repo: repo, model: model.New(cfg.ModelURL, cfg.Model, cfg.ModelCtx)}
+	st, err := store.Open(cfg.DataDir, base(repo.Root))
+	if err != nil {
+		return nil, err
+	}
+	a.store = st
 	srv, err := web.New(a.shell)
 	if err != nil {
 		return nil, err
@@ -48,7 +55,11 @@ func New(ctx context.Context, cfg config.Config, repo *git.Repo) (*App, error) {
 func (a *App) Handler() http.Handler { return a.web }
 
 // Close stops background work.
-func (a *App) Close() {}
+func (a *App) Close() {
+	if a.store != nil {
+		_ = a.store.Close()
+	}
+}
 
 func (a *App) shell() web.Shell {
 	a.mu.RLock()
@@ -92,4 +103,5 @@ func (a *App) routes() {
 	a.web.Handle("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		a.web.Render(w, r, "home", "review", "Review", nil)
 	})
+	a.repoRoutes()
 }
