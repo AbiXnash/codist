@@ -38,11 +38,12 @@ Put settings in `.codist/config.lua` in the repository. All are optional:
 ```lua
 model = { url = "http://localhost:11434", name = "qwen2.5-coder:7b", context = 8192 }
 max_files = 8            -- changed files per commit the model reads; checks read all of them
+history = 50             -- recent commits the model reads in the background; 0 for all. Checks cover every commit
 ignore = { "target/", "build/", "generated/" }
 ```
 
 The script runs with no file, network or OS access. Environment variables override it for one run:
-`PORT`, `CODIST_MODEL`, `CODIST_MODEL_URL`, `CODIST_MODEL_REVIEW=false`, `CODIST_DATA_DIR`.
+`PORT`, `CODIST_MODEL`, `CODIST_MODEL_URL`, `CODIST_MODEL_REVIEW=false`, `CODIST_HISTORY`, `CODIST_DATA_DIR`.
 
 ## Build
 

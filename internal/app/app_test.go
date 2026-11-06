@@ -560,6 +560,39 @@ func TestIncidents(t *testing.T) {
 	}
 }
 
+// When the innermost cause is all library code, the project's own frames from the outer exception
+// still locate the incident.
+func TestIncidentInLibraryCode(t *testing.T) {
+	e := start(t, func(c *config.Config) { c.ModelOff = true })
+	logs := `org.springframework.dao.DataIntegrityViolationException: could not execute statement
+	at com.shop.order.OrderService.find(OrderService.java:17)
+	at com.shop.order.OrderController.get(OrderController.java:16)
+Caused by: org.hibernate.exception.ConstraintViolationException: duplicate key
+	at org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:62)
+	at org.hibernate.internal.SessionImpl.flush(SessionImpl.java:1300)
+`
+	var made map[string]string
+	e.call("POST", "/api/incidents", `{"logs":`+quote(logs)+`}`, &made)
+	var in struct {
+		Incident struct {
+			Locations []struct {
+				Path   string
+				Line   int
+				Origin bool
+			}
+			Errors []struct{ Frames []struct{ Class string } }
+		}
+	}
+	e.get("/api/incidents/"+made["id"], &in)
+	l := in.Incident.Locations
+	if len(l) != 2 || l[0].Path != testrepo.ServicePath || l[0].Line != 17 || !l[0].Origin {
+		t.Errorf("locations %+v", l)
+	}
+	if f := in.Incident.Errors[0].Frames; len(f) != 2 || !strings.HasPrefix(f[0].Class, "org.hibernate") {
+		t.Errorf("the error still lists the cause's own frames: %+v", f)
+	}
+}
+
 func TestWithoutModel(t *testing.T) {
 	e := start(t, func(c *config.Config) { c.ModelOff = true })
 	cs := e.reviewed(3, false)
@@ -587,6 +620,25 @@ func TestWithoutModel(t *testing.T) {
 	}
 	if e.model.chats != 0 {
 		t.Errorf("the model was asked %d times", e.model.chats)
+	}
+}
+
+// With a history of one, code checks cover every commit and the model reads only the newest.
+func TestHistoryLimit(t *testing.T) {
+	e := start(t, func(c *config.Config) { c.History = 1 })
+	waitFor(t, "the newest commit read by the model", func() bool {
+		cs := e.commits()
+		return len(cs) == 3 && cs[0].Model == "fake"
+	})
+	time.Sleep(300 * time.Millisecond) // give the model lane time to do more, which it must not
+	cs := e.commits()
+	for _, c := range cs[1:] {
+		if c.Status != "done" || c.Model != "" {
+			t.Errorf("older commit %+v", c)
+		}
+	}
+	if e.app.models.length() != 0 {
+		t.Errorf("%d commits still queued for the model", e.app.models.length())
 	}
 }
 

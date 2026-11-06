@@ -25,7 +25,7 @@ type Config struct {
 	ModelOff  bool   // review with rules only
 	PollMs    int    // how often to look for new commits
 	MaxFiles  int    // files per commit the model reviews; rules see all of them
-	History   int    // how many commits back the model reviews in the background; 0 means all
+	History   int    // how many recent commits the model reads in the background; 0 means all. Code checks cover every commit
 	Ignore    []string
 	OpenPage  bool
 	FromLua   bool // a config.lua was found and read
@@ -44,6 +44,7 @@ func Defaults(repo string) Config {
 		ModelCtx: 8192,
 		PollMs:   3000,
 		MaxFiles: 8,
+		History:  50, // a laptop model takes minutes per commit, so a long history would take days
 		Ignore:   []string{"target/", "build/", "node_modules/", ".idea/"},
 		OpenPage: true,
 	}

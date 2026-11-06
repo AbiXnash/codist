@@ -36,3 +36,18 @@ func TestLuaCannotTouchTheMachine(t *testing.T) {
 		}
 	}
 }
+
+func TestHistory(t *testing.T) {
+	if Defaults(".").History != 50 {
+		t.Error("the model reads the last 50 commits by default")
+	}
+	c := Defaults(".")
+	if err := c.applyLua("history = 0"); err != nil || c.History != 0 {
+		t.Errorf("history = 0 means every commit: %d %v", c.History, err)
+	}
+	t.Setenv("CODIST_HISTORY", "7")
+	c.applyEnv()
+	if c.History != 7 {
+		t.Errorf("env: %d", c.History)
+	}
+}

@@ -51,3 +51,13 @@ func TestParseIgnoresPlainLines(t *testing.T) {
 		t.Errorf("no errors expected: %+v", errs)
 	}
 }
+
+func TestParseKeepsTheOuterFrames(t *testing.T) {
+	errs := Parse(springLog)
+	if o := errs[0].Outer; len(o) != 2 || o[0].Method != "processRequest" {
+		t.Errorf("outer frames: %+v", o)
+	}
+	if errs[1].Outer != nil {
+		t.Errorf("an error with no cause has no separate outer frames: %+v", errs[1].Outer)
+	}
+}

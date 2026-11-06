@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"codist/internal/incident"
+	"codist/internal/java"
 	"codist/internal/store"
 	"codist/internal/web"
 )
@@ -259,9 +260,17 @@ func (a *App) readLogs(in store.Incident) incidentJSON {
 	var order []string
 	for i, e := range incident.Parse(in.Logs) {
 		ej := errorJSON{Exception: e.Type, Message: e.Message, Frames: []frameJSON{}, CausedBy: e.Causes, Count: e.Count}
-		first := true
 		for _, f := range e.Frames {
 			ej.Frames = append(ej.Frames, frameJSON{Class: f.Class, Method: f.Method, File: f.File, Line: f.Line})
+		}
+		// The innermost cause shows where it went wrong. When that is all library code, such as
+		// Hibernate, the outer exception's frames still show where the project called it.
+		frames := e.Frames
+		if !inProject(ix, frames) {
+			frames = e.Outer
+		}
+		first := true
+		for _, f := range frames {
 			class := f.Class
 			if k := strings.Index(class, "$"); k >= 0 {
 				class = class[:k]
@@ -325,6 +334,17 @@ func (a *App) readLogs(in store.Incident) incidentJSON {
 	sort.Slice(j.Suspects, func(x, y int) bool { return j.Suspects[x].Score > j.Suspects[y].Score })
 	j.Suspects = j.Suspects[:min(8, len(j.Suspects))]
 	return j
+}
+
+// inProject says whether any frame is in the project's own code.
+func inProject(ix *java.Index, frames []incident.Frame) bool {
+	for _, f := range frames {
+		class, _, _ := strings.Cut(f.Class, "$")
+		if ix.ByID[class] != nil && f.Line > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 var causeSchema = map[string]any{

@@ -23,6 +23,7 @@ type Error struct {
 	Causes  []string // "Caused by" exceptions, outermost first
 	Root    string   // the innermost cause, usually the real problem
 	Frames  []Frame  // frames of the innermost cause, or of the error itself if it has none
+	Outer   []Frame  // frames of the outermost exception, when a cause has frames of its own
 	Count   int
 	First   string // the log line where it first appeared
 }
@@ -57,6 +58,9 @@ func Parse(logs string) []Error {
 		if m := causedBy.FindStringSubmatch(l); m != nil && cur != nil {
 			cur.Causes = append(cur.Causes, short(m[1])+message(m[2]))
 			cur.Root = short(m[1]) + message(m[2])
+			if cur.Outer == nil {
+				cur.Outer = frames
+			}
 			frames = nil // the innermost cause's frames are where it went wrong
 			continue
 		}

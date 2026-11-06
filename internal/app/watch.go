@@ -175,17 +175,17 @@ func (a *App) modelReady() bool {
 	return a.modelOK && !a.cfg.ModelOff
 }
 
-// backlog queues what each lane still has to do: code checks for commits never reviewed, and the
-// model for commits it has not read yet. It runs at start, so a restart picks up where it stopped.
+// backlog queues what each lane still has to do: code checks for every commit never reviewed, and
+// the model for the recent commits it has not read yet. It runs at start, so a restart picks up where it stopped.
 func (a *App) backlog() {
 	reviews := a.store.Reviews()
-	log, _ := a.repo.LogRef("HEAD", a.historyLimit())
-	for _, c := range log { // newest first
+	log, _ := a.repo.LogRef("HEAD", 1_000_000)
+	for i, c := range log { // newest first
 		rv, seen := reviews[c.SHA]
 		if !seen {
 			a.checks.push(job{sha: c.SHA, opt: review.Options{RulesOnly: true}}, false)
 		}
-		if !a.cfg.ModelOff && (!seen || rv.Model == "") {
+		if !a.cfg.ModelOff && i < a.historyLimit() && (!seen || rv.Model == "") {
 			a.models.push(job{sha: c.SHA}, false)
 		}
 	}

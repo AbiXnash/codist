@@ -16,7 +16,7 @@ Orbit Commerce (about 240 commits, two Spring services) from an empty Codist dat
 | While the model catches up | Every commit shows "queued" | A commit shows its code-check results, with a note that the model will read it later |
 | Answers to the page | Plain JSON | Compressed (gzip), except the live event stream |
 | Graph | Not the same as the first Codist | The same as the first Codist: 427 of 427 classes, 1,064 links and 2,865 method calls match the old server, including Feign links |
-| History setting | None | `history` in `config.lua` or `CODIST_HISTORY` limits how many commits back the model reads |
+| History setting | None | The model reads the last 50 commits by default; `history` in `config.lua` or `CODIST_HISTORY` changes it |
 
 ## Measured
 
@@ -33,8 +33,8 @@ Orbit Commerce (about 240 commits, two Spring services) from an empty Codist dat
 The model's own speed is unchanged: it reads one commit at a time. Over the first 5 hours 20 minutes it read 52
 commits, 6.1 minutes each on average (one commit can mean up to 8 files, each a separate model call). At that rate
 the whole history of this repository (442 commits) would take about 45 hours, so on a laptop the model cannot read a
-long history; new commits always go to the front. Code-check results are what make the first minutes useful. A
-default `history` limit (for example the last 50 commits) is worth deciding.
+long history; new commits always go to the front. Code-check results are what make the first minutes useful. So
+by default the model reads only the last 50 commits (`history`; 0 for all), while code checks still cover every commit.
 
 ## Tests
 
@@ -62,6 +62,6 @@ Run them with `go test -tags 'grammar_subset grammar_subset_java' ./...`.
 ## Found along the way
 
 - Deleting an incident that did not exist answered "deleted". It now answers 404.
-- The incident page locates only the frames of the innermost "Caused by" exception. That is deliberate (it is
-  usually where things went wrong), but when the innermost cause has only library frames, such as Hibernate's, the
-  page shows no place in the project's code. Using the outer exception's project frames as a fallback is worth doing.
+- The incident page located only the frames of the innermost "Caused by" exception, which is usually where things
+  went wrong. When that cause had only library frames, such as Hibernate's, the page showed no place in the project's
+  code. It now falls back to the outer exception's frames.
