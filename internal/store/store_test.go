@@ -17,7 +17,7 @@ func TestReviewsFindingsAndIssues(t *testing.T) {
 		t.Fatal(err)
 	}
 	fs := []Finding{
-		{Path: "A.java", Line: 3, EndLine: 3, Severity: "low", Source: "rule", Title: "Low one", Key: "k1"},
+		{Path: "A.java", Line: 3, EndLine: 3, Severity: "low", Source: "rule", Title: "Low one", Key: "k1", Snippet: "x();"},
 		{Path: "A.java", Line: 9, EndLine: 9, Severity: "high", Source: "model", Title: "High one", Key: "k2"},
 	}
 	if err := s.ReplaceFindings("a", fs); err != nil {
@@ -27,7 +27,7 @@ func TestReviewsFindingsAndIssues(t *testing.T) {
 	if len(got) != 2 || got[0].Title != "High one" || got[0].State != "open" {
 		t.Fatalf("findings: %+v", got)
 	}
-	if s.OpenByFile()["A.java"] != 2 || !s.OpenIssues("A.java")["k1"] {
+	if s.OpenByFile()["A.java"] != 2 || len(s.OpenIssues("A.java")) != 2 {
 		t.Error("issues not recorded")
 	}
 	if err := s.Resolve([]string{"k1"}, "b"); err != nil {

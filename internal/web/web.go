@@ -57,6 +57,7 @@ var funcs = template.FuncMap{
 		return template.JS(b)
 	},
 	"add":   func(a, b int) int { return a + b },
+	"sevs":  func() []string { return []string{"critical", "high", "medium", "low", "info"} },
 	"thous": thousands,
 	"pct": func(a, b int) int {
 		if b == 0 {

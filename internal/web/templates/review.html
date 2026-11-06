@@ -1,0 +1,87 @@
+{{define "content"}}
+<div class="review">
+  <aside class="commits" id="commits" hx-get="/review/list{{with .Data.Detail}}?c={{.Commit.SHA}}{{end}}" hx-trigger="every 5s" hx-swap="innerHTML">
+    {{template "list" .Data.Commits}}
+  </aside>
+  <section class="detail" id="detail">
+    {{with .Data.Detail}}{{template "detail" .}}{{else}}<p class="empty">No commits yet. Make one and it appears here.</p>{{end}}
+  </section>
+</div>
+{{end}}
+
+{{define "list"}}
+{{range .}}
+<a class="commit{{if .On}} on{{end}}" href="/?c={{.SHA}}" hx-get="/review/{{.SHA}}" hx-target="#detail" hx-push-url="/?c={{.SHA}}"
+   hx-on::after-request="document.querySelectorAll('.commit.on').forEach(e=>e.classList.remove('on'));this.classList.add('on')">
+  <span class="subject">{{.Subject}}</span>
+  <span class="meta">
+    <span class="mono">{{.Short}}</span> · {{.Author}} · {{ago .Time}}
+    <span class="grow"></span>
+    {{if eq .Status "running"}}<span class="tag">reviewing</span>
+    {{else if eq .Status "queued"}}<span class="tag">queued</span>
+    {{else if eq .Status "failed"}}<span class="sev high">failed</span>
+    {{else if eq .Status "waiting"}}<span class="faint">not reviewed</span>
+    {{else if .Serious}}<span class="sev high">{{.Serious}}</span>
+    {{else if .Notes}}<span class="faint">{{.Notes}} notes</span>
+    {{else}}<span class="ok">✓</span>{{end}}
+  </span>
+</a>
+{{end}}
+{{end}}
+
+{{define "detail"}}
+<div {{if or (eq .Review.Status "running") .Waiting}}hx-get="/review/{{.Commit.SHA}}" hx-trigger="every 3s" hx-target="#detail"{{end}}>
+  <header class="dhead">
+    <h1>{{.Commit.Subject}}</h1>
+    {{if .Commit.Body}}<p class="body">{{.Commit.Body}}</p>{{end}}
+    <p class="muted small">{{.Commit.Author}} · {{ago .Commit.Time}} · <span class="mono">{{.Commit.Short}}</span></p>
+    <div class="state">
+      {{if .Waiting}}{{if eq .Review.Status "running"}}<span class="spin"></span> Reviewing…{{else}}Queued for review{{end}}
+      {{else if not .Has}}<span class="muted">Not reviewed yet.</span>
+      {{else if eq .Review.Status "failed"}}<span class="sev high">The review failed</span> <span class="small">{{.Review.Note}}</span>
+      {{else if eq .Review.Status "running"}}<span class="spin"></span> Reviewing…
+      {{else}}
+        {{if .Serious}}{{range $s := sevs}}{{with index $.Counts $s}}{{if and (ne $s "low") (ne $s "info")}}<span class="sev {{$s}}">{{.}} {{$s}}</span>{{end}}{{end}}{{end}}
+        {{else}}<span class="ok">No problems found</span>{{end}}
+        <span class="faint small">{{if .Review.Model}}checks and {{.Review.Model}}{{else}}code checks only{{end}}{{if .Took}}, {{.Took}}{{end}}</span>
+      {{end}}
+      <span class="grow"></span>
+      {{if .Notes}}<label class="btn secondary toggle"><input type="checkbox" id="show-notes"> Show {{.Notes}} {{if eq .Notes 1}}note{{else}}notes{{end}}</label>{{end}}
+      {{if not .Waiting}}<button class="btn secondary" hx-post="/review/{{.Commit.SHA}}" hx-target="#detail">{{if .Has}}Review again{{else}}Review{{end}}</button>{{end}}
+    </div>
+    {{if and .Has .Review.Note}}<p class="small muted">{{.Review.Note}}</p>{{end}}
+  </header>
+  <div class="files">
+    {{range .Files}}
+    <details class="file" {{if or .Serious (le (len $.Files) 6)}}open{{end}}>
+      <summary><span class="mono path">{{.Path}}</span> <span class="tag">{{.Status}}</span>{{if .Serious}} <span class="sev high">{{.Serious}}</span>{{end}}</summary>
+      {{range .Outside}}{{template "finding" .}}{{end}}
+      <table class="diff">
+        {{range .Rows}}
+        <tr class="{{.Kind}}">{{if eq .Kind "hunk"}}<td colspan="3" class="mono">{{.Text}}</td>{{else}}<td class="no">{{if .Old}}{{.Old}}{{end}}</td><td class="no">{{if and .New (ne .Kind "del")}}{{.New}}{{end}}</td><td class="code mono">{{.Text}}</td>{{end}}</tr>
+        {{range .Findings}}<tr class="frow"><td colspan="3">{{template "finding" .}}</td></tr>{{end}}
+        {{end}}
+      </table>
+    </details>
+    {{else}}<p class="empty">This commit changes no files.</p>{{end}}
+  </div>
+</div>
+{{end}}
+
+{{define "finding"}}
+<details class="finding {{.Severity}}{{if or (eq .Severity "low") (eq .Severity "info")}} note{{end}}">
+  <summary>
+    <span class="sev {{.Severity}}">{{.Severity}}</span>
+    <span class="ftitle">{{.Title}}</span>
+    {{if .Doubt}}<span class="tag" title="{{.Doubt}}">unconfirmed</span>{{end}}
+    {{if eq .State "resolved"}}<span class="tag good">fixed since</span>{{end}}
+    <span class="tag">{{if eq .Source "model"}}AI{{else}}check{{end}}</span>
+    <span class="faint mono small">L{{.Line}}</span>
+  </summary>
+  <div class="fbody">
+    {{if .Doubt}}<p class="muted">Unconfirmed: {{.Doubt}}</p>{{end}}
+    {{if .Detail}}<p>{{.Detail}}</p>{{end}}
+    {{if .Suggestion}}<pre class="mono">{{.Suggestion}}</pre>{{end}}
+  </div>
+</details>
+{{end}}

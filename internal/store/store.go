@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS issues (
 	key        TEXT PRIMARY KEY,
 	path       TEXT NOT NULL,
 	first_sha  TEXT NOT NULL,
+	rule       TEXT NOT NULL DEFAULT '', -- the code check that found it, or '' for the model
+	snippet    TEXT NOT NULL DEFAULT '', -- the flagged line
 	state      TEXT NOT NULL,          -- open, resolved
 	fixed_sha  TEXT NOT NULL DEFAULT ''
 );
@@ -171,8 +173,8 @@ func (s *Store) ReplaceFindings(sha string, fs []Finding) error {
 			f.Detail, f.Suggestion, f.Snippet, f.Doubt, f.Key); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`INSERT INTO issues (key, path, first_sha, state) VALUES (?,?,?, 'open') ON CONFLICT(key) DO NOTHING`,
-			f.Key, f.Path, sha); err != nil {
+		if _, err := tx.Exec(`INSERT INTO issues (key, path, first_sha, rule, snippet, state) VALUES (?,?,?,?,?, 'open') ON CONFLICT(key) DO NOTHING`,
+			f.Key, f.Path, sha, f.Rule, f.Snippet); err != nil {
 			return err
 		}
 	}
@@ -221,18 +223,23 @@ func (s *Store) Counts() map[string]map[string]int {
 	return out
 }
 
-// OpenIssues lists the keys of open issues in one file.
-func (s *Store) OpenIssues(path string) map[string]bool {
-	out := map[string]bool{}
-	rows, err := s.db.Query(`SELECT key FROM issues WHERE path=? AND state='open'`, path)
+// OpenIssue is an issue that is still open.
+type OpenIssue struct {
+	Key, Rule, Snippet string
+}
+
+// OpenIssues lists the open issues in one file.
+func (s *Store) OpenIssues(path string) []OpenIssue {
+	var out []OpenIssue
+	rows, err := s.db.Query(`SELECT key, rule, snippet FROM issues WHERE path=? AND state='open'`, path)
 	if err != nil {
 		return out
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var k string
-		if rows.Scan(&k) == nil {
-			out[k] = true
+		var o OpenIssue
+		if rows.Scan(&o.Key, &o.Rule, &o.Snippet) == nil {
+			out = append(out, o)
 		}
 	}
 	return out

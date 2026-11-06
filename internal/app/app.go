@@ -27,6 +27,8 @@ type App struct {
 	modelOK   bool
 	modelNote string
 
+	queue *queue
+
 	ixMu   sync.Mutex
 	ix     *java.Index
 	ixHead string
@@ -34,7 +36,7 @@ type App struct {
 
 // New starts everything that runs in the background and registers the pages.
 func New(ctx context.Context, cfg config.Config, repo *git.Repo) (*App, error) {
-	a := &App{cfg: cfg, repo: repo, model: model.New(cfg.ModelURL, cfg.Model, cfg.ModelCtx)}
+	a := &App{cfg: cfg, repo: repo, model: model.New(cfg.ModelURL, cfg.Model, cfg.ModelCtx), queue: newQueue()}
 	st, err := store.Open(cfg.DataDir, base(repo.Root))
 	if err != nil {
 		return nil, err
@@ -46,8 +48,12 @@ func New(ctx context.Context, cfg config.Config, repo *git.Repo) (*App, error) {
 	}
 	a.web = srv
 	a.routes()
+	ok, note := a.model.Status(ctx) // know before the first review whether the model can be used
+	a.modelOK, a.modelNote = ok, note
 	go a.watchModel(ctx)
 	go a.index() // warm up, so the first page is quick
+	go a.work(ctx)
+	go a.watch(ctx)
 	return a, nil
 }
 
@@ -100,9 +106,7 @@ func base(p string) string {
 }
 
 func (a *App) routes() {
-	a.web.Handle("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		a.web.Render(w, r, "home", "review", "Review", nil)
-	})
+	a.reviewRoutes()
 	a.repoRoutes()
 	a.graphRoutes()
 }

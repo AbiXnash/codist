@@ -20,6 +20,7 @@ var checkCases = []struct {
 	{"optional get after check", `class A { Order a(long id) { Optional<Order> o = repo.findById(id); if (o.isPresent()) { return o.get(); } return null; } }`, nil},
 	{"map get is fine", `class A { String a(Map<String,String> m) { return m.get("k"); } }`, nil},
 	{"string ==", `class A { boolean a(String s) { return s == "OPEN"; } }`, []string{"string-identity"}},
+	{"string == a getter", `class A { boolean a(Order o, String s) { return o.getStatus() == s; } }`, []string{"string-identity"}},
 	{"string null check is fine", `class A { boolean a(String s) { return s == null; } }`, nil},
 	{"boxed ==", `class A { boolean a(Long x, Long y) { return x == y; } }`, []string{"boxed-identity"}},
 	{"primitive == is fine", `class A { boolean a(long x, long y) { return x == y; } }`, nil},

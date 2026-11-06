@@ -227,8 +227,14 @@ func (c *checker) equality(n *ts.Node, sc scope) {
 	isBoxed := func(x *ts.Node) bool {
 		return x.Type(lang) == "identifier" && boxedTypes[simpleTypeRaw(sc[c.f.text(x)])]
 	}
+	// Anything compared with == against a known String is compared by identity, unless it is a
+	// primitive literal, which would not compile anyway.
+	plain := func(x *ts.Node) bool {
+		k := x.Type(lang)
+		return k == "character_literal" || k == "decimal_integer_literal" || k == "true" || k == "false"
+	}
 	switch {
-	case isString(left) && isString(right) || isString(left) && right.Type(lang) == "string_literal" || left.Type(lang) == "string_literal" && isString(right):
+	case isString(left) && !plain(right) || isString(right) && !plain(left):
 		c.add(n, "string-identity", "high", "Strings compared with "+op,
 			op+" checks whether both are the same object, not the same text. Equal strings from a request or the database are usually different objects, so this is false when it should be true.",
 			"Use a.equals(b), or Objects.equals(a, b) when either can be null.")
