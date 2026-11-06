@@ -30,9 +30,11 @@ Orbit Commerce (about 240 commits, two Spring services) from an empty Codist dat
 | Commit list answer | 96 KB | 18 KB |
 | Server start / first index | 1.2 s / 0.97 s | about the same |
 
-The model's own speed is unchanged: it still reads one commit at a time, about a minute each on this Mac, so the
-full model backlog (442 commits queued on this repository) takes hours. Code-check results are what make the first
-minutes useful.
+The model's own speed is unchanged: it reads one commit at a time. Over the first 5 hours 20 minutes it read 52
+commits, 6.1 minutes each on average (one commit can mean up to 8 files, each a separate model call). At that rate
+the whole history of this repository (442 commits) would take about 45 hours, so on a laptop the model cannot read a
+long history; new commits always go to the front. Code-check results are what make the first minutes useful. A
+default `history` limit (for example the last 50 commits) is worth deciding.
 
 ## Tests
 
