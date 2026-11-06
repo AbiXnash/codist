@@ -9,6 +9,7 @@ import (
 
 	"codist/internal/config"
 	"codist/internal/git"
+	"codist/internal/java"
 	"codist/internal/model"
 	"codist/internal/web"
 )
@@ -23,6 +24,10 @@ type App struct {
 	mu        sync.RWMutex
 	modelOK   bool
 	modelNote string
+
+	ixMu   sync.Mutex
+	ix     *java.Index
+	ixHead string
 }
 
 // New starts everything that runs in the background and registers the pages.
@@ -35,6 +40,7 @@ func New(ctx context.Context, cfg config.Config, repo *git.Repo) (*App, error) {
 	a.web = srv
 	a.routes()
 	go a.watchModel(ctx)
+	go a.index() // warm up, so the first page is quick
 	return a, nil
 }
 
