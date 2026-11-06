@@ -15,8 +15,11 @@ var files embed.FS
 
 // UI serves the interface. Paths that are not files fall back to index.html, so a reload on any
 // screen works. Without a built interface it says how to build one.
-func UI() http.Handler {
-	dist, err := fs.Sub(files, "dist")
+func UI() http.Handler { return serve(files) }
+
+// serve serves the dist folder of fsys.
+func serve(fsys fs.FS) http.Handler {
+	dist, err := fs.Sub(fsys, "dist")
 	if err == nil {
 		if _, err = fs.Stat(dist, "index.html"); err == nil {
 			static := http.FileServerFS(dist)

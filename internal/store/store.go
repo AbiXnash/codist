@@ -430,8 +430,14 @@ func (s *Store) SetIssueState(key, state string) error {
 
 // DeleteIncident removes an incident.
 func (s *Store) DeleteIncident(id int64) error {
-	_, err := s.db.Exec(`DELETE FROM incidents WHERE id=?`, id)
-	return err
+	res, err := s.db.Exec(`DELETE FROM incidents WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("no incident %d", id)
+	}
+	return nil
 }
 
 // SetIncidentTitle renames an incident.
