@@ -1,0 +1,2 @@
+calls=18 ran=18 differ=0 flaky=0
+  main: skipped, it may exit

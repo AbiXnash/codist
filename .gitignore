@@ -9,3 +9,8 @@ web/node_modules/
 web/dist/
 internal/web/dist/*
 !internal/web/dist/.gitkeep
+# behaviour experiment: checked-out sources and builds, made by eval/behaviour/setup.sh
+eval/behaviour/*/old/
+eval/behaviour/*/new/
+eval/behaviour/harness/*.class
+eval/behaviour/changed/changed
