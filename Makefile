@@ -23,6 +23,7 @@ dist:
 	GOOS=darwin  GOARCH=arm64 $(GO) build -tags '$(TAGS)' -o dist/codist-macos-arm64 .
 	GOOS=darwin  GOARCH=amd64 $(GO) build -tags '$(TAGS)' -o dist/codist-macos-x64 .
 	GOOS=linux   GOARCH=amd64 $(GO) build -tags '$(TAGS)' -o dist/codist-linux-x64 .
+	GOOS=linux   GOARCH=arm64 $(GO) build -tags '$(TAGS)' -o dist/codist-linux-arm64 .
 	GOOS=windows GOARCH=amd64 $(GO) build -tags '$(TAGS)' -o dist/codist-windows-x64.exe .
 
 clean:

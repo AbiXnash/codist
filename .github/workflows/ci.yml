@@ -1,0 +1,79 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Vet
+        run: go vet -tags "grammar_subset grammar_subset_java" ./...
+      - name: Test
+        run: go test -tags "grammar_subset grammar_subset_java" ./...
+
+  install-unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install with install.sh
+        run: CODIST_FROM_SOURCE=1 CODIST_BIN_DIR="$RUNNER_TEMP/bin" sh install.sh
+      - name: Run it
+        run: |
+          "$RUNNER_TEMP/bin/codist" help
+          "$RUNNER_TEMP/bin/codist" doctor . || true
+
+  install-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install with install.ps1
+        shell: pwsh
+        run: |
+          $env:CODIST_FROM_SOURCE = '1'
+          $env:CODIST_BIN_DIR = "$env:RUNNER_TEMP\bin"
+          ./install.ps1
+      - name: Run it
+        shell: pwsh
+        run: |
+          & "$env:RUNNER_TEMP\bin\codist.exe" help
+          & "$env:RUNNER_TEMP\bin\codist.exe" doctor . ; exit 0
+
+  dev-setup:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Set up every repository (Linux)
+        if: runner.os != 'Windows'
+        run: sh scripts/dev-setup.sh "$RUNNER_TEMP/dev" && cd "$RUNNER_TEMP/dev/codist" && go build -tags "grammar_subset grammar_subset_java" ./...
+      - name: Set up every repository (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./scripts/dev-setup.ps1 "$env:RUNNER_TEMP\dev"
+          go build -tags "grammar_subset grammar_subset_java" ./...
