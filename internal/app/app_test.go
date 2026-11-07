@@ -767,7 +767,7 @@ func TestHelpers(t *testing.T) {
 	if lastSeen("baseline", "a") != "a" || lastSeen("b", "a") != "b" {
 		t.Error("lastSeen")
 	}
-	if base(`C:\code\shop`) != "shop" || base("shop") != "shop" || ms(time.Time{}) != 0 || short("abc") != "abc" {
+	if ms(time.Time{}) != 0 || short("abc") != "abc" {
 		t.Error("base, ms, short")
 	}
 	if len(orEmptyS(nil)) != 0 || len(orEmpty(nil)) != 0 {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/AbiXnash/codist-behaviour"
+	"github.com/AbiXnash/codist-fix"
 	"github.com/AbiXnash/codist-git"
 	"github.com/AbiXnash/codist-java"
 	"github.com/AbiXnash/codist-model"
@@ -40,6 +41,7 @@ type App struct {
 	modelOK   bool
 	modelNote string
 	view      string // a branch being looked at without checking it out, or "" for the checked-out one
+	fixer     *fix.Fixer
 
 	ixMu  sync.Mutex
 	ix    *java.Index
@@ -53,7 +55,8 @@ func New(ctx context.Context, cfg config.Config, repo *git.Repo) (*App, error) {
 		return nil, err
 	}
 	a := &App{cfg: cfg, repo: repo, model: model.New(cfg.ModelURL, cfg.Model, cfg.ModelCtx), store: st,
-		mux: http.NewServeMux(), checks: newQueue(), models: newQueue(), runs: newQueue(), events: newHub(), ctx: ctx}
+		mux: http.NewServeMux(), checks: newQueue(), models: newQueue(), runs: newQueue(), events: newHub(), ctx: ctx,
+		fixer: &fix.Fixer{Repo: repo, Store: st, Model: model.New(cfg.ModelURL, cfg.Model, cfg.ModelCtx), Notes: filepath.Join(cfg.DataDir, store.Name(repo.Root)+"-fix-notes.json")}}
 	if cfg.Behaviour {
 		a.runner = &behaviour.Runner{Repo: repo, Work: filepath.Join(cfg.DataDir, "behaviour", store.Name(repo.Root)), Ignored: cfg.Ignored}
 		go a.runBehaviour(ctx)
@@ -76,6 +79,7 @@ func (a *App) Close() { _ = a.store.Close() }
 
 func (a *App) routes() {
 	h := a.mux.HandleFunc
+	a.fixer.Routes(h) // prepare, check, apply and discard fixes; remember rejections
 	h("GET /api/status", a.status)
 	h("GET /api/features", a.features)
 	h("GET /api/events", a.events.serve)
@@ -135,15 +139,6 @@ func (a *App) viewing() bool {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	return a.view != ""
-}
-
-func base(p string) string {
-	for i := len(p) - 1; i >= 0; i-- {
-		if p[i] == '/' || p[i] == '\\' {
-			return p[i+1:]
-		}
-	}
-	return p
 }
 
 func ms(t time.Time) int64 {

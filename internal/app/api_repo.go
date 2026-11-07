@@ -3,6 +3,7 @@ package app
 import (
 	"net/http"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -88,7 +89,7 @@ func (a *App) repoReport(w http.ResponseWriter, r *http.Request) {
 		branch = ref
 	}
 	web.JSON(w, map[string]any{
-		"name": base(a.repo.Root), "head": a.ixSHA, "branch": branch, "files": len(files), "javaFiles": javaFiles, "testFiles": testFiles,
+		"name": filepath.Base(a.repo.Root), "head": a.ixSHA, "branch": branch, "files": len(files), "javaFiles": javaFiles, "testFiles": testFiles,
 		"lines": ix.Lines, "types": len(ix.Types), "methods": methods, "commits": a.repo.CountRef(ref), "contributors": contributors,
 		"languages": langs, "roles": roles, "services": services, "endpoints": endpoints, "calls": calls,
 		"hotspots": java.Hotspots(ix, churn, openByFile, 12), "costly": costly, "costlyTotal": costlyTotal, "largest": java.Largest(ix, 10),

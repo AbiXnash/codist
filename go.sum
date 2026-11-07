@@ -1,5 +1,7 @@
 github.com/AbiXnash/codist-behaviour v0.2.0 h1:TwJzoutw1OyW7I5N76yTn7HtzZUiweFCYthn00vdJhc=
 github.com/AbiXnash/codist-behaviour v0.2.0/go.mod h1:0m9E3AHMyKBY0/FdI0AAtuMpp6GERdukmp4zGPh3qV0=
+github.com/AbiXnash/codist-fix v0.1.0 h1:B1qqBQoMYcmCNORpS1JjI796V1RRCZWlLSWHCZKoO6s=
+github.com/AbiXnash/codist-fix v0.1.0/go.mod h1:3FNtovh8qBnH4xTXGmJiUI9W+XZA0cZeaPjNzgWAMi4=
 github.com/AbiXnash/codist-git v0.3.0 h1:xyDNqTz37HqwmjaUA/9pirJEpe0VMtMRAiaRez3aPlU=
 github.com/AbiXnash/codist-git v0.3.0/go.mod h1:RIqrSdD6PQGw3PA6QT+PyPnZPqUxg5Tw+3TUe6iIrQk=
 github.com/AbiXnash/codist-java v0.3.0 h1:MucFGBQ5fhwzyGVQk7cZ8M/JSvrT8c28g3+zp2Y9XVg=

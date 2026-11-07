@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	review "github.com/AbiXnash/codist-review"
@@ -27,9 +28,9 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 	}
 	head := a.repo.Resolve(a.viewRef())
 	web.JSON(w, map[string]any{
-		"repo": base(a.repo.Root), "path": a.repo.Root, "branch": branch, "viewing": view != "", "checkedOut": checkedOut,
+		"repo": filepath.Base(a.repo.Root), "path": a.repo.Root, "branch": branch, "viewing": view != "", "checkedOut": checkedOut,
 		"tracking": branch, "head": head, "model": a.cfg.Model, "llmProblem": problem,
-		"graphSource": head, "graphBuiltAt": time.Now().UnixMilli(), "canFix": false, "user": "",
+		"graphSource": head, "graphBuiltAt": time.Now().UnixMilli(), "canFix": !a.cfg.ModelOff && modelOK && view == "", "user": "",
 		"rules": 15, "models": map[string]string{"review": a.cfg.Model, "summary": a.cfg.Model, "fix": a.cfg.Model, "ask": a.cfg.Model},
 		"types": len(ix.Types), "behaviour": a.runner != nil, "modelUsage": review.Usage(a.store), "riskModel": a.riskModel(),
 	})
@@ -41,7 +42,7 @@ func (a *App) features(w http.ResponseWriter, r *http.Request) {
 		"menus": map[string]bool{"review": true, "repo": true, "incidents": true, "branches": false, "mine": false, "team": false,
 			"release": false, "activity": false, "memory": false},
 		"panels":   map[string]bool{"issues": true, "commit": true, "code": true, "ask": false},
-		"features": map[string]bool{"explorer": true, "branchGraph": false, "branchSwitcher": true, "fix": false, "reword": false, "localPlan": false},
+		"features": map[string]bool{"explorer": true, "branchGraph": false, "branchSwitcher": true, "fix": true, "reword": false, "localPlan": false},
 		"sources":  []string{},
 	})
 }
