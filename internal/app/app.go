@@ -10,9 +10,9 @@ import (
 	"github.com/AbiXnash/codist-git"
 	"github.com/AbiXnash/codist-java"
 	"github.com/AbiXnash/codist-model"
+	"github.com/AbiXnash/codist-review/store"
 	"github.com/AbiXnash/codist-ui"
 	"github.com/AbiXnash/codist/internal/config"
-	"github.com/AbiXnash/codist/internal/store"
 	"github.com/AbiXnash/codist/internal/web"
 )
 

@@ -16,6 +16,7 @@ import (
 
 	"github.com/AbiXnash/codist-git"
 	"github.com/AbiXnash/codist-git/testrepo"
+	"github.com/AbiXnash/codist-java"
 	"github.com/AbiXnash/codist/internal/config"
 )
 
@@ -300,7 +301,7 @@ func TestGraphRepoAndFiles(t *testing.T) {
 			Members                           []struct{ Name, Kind string }
 			Endpoints                         []string
 		}
-		Edges  []graphEdge
+		Edges  []java.GraphEdge
 		Source string
 	}
 	e.get("/api/graph", &g)
@@ -769,7 +770,7 @@ func TestHelpers(t *testing.T) {
 	if base(`C:\code\shop`) != "shop" || base("shop") != "shop" || ms(time.Time{}) != 0 || short("abc") != "abc" {
 		t.Error("base, ms, short")
 	}
-	if orName("", "b") != "b" || len(orEmptyM(nil)) != 0 || len(orEmptyR(nil)) != 0 || len(orEmpty(nil)) != 0 {
+	if len(orEmptyS(nil)) != 0 || len(orEmpty(nil)) != 0 {
 		t.Error("or helpers")
 	}
 	for p, want := range map[string][2]bool{

@@ -6,8 +6,8 @@ import (
 
 	"github.com/AbiXnash/codist-git"
 	"github.com/AbiXnash/codist-git/testrepo"
+	"github.com/AbiXnash/codist-review/store"
 	"github.com/AbiXnash/codist/internal/config"
-	"github.com/AbiXnash/codist/internal/store"
 )
 
 // A restart picks up where Codist stopped: reviews cut off mid-way are done again, finished ones

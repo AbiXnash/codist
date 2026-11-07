@@ -9,8 +9,8 @@ import (
 
 	"github.com/AbiXnash/codist-git"
 	"github.com/AbiXnash/codist-java"
-	"github.com/AbiXnash/codist/internal/review"
-	"github.com/AbiXnash/codist/internal/store"
+	"github.com/AbiXnash/codist-review"
+	"github.com/AbiXnash/codist-review/store"
 	"github.com/AbiXnash/codist/internal/web"
 )
 
@@ -136,15 +136,15 @@ var changeTypes = map[string]string{"added": "ADD", "modified": "MODIFY", "delet
 var edgesCache struct {
 	sync.Mutex
 	sha   string
-	edges []graphEdge
+	edges []java.GraphEdge
 }
 
-func (a *App) edges() []graphEdge {
+func (a *App) edges() []java.GraphEdge {
 	ix := a.index()
 	edgesCache.Lock()
 	defer edgesCache.Unlock()
 	if edgesCache.sha != a.ixSHA || edgesCache.edges == nil {
-		edgesCache.sha, edgesCache.edges = a.ixSHA, graphEdges(ix)
+		edgesCache.sha, edgesCache.edges = a.ixSHA, java.GraphEdges(ix)
 	}
 	return edgesCache.edges
 }

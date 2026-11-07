@@ -10,18 +10,9 @@ import (
 	"github.com/AbiXnash/codist/internal/web"
 )
 
-type repoMethod struct {
-	Class  string    `json:"class"`
-	Node   string    `json:"node"`
-	Method string    `json:"method"`
-	File   string    `json:"file"`
-	Line   int       `json:"line"`
-	Cost   java.Cost `json:"cost"`
-}
-
+// repoReport is the Repository page: the code's shape from the index, joined with git history and open issues.
 func (a *App) repoReport(w http.ResponseWriter, r *http.Request) {
-	ix := a.index()
-	ref := a.viewRef()
+	ix, ref := a.index(), a.viewRef()
 	files, _ := a.repo.Files(a.ixSHA)
 	langs := map[string]int{}
 	javaFiles, testFiles := 0, 0
@@ -38,152 +29,55 @@ func (a *App) repoReport(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	open := map[string]map[string]int{} // file -> severity -> count
+	moduleOf := java.ModuleOfFile(ix)
+	openByFile, openByModule := map[string]int{}, map[string]map[string]int{}
 	issues, sev := map[string]int{}, map[string]int{}
 	for _, is := range a.store.AllIssues() {
 		if is.State != "open" {
 			continue
 		}
-		if open[is.Path] == nil {
-			open[is.Path] = map[string]int{}
+		openByFile[is.Path]++
+		if m := moduleOf[is.Path]; m != "" {
+			if openByModule[m] == nil {
+				openByModule[m] = map[string]int{}
+			}
+			openByModule[m][is.Latest.Severity]++
 		}
-		open[is.Path][is.Latest.Severity]++
 		issues[kinds[category(is.Latest.Rule, is.Latest.Source)]]++
 		sev[is.Latest.Severity]++
 	}
-	moduleOf := map[string]string{}
-	methods := 0
-	roles := map[string]int{}
-	var costly []repoMethod
-	largest := []map[string]any{}
+	methods, roles := 0, map[string]int{}
 	for _, t := range ix.Types {
-		moduleOf[t.File] = t.Module
 		methods += len(t.Methods)
-		roles[role(t)]++
-		for _, m := range t.Methods {
-			if m.Cost.LoopIO > 0 || m.Cost.LoopDepth >= 2 || m.Cost.Complexity >= 8 {
-				costly = append(costly, repoMethod{Class: t.Name, Node: t.ID, Method: m.Name, File: t.File, Line: m.Line, Cost: m.Cost})
-			}
-		}
+		roles[t.Stereotype]++
 	}
-	sort.Slice(costly, func(i, j int) bool {
-		x, y := costly[i].Cost, costly[j].Cost
-		if x.LoopIO != y.LoopIO {
-			return x.LoopIO > y.LoopIO
-		}
-		if x.LoopDepth != y.LoopDepth {
-			return x.LoopDepth > y.LoopDepth
-		}
-		return x.Complexity > y.Complexity
-	})
-	costlyTotal := len(costly)
-	costly = costly[:min(15, len(costly))]
-	types := append([]*java.Type(nil), ix.Types...)
-	sort.Slice(types, func(i, j int) bool { return types[i].Lines() > types[j].Lines() })
-	for _, t := range types[:min(10, len(types))] {
-		largest = append(largest, map[string]any{"Name": t.Name, "Node": t.ID, "File": t.File, "Lines": t.Lines(), "Members": len(t.Fields) + len(t.Methods)})
-	}
-
 	churn := a.repo.Churn(2000)
-	modCommits := map[string]int{}
-	lines := map[string]int{}
-	for _, t := range ix.Types {
-		lines[t.File] = max(lines[t.File], t.End)
-	}
-	type hot struct {
-		Path          string `json:"path"`
-		Commits, Open int
-		Lines         int `json:"lines"`
-	}
-	var hots []map[string]any
+	moduleCommits := map[string]int{}
 	for p, n := range churn {
-		if m := moduleOf[p]; m != "" {
-			modCommits[m] += n
-		}
-		if l, ok := lines[p]; ok {
-			o := 0
-			for _, c := range open[p] {
-				o += c
-			}
-			hots = append(hots, map[string]any{"path": p, "commits": n, "open": o, "lines": l})
-		}
+		moduleCommits[moduleOf[p]] += n
 	}
-	sort.Slice(hots, func(i, j int) bool {
-		x, y := hots[i]["commits"].(int)*(hots[i]["open"].(int)+1), hots[j]["commits"].(int)*(hots[j]["open"].(int)+1)
-		if x != y {
-			return x > y
-		}
-		return hots[i]["path"].(string) < hots[j]["path"].(string)
-	})
-	hots = hots[:min(12, len(hots))]
-
 	services := []map[string]any{}
-	files2 := map[string]int{}
-	for _, f := range files {
-		for _, m := range ix.Modules {
-			if m.Dir != "" && strings.HasPrefix(f, m.Dir+"/") {
-				files2[m.Name]++
-			}
-		}
-	}
 	for _, m := range ix.Modules {
-		o := map[string]int{}
-		for p, bySev := range open {
-			if moduleOf[p] == m.Name {
-				for s, n := range bySev {
-					o[s] += n
-				}
+		n := 0
+		for _, f := range files {
+			if m.Dir != "" && strings.HasPrefix(f, m.Dir+"/") {
+				n++
 			}
 		}
 		var port any
 		if m.Port != "" {
 			port = m.Port
 		}
-		services = append(services, map[string]any{"name": m.Name, "port": port, "kind": m.Kind, "files": files2[m.Name], "lines": m.Lines,
+		open := openByModule[m.Name]
+		if open == nil {
+			open = map[string]int{}
+		}
+		services = append(services, map[string]any{"name": m.Name, "port": port, "kind": m.Kind, "files": n, "lines": m.Lines,
 			"types": m.Types, "tests": m.Tests, "endpoints": m.Endpoints, "calls": orEmptyS(m.Calls), "calledBy": orEmptyS(m.CalledBy),
-			"usesLibs": orEmptyS(m.Uses), "deps": []string{}, "open": o, "commits": modCommits[m.Name]})
+			"usesLibs": orEmptyS(m.Uses), "deps": []string{}, "open": open, "commits": moduleCommits[m.Name]})
 	}
-
-	// Calls into each route from Feign clients in this repository.
-	callers := map[string]int{}
-	var calls []map[string]any
-	for _, t := range ix.Types {
-		if t.Stereotype != "client" {
-			continue
-		}
-		target := ""
-		for _, m := range ix.Modules {
-			if m.App == t.Feign || m.Name == t.Feign {
-				target = m.Name
-			}
-		}
-		var routes []string
-		for _, e := range t.Endpoints {
-			routes = append(routes, e.Verb+" "+e.Path)
-			callers[target+" "+e.Verb+" "+e.Path]++
-		}
-		calls = append(calls, map[string]any{"from": t.Module, "to": orName(target, t.Feign), "client": t.Name, "node": t.ID, "routes": orEmptyS(routes)})
-	}
-	sort.Slice(calls, func(i, j int) bool {
-		return calls[i]["from"].(string)+calls[i]["client"].(string) < calls[j]["from"].(string)+calls[j]["client"].(string)
-	})
-	endpoints := []map[string]any{}
-	for _, t := range ix.Types {
-		if t.Stereotype == "client" {
-			continue
-		}
-		for _, e := range t.Endpoints {
-			endpoints = append(endpoints, map[string]any{"service": t.Module, "route": e.Verb + " " + e.Path, "handler": e.Handler + "()",
-				"class": t.Name, "node": t.ID, "callers": callers[t.Module+" "+e.Verb+" "+e.Path]})
-		}
-	}
-	sort.Slice(endpoints, func(i, j int) bool {
-		if endpoints[i]["service"] != endpoints[j]["service"] {
-			return endpoints[i]["service"].(string) < endpoints[j]["service"].(string)
-		}
-		return endpoints[i]["route"].(string) < endpoints[j]["route"].(string)
-	})
-
+	calls, endpoints := java.Services(ix)
+	costly, costlyTotal := java.Costly(ix, 15)
 	contributors := []map[string]any{}
 	for name, n := range a.repo.Authors(ref) {
 		contributors = append(contributors, map[string]any{"name": name, "commits": n})
@@ -196,28 +90,8 @@ func (a *App) repoReport(w http.ResponseWriter, r *http.Request) {
 	web.JSON(w, map[string]any{
 		"name": base(a.repo.Root), "head": a.ixSHA, "branch": branch, "files": len(files), "javaFiles": javaFiles, "testFiles": testFiles,
 		"lines": ix.Lines, "types": len(ix.Types), "methods": methods, "commits": a.repo.CountRef(ref), "contributors": contributors,
-		"languages": langs, "roles": roles, "services": services, "endpoints": endpoints, "calls": orEmptyM(calls), "hotspots": orEmptyM(hots),
-		"costly": orEmptyR(costly), "costlyTotal": costlyTotal, "largest": largest, "issues": issues, "urgency": map[string]int{}, "severity": sev,
+		"languages": langs, "roles": roles, "services": services, "endpoints": endpoints, "calls": calls,
+		"hotspots": java.Hotspots(ix, churn, openByFile, 12), "costly": costly, "costlyTotal": costlyTotal, "largest": java.Largest(ix, 10),
+		"issues": issues, "urgency": map[string]int{}, "severity": sev,
 	})
-}
-
-func orName(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
-}
-
-func orEmptyM(xs []map[string]any) []map[string]any {
-	if xs == nil {
-		return []map[string]any{}
-	}
-	return xs
-}
-
-func orEmptyR(xs []repoMethod) []repoMethod {
-	if xs == nil {
-		return []repoMethod{}
-	}
-	return xs
 }
