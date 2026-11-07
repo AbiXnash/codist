@@ -1,2 +1,0 @@
-org.apache.commons.csv.CSVFormat#print
-org.apache.commons.csv.CSVFormat#printAndQuote

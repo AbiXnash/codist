@@ -7,12 +7,13 @@ import (
 	"sync"
 	"time"
 
-	"codist/internal/config"
-	"codist/internal/git"
-	"codist/internal/java"
-	"codist/internal/model"
-	"codist/internal/store"
-	"codist/internal/web"
+	"github.com/AbiXnash/codist-git"
+	"github.com/AbiXnash/codist-java"
+	"github.com/AbiXnash/codist-model"
+	"github.com/AbiXnash/codist-ui"
+	"github.com/AbiXnash/codist/internal/config"
+	"github.com/AbiXnash/codist/internal/store"
+	"github.com/AbiXnash/codist/internal/web"
 )
 
 // App is one running Codist for one repository.
@@ -89,7 +90,7 @@ func (a *App) routes() {
 	a.mux.Handle("/api/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, http.StatusNotFound, "This part of Codist is not in this version.")
 	}))
-	a.mux.Handle("/", web.UI())
+	a.mux.Handle("/", ui.Handler())
 }
 
 // watchModel checks the model server now and every 30 seconds, so the interface says when it goes away.

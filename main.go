@@ -19,10 +19,10 @@ import (
 	"syscall"
 	"time"
 
-	"codist/internal/app"
-	"codist/internal/config"
-	"codist/internal/git"
-	"codist/internal/model"
+	"github.com/AbiXnash/codist-git"
+	"github.com/AbiXnash/codist-model"
+	"github.com/AbiXnash/codist/internal/app"
+	"github.com/AbiXnash/codist/internal/config"
 )
 
 func main() {

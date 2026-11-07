@@ -4,10 +4,10 @@ import (
 	"testing"
 	"time"
 
-	"codist/internal/config"
-	"codist/internal/git"
-	"codist/internal/store"
-	"codist/internal/testrepo"
+	"github.com/AbiXnash/codist-git"
+	"github.com/AbiXnash/codist-git/testrepo"
+	"github.com/AbiXnash/codist/internal/config"
+	"github.com/AbiXnash/codist/internal/store"
 )
 
 // A restart picks up where Codist stopped: reviews cut off mid-way are done again, finished ones

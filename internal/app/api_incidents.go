@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"codist/internal/incident"
-	"codist/internal/java"
-	"codist/internal/store"
-	"codist/internal/web"
+	"github.com/AbiXnash/codist-java"
+	"github.com/AbiXnash/codist-model/incident"
+	"github.com/AbiXnash/codist/internal/store"
+	"github.com/AbiXnash/codist/internal/web"
 )
 
 type frameJSON struct {

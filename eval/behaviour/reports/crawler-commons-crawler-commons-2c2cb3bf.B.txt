@@ -1,2 +1,0 @@
-calls=108 ran=108 differ=0 flaky=0 dropped=6
-  main: skipped, it may exit

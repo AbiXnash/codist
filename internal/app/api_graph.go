@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"codist/internal/java"
-	"codist/internal/web"
+	"github.com/AbiXnash/codist-java"
+	"github.com/AbiXnash/codist/internal/web"
 )
 
 type member struct {

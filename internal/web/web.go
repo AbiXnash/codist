@@ -1,48 +1,11 @@
-// Package web carries the built interface inside the binary, so one file is all anyone needs to run
-// Codist. `make build` builds web/ and copies its output to dist/ before compiling.
+// Package web holds the small helpers the API uses to answer in JSON. The interface itself is the codist-ui
+// module.
 package web
 
 import (
-	"embed"
 	"encoding/json"
-	"io/fs"
 	"net/http"
-	"strings"
 )
-
-//go:embed all:dist
-var files embed.FS
-
-// UI serves the interface. Paths that are not files fall back to index.html, so a reload on any
-// screen works. Without a built interface it says how to build one.
-func UI() http.Handler { return serve(files) }
-
-// serve serves the dist folder of fsys.
-func serve(fsys fs.FS) http.Handler {
-	dist, err := fs.Sub(fsys, "dist")
-	if err == nil {
-		if _, err = fs.Stat(dist, "index.html"); err == nil {
-			static := http.FileServerFS(dist)
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				p := strings.TrimPrefix(r.URL.Path, "/")
-				if p != "" {
-					if _, err := fs.Stat(dist, p); err == nil {
-						if strings.HasPrefix(p, "assets/") {
-							w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-						}
-						static.ServeHTTP(w, r)
-						return
-					}
-				}
-				w.Header().Set("Cache-Control", "no-cache")
-				http.ServeFileFS(w, r, dist, "index.html")
-			})
-		}
-	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "This build has no interface. Run make build, which builds web/ into the binary.", http.StatusNotFound)
-	})
-}
 
 // JSON writes v as JSON.
 func JSON(w http.ResponseWriter, v any) {

@@ -47,10 +47,30 @@ The script runs with no file, network or OS access. Environment variables overri
 
 ## Build
 
-`make build` builds the interface in `web/` (Svelte; needs Node) and embeds it in `bin/codist`; `make dist` makes
-one file each for macOS, Linux and Windows. No C compiler is needed, and people who run Codist need neither Node nor
-Go. `make dev` runs the server with a live-reloading interface. `make test` runs the tests. Data is kept in
+`make build` builds `bin/codist`; `make dist` makes one file each for macOS, Linux and Windows. No C compiler is
+needed, and people who run Codist need neither Node nor Go. `make test` runs the tests. Data is kept in
 `~/.codist/<repo>.db`, a SQLite file.
+
+## Codebases
+
+Codist is split into modules, each its own repository, and built into this one binary:
+
+| Repository | What it holds |
+|---|---|
+| [codist](https://github.com/AbiXnash/codist) | this app: the API, review lanes, issue store and settings |
+| [codist-java](https://github.com/AbiXnash/codist-java) | the Java parser, code checks, class graph and call graph |
+| [codist-git](https://github.com/AbiXnash/codist-git) | reading a repository through git, and a test repository builder |
+| [codist-model](https://github.com/AbiXnash/codist-model) | the model server client and production log parsing |
+| [codist-ui](https://github.com/AbiXnash/codist-ui) | the Svelte interface, embedded already built |
+| [codist-eval](https://github.com/AbiXnash/codist-eval) | the benchmark and the behaviour-difference experiment |
+
+To change several at once, clone them side by side and add a `go.work` (ignored by git):
+
+```bash
+go work init . ../codist-java ../codist-git ../codist-model ../codist-ui
+```
+
+`make dev` runs the server with the interface from `../codist-ui` reloading live.
 
 The branch picker in the top bar shows any local or remote branch read-only: its commits, graph and repository
 report, read from git, while your checkout stays as it is.

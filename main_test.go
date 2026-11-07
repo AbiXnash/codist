@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"codist/internal/config"
-	"codist/internal/testrepo"
+	"github.com/AbiXnash/codist-git/testrepo"
+	"github.com/AbiXnash/codist/internal/config"
 )
 
 // TestMain lets a test run the program itself: CODIST_RUN_MAIN=1 runs main with the given arguments.

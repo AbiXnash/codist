@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"codist/internal/java"
+	"github.com/AbiXnash/codist-java"
 )
 
 func wanted(p string) (isJava, isBuild bool) {

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"codist/internal/review"
+	"github.com/AbiXnash/codist/internal/review"
 )
 
 // Reviews run in two lanes. Code checks take milliseconds, so they have their own lane and never

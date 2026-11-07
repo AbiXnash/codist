@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"codist/internal/config"
-	"codist/internal/git"
-	"codist/internal/testrepo"
+	"github.com/AbiXnash/codist-git"
+	"github.com/AbiXnash/codist-git/testrepo"
+	"github.com/AbiXnash/codist/internal/config"
 )
 
 // fakeModel is a model server: it has one model, "fake", and answers reviews and incident
@@ -630,8 +630,9 @@ func TestHistoryLimit(t *testing.T) {
 		cs := e.commits()
 		return len(cs) == 3 && cs[0].Model == "fake"
 	})
+	cs := e.reviewed(3, false)         // every commit checked
 	time.Sleep(300 * time.Millisecond) // give the model lane time to do more, which it must not
-	cs := e.commits()
+	cs = e.commits()
 	for _, c := range cs[1:] {
 		if c.Status != "done" || c.Model != "" {
 			t.Errorf("older commit %+v", c)

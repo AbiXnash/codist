@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"codist/internal/web"
+	"github.com/AbiXnash/codist/internal/web"
 )
 
 func (a *App) status(w http.ResponseWriter, r *http.Request) {

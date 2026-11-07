@@ -7,11 +7,11 @@ import (
 	"strings"
 	"sync"
 
-	"codist/internal/git"
-	"codist/internal/java"
-	"codist/internal/review"
-	"codist/internal/store"
-	"codist/internal/web"
+	"github.com/AbiXnash/codist-git"
+	"github.com/AbiXnash/codist-java"
+	"github.com/AbiXnash/codist/internal/review"
+	"github.com/AbiXnash/codist/internal/store"
+	"github.com/AbiXnash/codist/internal/web"
 )
 
 type commitJSON struct {

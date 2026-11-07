@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"codist/internal/git"
-	"codist/internal/java"
-	"codist/internal/store"
+	"github.com/AbiXnash/codist-git"
+	"github.com/AbiXnash/codist-java"
+	"github.com/AbiXnash/codist/internal/store"
 )
 
 //go:embed review.md

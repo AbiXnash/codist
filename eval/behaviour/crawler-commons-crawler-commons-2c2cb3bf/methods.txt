@@ -1,2 +1,0 @@
-crawlercommons.robots.SimpleRobotRulesParser#main
-crawlercommons.robots.SimpleRobotRulesParser#parseContent

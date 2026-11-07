@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"codist/internal/git"
-	"codist/internal/store"
+	"github.com/AbiXnash/codist-git"
+	"github.com/AbiXnash/codist/internal/store"
 )
 
 func TestJudge(t *testing.T) {

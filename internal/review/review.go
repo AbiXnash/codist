@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"codist/internal/git"
-	"codist/internal/java"
-	"codist/internal/model"
-	"codist/internal/store"
+	"github.com/AbiXnash/codist-git"
+	"github.com/AbiXnash/codist-java"
+	"github.com/AbiXnash/codist-model"
+	"github.com/AbiXnash/codist/internal/store"
 )
 
 // Reviewer reviews commits of one repository.
