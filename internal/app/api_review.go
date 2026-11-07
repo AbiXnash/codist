@@ -213,10 +213,11 @@ func (a *App) commit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	web.JSON(w, map[string]any{
-		"analysis": map[string]any{"commit": commitOf(c), "files": files, "changed": changed, "impacted": impacted},
-		"review":   a.reviewJSON(c, changes),
-		"fixes":    map[string]string{},
-		"resolved": resolved,
+		"analysis":  map[string]any{"commit": commitOf(c), "files": files, "changed": changed, "impacted": impacted},
+		"review":    a.reviewJSON(c, changes),
+		"behaviour": a.behaviourOf(c.SHA),
+		"fixes":     map[string]string{},
+		"resolved":  resolved,
 	})
 }
 

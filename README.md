@@ -10,6 +10,8 @@ watches the repository, and shows what it finds in your browser:
 - **Incidents**: paste production logs to see each error, the line of your code it came from, and the commit that
   last changed that line. The model can suggest a cause.
 - **Repository**: modules, HTTP routes, Feign calls, hotspots, the largest classes and methods that may be slow.
+- **Behaviour** (optional): runs the methods each commit changed on the code before and after it, with the same
+  inputs, and shows what now behaves differently, so you can say whether it was meant.
 
 Nothing leaves your machine. Codist never changes your code.
 
@@ -54,10 +56,12 @@ model = { url = "http://localhost:11434", name = "qwen2.5-coder:7b", context = 8
 max_files = 8            -- changed files per commit the model reads; checks read all of them
 history = 50             -- recent commits the model reads in the background; 0 for all. Checks cover every commit
 ignore = { "target/", "build/", "generated/" }
+behaviour = false        -- run changed methods before and after each recent commit; runs your code, needs a JDK
 ```
 
 The script runs with no file, network or OS access. Environment variables override it for one run:
-`PORT`, `CODIST_MODEL`, `CODIST_MODEL_URL`, `CODIST_MODEL_REVIEW=false`, `CODIST_HISTORY`, `CODIST_DATA_DIR`.
+`PORT`, `CODIST_MODEL`, `CODIST_MODEL_URL`, `CODIST_MODEL_REVIEW=false`, `CODIST_HISTORY`, `CODIST_BEHAVIOUR=1`,
+`CODIST_DATA_DIR`.
 
 ## How it is built
 
@@ -65,8 +69,9 @@ Codist is split into modules, each its own repository, and built into this one p
 
 | Repository | What it holds |
 |---|---|
-| [codist](https://github.com/AbiXnash/codist) | this app: settings, the HTTP API and the two review lanes |
+| [codist](https://github.com/AbiXnash/codist) | this app: settings, the HTTP API and the review lanes |
 | [codist-review](https://github.com/AbiXnash/codist-review) | how a commit is reviewed, and the issue store |
+| [codist-behaviour](https://github.com/AbiXnash/codist-behaviour) | running changed methods before and after a commit |
 | [codist-java](https://github.com/AbiXnash/codist-java) | the Java parser, code checks, class graph and call graph |
 | [codist-git](https://github.com/AbiXnash/codist-git) | reading a repository through git, and a test repository builder |
 | [codist-model](https://github.com/AbiXnash/codist-model) | the model server client, and reading production logs into incidents |

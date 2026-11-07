@@ -89,6 +89,7 @@ model = { url = "http://localhost:11434", name = "qwen2.5-coder:7b", context = 8
 max_files = 8            -- changed files per commit the model reads; checks read all of them
 history = 50             -- recent commits the model reads in the background; 0 for all
 ignore = { "target/", "build/", "generated/" }
+behaviour = false        -- run changed methods before and after each recent commit (see below)
 ```
 
 The file is Lua, so a team can compute values instead of copying them; it runs with no file, network or OS access.
@@ -100,6 +101,7 @@ Environment variables override it for one run:
 | `CODIST_MODEL`, `CODIST_MODEL_URL` | model name and server address |
 | `CODIST_MODEL_REVIEW=false` | code checks only |
 | `CODIST_HISTORY` | how many recent commits the model reads; 0 for all |
+| `CODIST_BEHAVIOUR=1` | turn on running changed methods (see below) |
 | `CODIST_DATA_DIR` | where Codist keeps its data (default `~/.codist`) |
 
 ## 5. Using it
@@ -115,7 +117,22 @@ Environment variables override it for one run:
 - **Repository**: modules and their ports, routes and who calls them, hotspots that change often and have open
   issues, and methods that may be slow.
 
+- **Behaviour**, when turned on: for each recent commit, Codist builds the code before and after it, calls the
+  methods it changed (and the methods that call them) with the same inputs, and lists every call whose result
+  changed: "before: 1200, after: 1201". You decide whether each change was meant. A commit that only adds code, or
+  that it cannot build, says why it was not run.
+
 The branch picker in the top bar shows any branch, read from git, without changing your checkout.
+
+## Behaviour: running the changed code (optional)
+
+Turn it on per repository with `behaviour = true` in `.codist/config.lua`, or `CODIST_BEHAVIOUR=1` for one run. It
+needs a JDK 17 or later (`java` and `javac`) and, for Maven projects, the project's `mvnw` or `mvn`; Gradle is not
+supported yet. It is off by default because it runs your project's code. Codist runs it in a scratch folder with an
+environment cut down to the path, the JDK and the locale, so keys and passwords in your environment do not reach it.
+
+Inputs are standard edge cases for each parameter type, so it finds differences in logic that takes plain values
+best. A service that needs a database or another service is not covered yet.
 
 ## Common problems
 

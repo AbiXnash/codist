@@ -30,7 +30,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		"tracking": branch, "head": head, "model": a.cfg.Model, "llmProblem": problem,
 		"graphSource": head, "graphBuiltAt": time.Now().UnixMilli(), "canFix": false, "user": "",
 		"rules": 15, "models": map[string]string{"review": a.cfg.Model, "summary": a.cfg.Model, "fix": a.cfg.Model, "ask": a.cfg.Model},
-		"types": len(ix.Types),
+		"types": len(ix.Types), "behaviour": a.runner != nil,
 	})
 }
 

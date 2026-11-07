@@ -4,9 +4,11 @@ package app
 import (
 	"context"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/AbiXnash/codist-behaviour"
 	"github.com/AbiXnash/codist-git"
 	"github.com/AbiXnash/codist-java"
 	"github.com/AbiXnash/codist-model"
@@ -25,6 +27,8 @@ type App struct {
 	mux      *http.ServeMux
 	checks   *queue // code checks: fast, never wait for the model
 	models   *queue // the model, one commit at a time
+	runs     *queue // running the changed methods before and after a commit, when turned on
+	runner   *behaviour.Runner
 	events   *hub
 	shaLocks sync.Map
 	ctx      context.Context
@@ -46,7 +50,11 @@ func New(ctx context.Context, cfg config.Config, repo *git.Repo) (*App, error) {
 		return nil, err
 	}
 	a := &App{cfg: cfg, repo: repo, model: model.New(cfg.ModelURL, cfg.Model, cfg.ModelCtx), store: st,
-		mux: http.NewServeMux(), checks: newQueue(), models: newQueue(), events: newHub(), ctx: ctx}
+		mux: http.NewServeMux(), checks: newQueue(), models: newQueue(), runs: newQueue(), events: newHub(), ctx: ctx}
+	if cfg.Behaviour {
+		a.runner = &behaviour.Runner{Repo: repo, Work: filepath.Join(cfg.DataDir, "behaviour", base(repo.Root)), Ignored: cfg.Ignored}
+		go a.runBehaviour(ctx)
+	}
 	a.modelOK, a.modelNote = a.model.Status(ctx)
 	a.routes()
 	go a.watchModel(ctx)
@@ -78,6 +86,7 @@ func (a *App) routes() {
 	h("GET /api/commits/{sha}", a.commit)
 	h("GET /api/commits/{sha}/impact", a.impact)
 	h("POST /api/commits/{sha}/review", a.requestReview)
+	h("POST /api/commits/{sha}/behaviour", a.requestBehaviour)
 	h("GET /api/issues", a.issues)
 	h("POST /api/issues/{id}/resolve", a.resolveIssue)
 	h("DELETE /api/issues/{id}/resolve", a.reopenIssue)

@@ -51,3 +51,23 @@ func TestHistory(t *testing.T) {
 		t.Errorf("env: %d", c.History)
 	}
 }
+
+func TestBehaviourSetting(t *testing.T) {
+	if Defaults(".").Behaviour {
+		t.Error("running the project's code is off unless turned on")
+	}
+	c := Defaults(".")
+	if err := c.applyLua("behaviour = true"); err != nil || !c.Behaviour {
+		t.Errorf("lua: %v %v", c.Behaviour, err)
+	}
+	t.Setenv("CODIST_BEHAVIOUR", "off")
+	c.applyEnv()
+	if c.Behaviour {
+		t.Error("env off")
+	}
+	t.Setenv("CODIST_BEHAVIOUR", "1")
+	c.applyEnv()
+	if !c.Behaviour {
+		t.Error("env on")
+	}
+}

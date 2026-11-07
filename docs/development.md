@@ -2,7 +2,7 @@
 
 ## Set up
 
-You need git and Go 1.26 or later; Node 20 or later only to change the interface. One script clones all seven
+You need git and Go 1.26 or later; Node 20 or later only to change the interface. One script clones all eight
 repositories side by side and ties the Go modules together:
 
 ```bash
@@ -23,6 +23,7 @@ codist-java/
 codist-git/
 codist-model/
 codist-review/
+codist-behaviour/
 codist-ui/
 codist-eval/
 ```
@@ -70,7 +71,7 @@ Coverage is above 90% in every module except the app's `main` (85%) and settings
    `GOWORK=off make test` passes without your local copies, and commit `go.mod` and `go.sum`.
 
 Tag modules before the app, and dependencies before what uses them: codist-git and codist-model, then codist-java,
-then codist-review, then codist.
+then codist-review and codist-behaviour, then codist.
 
 ## Releases
 

@@ -811,3 +811,61 @@ type plainWriter struct {
 func (p *plainWriter) Header() http.Header         { return p.header }
 func (p *plainWriter) Write(b []byte) (int, error) { return p.body.Write(b) }
 func (p *plainWriter) WriteHeader(c int)           { p.code = c }
+
+// Behaviour is off unless turned on: no report, and asking for one says how to turn it on.
+func TestBehaviourOff(t *testing.T) {
+	e := start(t, nil)
+	var c map[string]any
+	e.get("/api/commits/"+e.repo.Bug, &c)
+	if c["behaviour"] != nil {
+		t.Errorf("behaviour %v", c["behaviour"])
+	}
+	var st map[string]any
+	if e.get("/api/status", &st); st["behaviour"] != false {
+		t.Errorf("status %v", st["behaviour"])
+	}
+	var msg map[string]string
+	if e.call("POST", "/api/commits/"+e.repo.Bug+"/behaviour", "", &msg) != 409 || !strings.Contains(msg["error"], "behaviour = true") {
+		t.Errorf("%v", msg)
+	}
+}
+
+// Turned on, every recent commit gets a report, and asking runs one again.
+func TestBehaviourOn(t *testing.T) {
+	e := start(t, func(c *config.Config) { c.Behaviour = true; c.ModelOff = true })
+	report := func(sha string) map[string]any {
+		var c struct{ Behaviour map[string]any }
+		e.get("/api/commits/"+sha, &c)
+		return c.Behaviour
+	}
+	waitFor(t, "a report for each commit", func() bool {
+		for _, sha := range []string{e.repo.Init, e.repo.Bug, e.repo.Fix} {
+			r := report(sha)
+			if r == nil || r["status"] == "queued" || r["status"] == "running" {
+				return false
+			}
+		}
+		return true
+	})
+	if r := report(e.repo.Init); r["status"] != "skipped" || !strings.Contains(r["reason"].(string), "first commit") {
+		t.Errorf("first commit %v", r)
+	}
+	if r := report(e.repo.Bug); r["reason"] == "" && r["status"] != "done" {
+		t.Errorf("bug commit %v", r)
+	}
+	var st map[string]any
+	if e.get("/api/status", &st); st["behaviour"] != true {
+		t.Errorf("status %v", st["behaviour"])
+	}
+	var queued map[string]any
+	if e.call("POST", "/api/commits/"+e.repo.Bug+"/behaviour", "", &queued) != 200 || queued["queued"] != true {
+		t.Errorf("%v", queued)
+	}
+	if e.call("POST", "/api/commits/nope/behaviour", "", nil) != 404 {
+		t.Error("unknown commit")
+	}
+	waitFor(t, "the rerun", func() bool {
+		r := report(e.repo.Bug)
+		return r != nil && r["status"] != "queued" && r["status"] != "running"
+	})
+}

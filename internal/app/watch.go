@@ -231,6 +231,9 @@ func (a *App) watch(ctx context.Context) {
 			if !a.cfg.ModelOff {
 				a.models.push(job{sha: fresh[i]}, true)
 			}
+			if a.runner != nil {
+				a.runs.push(job{sha: fresh[i]}, true)
+			}
 		}
 		last = head
 		go func() {

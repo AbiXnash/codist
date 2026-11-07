@@ -26,6 +26,7 @@ type Config struct {
 	PollMs    int    // how often to look for new commits
 	MaxFiles  int    // files per commit the model reviews; rules see all of them
 	History   int    // how many recent commits the model reads in the background; 0 means all. Code checks cover every commit
+	Behaviour bool   // run the changed methods before and after each recent commit; off unless turned on, since it runs the project's code
 	Ignore    []string
 	OpenPage  bool
 	FromLua   bool // a config.lua was found and read
@@ -111,6 +112,9 @@ func (c *Config) applyLua(src string) error {
 	num("poll_ms", &c.PollMs)
 	num("max_files", &c.MaxFiles)
 	num("history", &c.History)
+	if v, ok := L.GetGlobal("behaviour").(lua.LBool); ok {
+		c.Behaviour = bool(v)
+	}
 	if t, ok := L.GetGlobal("ignore").(*lua.LTable); ok {
 		c.Ignore = nil
 		t.ForEach(func(_, v lua.LValue) {
@@ -144,6 +148,12 @@ func (c *Config) applyEnv() {
 	}
 	if v := strings.ToLower(os.Getenv("CODIST_MODEL_REVIEW")); v == "false" || v == "0" || v == "off" {
 		c.ModelOff = true
+	}
+	switch strings.ToLower(os.Getenv("CODIST_BEHAVIOUR")) {
+	case "1", "true", "on":
+		c.Behaviour = true
+	case "0", "false", "off":
+		c.Behaviour = false
 	}
 	if os.Getenv("CODIST_NO_BROWSER") != "" {
 		c.OpenPage = false

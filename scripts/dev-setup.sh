@@ -7,7 +7,7 @@
 # Needs git and Go 1.26 or later; Node 20 or later only to work on the interface.
 set -eu
 OWNER="https://github.com/AbiXnash"
-REPOS="codist codist-java codist-git codist-model codist-review codist-ui codist-eval"
+REPOS="codist codist-java codist-git codist-model codist-review codist-behaviour codist-ui codist-eval"
 
 have() { command -v "$1" >/dev/null 2>&1; }
 have git || { echo "dev-setup: install git first." >&2; exit 1; }
@@ -29,7 +29,7 @@ done
 # go.work lets each module use the others from these folders instead of their published versions.
 cd codist
 rm -f go.work go.work.sum
-go work init . ../codist-java ../codist-git ../codist-model ../codist-review ../codist-ui
+go work init . ../codist-java ../codist-git ../codist-model ../codist-review ../codist-behaviour ../codist-ui
 echo "Created codist/go.work"
 
 if have npm; then

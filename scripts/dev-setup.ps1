@@ -7,7 +7,7 @@
 param([string]$Dir)
 $ErrorActionPreference = 'Stop'
 $Owner = 'https://github.com/AbiXnash'
-$Repos = 'codist', 'codist-java', 'codist-git', 'codist-model', 'codist-review', 'codist-ui', 'codist-eval'
+$Repos = 'codist', 'codist-java', 'codist-git', 'codist-model', 'codist-review', 'codist-behaviour', 'codist-ui', 'codist-eval'
 function Have($name) { [bool](Get-Command $name -ErrorAction SilentlyContinue) }
 if (-not (Have git)) { throw 'Install git first: https://git-scm.com/download/win' }
 if (-not (Have go))  { throw 'Install Go 1.26 or later first: https://go.dev/dl' }
@@ -25,7 +25,7 @@ foreach ($r in $Repos) {
 }
 Set-Location codist
 Remove-Item -Force -ErrorAction SilentlyContinue go.work, go.work.sum
-go work init . ../codist-java ../codist-git ../codist-model ../codist-review ../codist-ui
+go work init . ../codist-java ../codist-git ../codist-model ../codist-review ../codist-behaviour ../codist-ui
 Write-Host 'Created codist\go.work'
 if (Have npm) {
   Push-Location ..\codist-ui; npm install --no-audit --no-fund | Out-Null; Pop-Location
