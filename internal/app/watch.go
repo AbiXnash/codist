@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 	"time"
@@ -256,7 +258,9 @@ func (a *App) watch(ctx context.Context) {
 }
 
 func (a *App) reviewer(model bool) *review.Reviewer {
-	r := &review.Reviewer{Repo: a.repo, Store: a.store, MaxFiles: a.cfg.MaxFiles, Ignored: a.cfg.Ignored, Learn: true}
+	rules, _ := os.ReadFile(filepath.Join(a.repo.Root, ".codist", "rules.md")) // the team's rules, read fresh each review
+	r := &review.Reviewer{Repo: a.repo, Store: a.store, MaxFiles: a.cfg.MaxFiles, Ignored: a.cfg.Ignored, Learn: true,
+		Contracts: true, Rules: string(rules)}
 	if model && a.modelReady() {
 		r.Model = a.model
 	}

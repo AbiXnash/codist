@@ -104,6 +104,13 @@ Environment variables override it for one run:
 | `CODIST_BEHAVIOUR=1` | turn on running changed methods (see below) |
 | `CODIST_DATA_DIR` | where Codist keeps its data (default `~/.codist`) |
 
+### Your team's rules
+
+Write the rules your code must keep in `.codist/rules.md`, in plain words: "a coupon and a loyalty discount never
+stack", "cancelling releases only what was reserved". The model reads them with every review and reports a change
+that breaks one, naming the rule. Keep them short; the first 4,000 characters are used. Codist reads the file fresh
+for each review, so edits apply to the next commit it reads.
+
 ## 5. Using it
 
 - **Review** lists commits newest first. Pick one to see its diff with issues next to the lines. Issues from code

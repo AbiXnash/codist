@@ -61,6 +61,19 @@ func (a *App) behaviourOf(sha string) any {
 	return nil
 }
 
+// behaviourBrief is the lane's state for the commit list: queued, running, skipped, done, or differs when a run
+// found a changed result.
+func (a *App) behaviourBrief(sha string) string {
+	var r map[string]any
+	raw, _ := json.Marshal(a.behaviourOf(sha))
+	_ = json.Unmarshal(raw, &r)
+	if d, _ := r["differ"].(float64); d > 0 {
+		return "differs"
+	}
+	s, _ := r["status"].(string)
+	return s
+}
+
 // requestBehaviour runs one commit next.
 func (a *App) requestBehaviour(w http.ResponseWriter, r *http.Request) {
 	if a.runner == nil {

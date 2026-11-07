@@ -91,21 +91,18 @@ func (a *App) commits(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]any, 0, len(log))
 	for _, c := range log {
 		item := map[string]any{"commit": commitOf(c)}
-		if rv, ok := reviews[c.SHA]; ok && rv.Model != "" {
-			item["model"] = rv.Model
+		set := func(key string, v any, ok bool) {
+			if ok {
+				item[key] = v
+			}
 		}
-		if st := a.reviewStatus(c.SHA, reviews); st != "" {
-			item["status"] = st
-		}
-		if n := counts[c.SHA]; len(n) > 0 {
-			item["counts"] = n
-		}
-		if fixed[c.SHA] > 0 {
-			item["fixed"] = fixed[c.SHA]
-		}
-		if level := a.riskLevel(c.SHA); level != "" {
-			item["risk"] = level
-		}
+		set("model", reviews[c.SHA].Model, reviews[c.SHA].Model != "")
+		st, level, b := a.reviewStatus(c.SHA, reviews), a.riskLevel(c.SHA), a.behaviourBrief(c.SHA)
+		set("status", st, st != "")
+		set("counts", counts[c.SHA], len(counts[c.SHA]) > 0)
+		set("fixed", fixed[c.SHA], fixed[c.SHA] > 0)
+		set("risk", level, level != "")
+		set("behaviour", b, b != "")
 		out = append(out, item)
 	}
 	web.JSON(w, out)
