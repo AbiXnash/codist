@@ -35,7 +35,7 @@ combining several methods because no single one is enough. Codist follows it in 
 | User feedback and the data flywheel (10, 8) | Every finding can be marked useful or wrong. A wrong one is set aside and not reported again; both kinds are kept, and become labelled examples for evaluation and, later, for tuning. |
 | Observability (10) | Review notes say what was skipped and why; behaviour runs say why a commit was not run; failures name their cause. |
 | Learning from feedback (5, 10) | The model sees up to three of the latest findings this team marked wrong ("do not report problems like these", with the person's note) and three marked useful. Nothing is trained; the examples follow the team's judgements. |
-| A small risk model (ML) | `codist-review/risk`: logistic regression trained on the repository's own history when Codist starts (seconds). Labels come from the history (SZZ: the lines each fix commit changed are traced with git blame to the commits that wrote them) and from issues Codist found. Features: size, files, share of Java, test changes, how often the files changed and needed fixes before, the author's experience, how spread the change is. Trained on the older three quarters, tested on the newest quarter, and used only with enough examples and an AUC of at least 0.6. When used, the model lane reads the riskiest recent commits first, and commits show low, medium or high risk. On jsoup (1,903 commits, 177 traced as bug-bringing) it reached an AUC of 0.82 on the held-out newest quarter; on Orbit Commerce (366 commits, 11 traced) it says it has too little to learn from. |
+| A small risk model (ML) | `codist-review/risk`: logistic regression trained on the repository's own history when Codist starts (seconds). Labels come from the history (SZZ: the lines each fix commit changed are traced with git blame to the commits that wrote them) and from issues Codist found. Features: size, files, share of Java, test changes, how often the files changed and needed fixes before, the author's experience, how spread the change is. Trained on the older three quarters, tested on the newest quarter, and used only with enough examples and an AUC of at least 0.6. When used, the model lane reads the riskiest recent commits first, and commits show low, medium or high risk. On jsoup (1,902 commits, 136 traced as bug-bringing) it reached an AUC of 0.86 on the held-out newest quarter; on Orbit Commerce (366 commits, 11 traced) it says it has too little to learn from. |
 | Workload-aware serving (9) | Code checks never wait for the model; the model reads the newest commits first and only the last 50 by default, since a laptop model takes minutes per commit. |
 
 ## Measured and not shipped
@@ -45,17 +45,25 @@ measured on the 10-bug sample with `qwen2.5-coder:7b`: located 5 of 10 without c
 stays an option (`Reviewer.Callers`) and is off. The reason it did not help is likely that most of these bugs sit
 inside one method; it may still matter for service code, which the sample lacks.
 
-**Known limits of the risk model.** SZZ labels favour large commits, since they write more lines a later fix can
-touch; size is also a real risk factor, so the ranking stays useful, but it over-ranks big low-risk changes (on
-jsoup, a large javadoc-only commit was ranked high because comment lines count as lines added). The learning from
-feedback is not yet measured: it only acts once a team has judged findings, and the sample has none.
+**Counting code, not lines.** The first version counted every changed line, so a large javadoc-only commit on
+jsoup was ranked high risk: jsoup writes javadoc paragraphs without leading stars, so even a line-by-line comment
+check took them for code. Sizes now come from a Java tokenizer that reads each changed file in full and marks the
+lines holding code (comments, javadoc, strings, text blocks, imports and blank lines are told apart); fixes are
+traced back only through code lines; and mass changes (over 3,000 code lines or 100 files, such as reformatting)
+are left out of learning. On jsoup the held-out AUC rose from 0.82 to 0.86 and that commit went from high (0.78) to
+low (0.10).
+
+**Known limits.** The SZZ labels still favour large commits, since they write more lines a later fix can touch;
+size is a real risk factor too, so the ranking stays useful, but it cannot tell a large careful change from a large
+careless one. The learning from feedback is not yet measured: it only acts once a team has judged findings, and the
+sample has none.
 
 ## Next, in order
 
 1. **Measure the learning from feedback.** Label the findings on the 10-bug sample, mark some wrong, and compare false
    alarms with and without the examples.
-2. **A better risk model.** Count only code lines (not comments), add the findings marked wrong as negative labels,
-   and compare against the newest-first order on how soon the model reaches the commits with real issues.
+2. **A better risk model.** Add the findings marked wrong as negative labels, and compare against the newest-first
+   order on how soon the model reaches the commits with real issues.
 3. **A model router** (chapter 10). Send cheap work, such as incident summaries, to a small model and reviews to the
    largest the machine can run.
 4. **Self-consistency on serious findings** (chapter 2). Ask twice for critical and high findings and keep those both
