@@ -48,14 +48,14 @@ type App struct {
 
 // New starts everything that runs in the background and registers the API.
 func New(ctx context.Context, cfg config.Config, repo *git.Repo) (*App, error) {
-	st, err := store.Open(cfg.DataDir, base(repo.Root))
+	st, err := store.OpenRepo(cfg.DataDir, repo.Root)
 	if err != nil {
 		return nil, err
 	}
 	a := &App{cfg: cfg, repo: repo, model: model.New(cfg.ModelURL, cfg.Model, cfg.ModelCtx), store: st,
 		mux: http.NewServeMux(), checks: newQueue(), models: newQueue(), runs: newQueue(), events: newHub(), ctx: ctx}
 	if cfg.Behaviour {
-		a.runner = &behaviour.Runner{Repo: repo, Work: filepath.Join(cfg.DataDir, "behaviour", base(repo.Root)), Ignored: cfg.Ignored}
+		a.runner = &behaviour.Runner{Repo: repo, Work: filepath.Join(cfg.DataDir, "behaviour", store.Name(repo.Root)), Ignored: cfg.Ignored}
 		go a.runBehaviour(ctx)
 	}
 	a.modelOK, a.modelNote = a.model.Status(ctx)

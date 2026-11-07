@@ -6,10 +6,10 @@ github.com/AbiXnash/codist-java v0.3.0 h1:MucFGBQ5fhwzyGVQk7cZ8M/JSvrT8c28g3+zp2
 github.com/AbiXnash/codist-java v0.3.0/go.mod h1:bIJs2YZpqp/4jvW2Uss/ZCBvAOIkwHcXDz7m6W3HNMs=
 github.com/AbiXnash/codist-model v0.3.0 h1:0yveUbPXee5iCF7VS7uo5JFqlJnbEmYEBQ38oG0iHqU=
 github.com/AbiXnash/codist-model v0.3.0/go.mod h1:aChuSiyXbY45Ds2jZB6vgUEAw0DCQ56PAyQ2qKpblFM=
-github.com/AbiXnash/codist-review v0.5.0 h1:Q4m0EQhQYhM9R+fTQo9BIam0GHFhGKnhB81CCgkhIss=
-github.com/AbiXnash/codist-review v0.5.0/go.mod h1:UFkI8KQYiuUbbQP40BNisDV3c5Bftn/b6M3ZbD3S4BE=
-github.com/AbiXnash/codist-ui v0.5.0 h1:k3WvUaCKaoEqmqDcXhcvOp2yTWtCSjJb8Ub/fDv8oF0=
-github.com/AbiXnash/codist-ui v0.5.0/go.mod h1:Jr22VsqeQQVq0Vgg/JGLybTPMFt/qCTcHbZgMzh9Rzs=
+github.com/AbiXnash/codist-review v0.5.1 h1:LEPOq5q1rePPsTgyJHcr1Enf5rZZj1G+ztO2hTWzVvY=
+github.com/AbiXnash/codist-review v0.5.1/go.mod h1:UFkI8KQYiuUbbQP40BNisDV3c5Bftn/b6M3ZbD3S4BE=
+github.com/AbiXnash/codist-ui v0.6.0 h1:bd3S1Sk7Jq/7Cq5pAX789Rnl6O86sbuAHIDDAdnO7Fg=
+github.com/AbiXnash/codist-ui v0.6.0/go.mod h1:Jr22VsqeQQVq0Vgg/JGLybTPMFt/qCTcHbZgMzh9Rzs=
 github.com/dustin/go-humanize v1.1.0 h1:dbKTrvD0klcbBV/h4AWJdMuZogJACoMlvWIWZ5b2xWg=
 github.com/dustin/go-humanize v1.1.0/go.mod h1:hc1CvRkJMsgxqjmjMQF3QNRAZBwY8AXBAzKYoSX9sFI=
 github.com/google/pprof v0.0.0-20261016150608-1facf8f91b50 h1:PlNWJRxu5APSV0pWqfIsZ0qt9OOGHSWfZQ4zvx+WgWs=
