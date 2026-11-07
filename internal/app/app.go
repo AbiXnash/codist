@@ -90,6 +90,7 @@ func (a *App) routes() {
 	h("GET /api/issues", a.issues)
 	h("POST /api/issues/{id}/resolve", a.resolveIssue)
 	h("DELETE /api/issues/{id}/resolve", a.reopenIssue)
+	h("POST /api/issues/{id}/feedback", a.feedback)
 	h("GET /api/repo", a.repoReport)
 	h("GET /api/incidents", a.incidents)
 	h("POST /api/incidents", a.createIncident)

@@ -869,3 +869,69 @@ func TestBehaviourOn(t *testing.T) {
 		return r != nil && r["status"] != "queued" && r["status"] != "running"
 	})
 }
+
+// A finding marked wrong is set aside and not reported again; clearing the mark opens it again.
+func TestFeedback(t *testing.T) {
+	e := start(t, nil)
+	e.reviewed(3, true)
+	var bug struct {
+		Review struct {
+			Files      []struct{ Findings []map[string]any }
+			ModelStats map[string]any
+		}
+	}
+	e.get("/api/commits/"+e.repo.Bug, &bug)
+	f := bug.Review.Files[0].Findings[0]
+	id := f["issueId"].(string)
+	if f["feedback"] != "" || bug.Review.ModelStats["model"] != "fake" || bug.Review.ModelStats["promptVersion"] == "" {
+		t.Errorf("finding %v stats %v", f, bug.Review.ModelStats)
+	}
+	if e.call("POST", "/api/issues/"+id+"/feedback", `{"verdict":"maybe"}`, nil) != 400 ||
+		e.call("POST", "/api/issues/nope/feedback", `{"verdict":"useful"}`, nil) != 404 ||
+		e.call("POST", "/api/issues/nope/feedback", `{"verdict":"wrong"}`, nil) != 404 {
+		t.Error("bad requests")
+	}
+	if e.call("POST", "/api/issues/"+id+"/feedback", `{"verdict":"wrong","note":"we log it"}`, nil) != 200 {
+		t.Fatal("wrong")
+	}
+	var issues struct{ Issues []map[string]any }
+	e.get("/api/issues?state=ignored", &issues)
+	if len(issues.Issues) != 1 || issues.Issues[0]["feedback"] != "wrong" {
+		t.Errorf("set aside: %v", issues.Issues)
+	}
+	e.call("POST", "/api/commits/"+e.repo.Bug+"/review", "", nil)
+	waitFor(t, "the re-review", func() bool {
+		var c struct {
+			Review struct{ Status, Summary string }
+		}
+		e.get("/api/commits/"+e.repo.Bug, &c)
+		return c.Review.Status == "done" && strings.Contains(c.Review.Summary, "marked wrong")
+	})
+	e.get("/api/commits/"+e.repo.Bug, &bug)
+	if g := bug.Review.Files[0].Findings; len(g) != 1 || g[0]["ignored"] != true || g[0]["feedback"] != "wrong" {
+		t.Errorf("a finding marked wrong is kept but set aside: %v", g)
+	}
+	var cs []commitItem
+	if e.get("/api/commits", &cs); cs[1].Counts["medium"] != 0 {
+		t.Errorf("a set-aside finding is not counted: %v", cs[1].Counts)
+	}
+	if e.call("POST", "/api/issues/"+id+"/feedback", `{"verdict":""}`, nil) != 200 {
+		t.Fatal("clear")
+	}
+	e.get("/api/issues?state=open", &issues)
+	found := false
+	for _, is := range issues.Issues {
+		found = found || is["id"] == id
+	}
+	if !found {
+		t.Error("clearing the mark opens the issue again")
+	}
+	if e.call("POST", "/api/issues/"+id+"/feedback", `{"verdict":"useful"}`, nil) != 200 {
+		t.Error("useful")
+	}
+	var st struct{ ModelUsage map[string]any }
+	e.get("/api/status", &st)
+	if st.ModelUsage["commits"].(float64) < 3 || st.ModelUsage["promptVersion"] == "" || st.ModelUsage["secondsPerCommit"] == nil {
+		t.Errorf("usage %v", st.ModelUsage)
+	}
+}

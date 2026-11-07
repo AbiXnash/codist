@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -264,6 +265,7 @@ func (a *App) reviewJSON(c git.Commit, changes []git.FileChange) any {
 		note = strings.TrimSpace(note + " Code checks are done; the model has not read this commit yet and will in the background.")
 	}
 	findings := a.store.Findings(c.SHA)
+	feedback := a.store.AllFeedback()
 	issues := map[string]store.TrackedIssue{}
 	for _, is := range a.store.AllIssues() {
 		issues[is.Key] = is
@@ -281,7 +283,8 @@ func (a *App) reviewJSON(c git.Commit, changes []git.FileChange) any {
 		}
 		j := map[string]any{"line": f.Line, "endLine": f.EndLine, "severity": f.Severity, "category": category(f.Rule, f.Source),
 			"title": f.Title, "detail": f.Detail, "suggestion": f.Suggestion, "nodeId": node, "onChangedLine": true,
-			"source": source, "snippet": f.Snippet, "state": f.State}
+			"source": source, "snippet": f.Snippet, "state": f.State, "issueId": f.Key, "feedback": feedback[f.Key].Verdict,
+			"ignored": f.State == "ignored"}
 		if f.Rule != "" {
 			j["ref"] = f.Rule
 		}
@@ -316,6 +319,9 @@ func (a *App) reviewJSON(c git.Commit, changes []git.FileChange) any {
 		"summary": note, "risk": "", "highlights": []string{}, "files": files}
 	if rv.Status == "failed" {
 		out["error"] = rv.Note
+	}
+	if raw, ok := a.store.Stats(c.SHA); ok {
+		out["modelStats"] = json.RawMessage(raw)
 	}
 	return out
 }
@@ -358,7 +364,7 @@ func (a *App) issueJSON(is store.TrackedIssue) map[string]any {
 	cat := category(f.Rule, f.Source)
 	j := map[string]any{"id": is.Key, "state": is.State, "severity": f.Severity, "category": cat, "kind": kinds[cat], "urgency": urgency(f.Severity),
 		"title": f.Title, "detail": f.Detail, "suggestion": f.Suggestion, "source": source, "path": is.Path, "line": f.Line,
-		"snippet": f.Snippet, "firstSeen": is.FirstSHA, "lastSeen": lastSeen(f.SHA, is.FirstSHA), "commits": orEmptyS(is.Commits), "reviewLine": f.Line}
+		"snippet": f.Snippet, "feedback": a.store.AllFeedback()[is.Key].Verdict, "firstSeen": is.FirstSHA, "lastSeen": lastSeen(f.SHA, is.FirstSHA), "commits": orEmptyS(is.Commits), "reviewLine": f.Line}
 	if f.Rule != "" {
 		j["ref"] = f.Rule
 	}
@@ -390,6 +396,51 @@ func (a *App) issues(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	web.JSON(w, map[string]any{"issues": out, "counts": counts, "openBySeverity": bySev})
+}
+
+// feedback records a person's judgement of an issue. "wrong" also sets the issue aside, and later reviews leave it
+// out; clearing it opens the issue again. The judgements are kept as evaluation data.
+func (a *App) feedback(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Verdict string `json:"verdict"` // useful, wrong, or "" to clear
+		Note    string `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || (in.Verdict != "useful" && in.Verdict != "wrong" && in.Verdict != "") {
+		web.Error(w, http.StatusBadRequest, "Say useful or wrong.")
+		return
+	}
+	id := r.PathValue("id")
+	before := a.store.AllFeedback()[id].Verdict
+	state := ""
+	switch {
+	case in.Verdict == "wrong":
+		state = "ignored"
+	case before == "wrong":
+		state = "open"
+	}
+	if state != "" {
+		if err := a.store.SetIssueState(id, state); err != nil {
+			web.Error(w, http.StatusNotFound, err.Error())
+			return
+		}
+	} else if !a.issueExists(id) {
+		web.Error(w, http.StatusNotFound, "no issue "+id)
+		return
+	}
+	if err := a.store.SetFeedback(id, in.Verdict, in.Note); err != nil {
+		web.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	web.JSON(w, map[string]string{"id": id, "feedback": in.Verdict})
+}
+
+func (a *App) issueExists(id string) bool {
+	for _, is := range a.store.AllIssues() {
+		if is.Key == id {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *App) resolveIssue(w http.ResponseWriter, r *http.Request) { a.setIssue(w, r, "resolved") }

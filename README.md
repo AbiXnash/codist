@@ -80,6 +80,7 @@ Codist is split into modules, each its own repository, and built into this one p
 
 [docs/architecture.md](docs/architecture.md) shows how they fit together, and
 [docs/development.md](docs/development.md) how to work on them: one script clones them all side by side.
+[docs/ai-engineering.md](docs/ai-engineering.md) maps the ideas in Chip Huyen's *AI Engineering* to Codist.
 
 ```bash
 make build    # bin/codist; no C compiler needed
