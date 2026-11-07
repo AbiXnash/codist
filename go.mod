@@ -8,11 +8,11 @@ require github.com/yuin/gopher-lua v1.1.2
 
 require (
 	github.com/AbiXnash/codist-behaviour v0.1.0
-	github.com/AbiXnash/codist-git v0.1.0
+	github.com/AbiXnash/codist-git v0.2.0
 	github.com/AbiXnash/codist-java v0.2.0
 	github.com/AbiXnash/codist-model v0.3.0
-	github.com/AbiXnash/codist-review v0.3.0
-	github.com/AbiXnash/codist-ui v0.3.0
+	github.com/AbiXnash/codist-review v0.4.1
+	github.com/AbiXnash/codist-ui v0.4.0
 )
 
 require (

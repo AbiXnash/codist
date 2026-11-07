@@ -935,3 +935,42 @@ func TestFeedback(t *testing.T) {
 		t.Errorf("usage %v", st.ModelUsage)
 	}
 }
+
+// The risk model needs history; on three commits it says so, and no commit gets a risk level.
+func TestRiskModelOnLittleHistory(t *testing.T) {
+	e := start(t, func(c *config.Config) { c.ModelOff = true })
+	e.reviewed(3, false)
+	var st struct{ RiskModel map[string]any }
+	waitFor(t, "the risk model", func() bool {
+		e.get("/api/status", &st)
+		r, _ := st.RiskModel["reason"].(string)
+		return r != "" && !strings.HasPrefix(r, "Learning")
+	})
+	if st.RiskModel["ready"] != false || !strings.Contains(st.RiskModel["reason"].(string), "Too little history") {
+		t.Errorf("%v", st.RiskModel)
+	}
+	var cs []map[string]any
+	if e.get("/api/commits", &cs); cs[0]["risk"] != nil {
+		t.Errorf("no level without a model: %v", cs[0])
+	}
+	if e.app.riskLevel(e.repo.Bug) != "" {
+		t.Error("risk level")
+	}
+}
+
+func TestQueueSortBy(t *testing.T) {
+	q := newQueue()
+	for _, s := range []string{"a", "b", "c", "d"} {
+		q.push(job{sha: s}, false)
+	}
+	score := map[string]float64{"c": 0.9, "a": 0.2, "d": 0.2}
+	q.sortBy(func(sha string) float64 { return score[sha] })
+	var order []string
+	for j, ok := q.pop(); ok; j, ok = q.pop() {
+		order = append(order, j.sha)
+		q.done(j.sha)
+	}
+	if strings.Join(order, "") != "cadb" {
+		t.Errorf("order %v", order)
+	}
+}

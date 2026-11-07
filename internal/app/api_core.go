@@ -31,7 +31,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 		"tracking": branch, "head": head, "model": a.cfg.Model, "llmProblem": problem,
 		"graphSource": head, "graphBuiltAt": time.Now().UnixMilli(), "canFix": false, "user": "",
 		"rules": 15, "models": map[string]string{"review": a.cfg.Model, "summary": a.cfg.Model, "fix": a.cfg.Model, "ask": a.cfg.Model},
-		"types": len(ix.Types), "behaviour": a.runner != nil, "modelUsage": a.modelUsage(),
+		"types": len(ix.Types), "behaviour": a.runner != nil, "modelUsage": review.Usage(a.store), "riskModel": a.riskModel(),
 	})
 }
 
@@ -97,36 +97,4 @@ func (a *App) file(w http.ResponseWriter, r *http.Request) {
 // working reports uncommitted changes. This version reviews commits only.
 func (a *App) working(w http.ResponseWriter, r *http.Request) {
 	web.JSON(w, map[string]any{"files": []any{}, "changes": []any{}, "findings": 0})
-}
-
-// modelUsage sums what the model has cost across reviewed commits, so a person can see what reviews take on this
-// machine: time per commit, how fast it writes, and how often a reply came from the cache.
-func (a *App) modelUsage() map[string]any {
-	var commits, calls, cached, promptTokens, replyTokens int
-	var seconds, decode float64
-	version := review.PromptVersion
-	for _, raw := range a.store.AllStats() {
-		var s review.Stats
-		if json.Unmarshal(raw, &s) != nil {
-			continue
-		}
-		commits++
-		calls += s.Calls
-		cached += s.Cached
-		promptTokens += s.PromptTokens
-		replyTokens += s.ReplyTokens
-		seconds += s.ModelSeconds
-		decode += s.DecodeSeconds
-	}
-	out := map[string]any{"commits": commits, "calls": calls, "cached": cached, "promptVersion": version}
-	if commits > 0 {
-		out["secondsPerCommit"] = seconds / float64(commits)
-	}
-	if calls > 0 {
-		out["promptTokensPerCall"] = promptTokens / calls
-	}
-	if decode > 0 {
-		out["tokensPerSecond"] = float64(replyTokens) / decode
-	}
-	return out
 }

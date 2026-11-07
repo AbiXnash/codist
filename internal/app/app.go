@@ -12,6 +12,7 @@ import (
 	"github.com/AbiXnash/codist-git"
 	"github.com/AbiXnash/codist-java"
 	"github.com/AbiXnash/codist-model"
+	"github.com/AbiXnash/codist-review/risk"
 	"github.com/AbiXnash/codist-review/store"
 	"github.com/AbiXnash/codist-ui"
 	"github.com/AbiXnash/codist/internal/config"
@@ -29,6 +30,8 @@ type App struct {
 	models   *queue // the model, one commit at a time
 	runs     *queue // running the changed methods before and after a commit, when turned on
 	runner   *behaviour.Runner
+	risk     *risk.Model // which commits tend to bring bugs here, learned from this repository's history
+	riskAt   time.Time
 	events   *hub
 	shaLocks sync.Map
 	ctx      context.Context

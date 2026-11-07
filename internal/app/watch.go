@@ -3,10 +3,12 @@ package app
 import (
 	"context"
 	"log/slog"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/AbiXnash/codist-review"
+	"github.com/AbiXnash/codist-review/risk"
 )
 
 // Reviews run in two lanes. Code checks take milliseconds, so they have their own lane and never
@@ -88,6 +90,13 @@ func (q *queue) running(sha string) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	return q.current == sha
+}
+
+// sortBy orders the waiting jobs by score, highest first, keeping the order of equal scores.
+func (q *queue) sortBy(score func(sha string) float64) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	sort.SliceStable(q.jobs, func(i, j int) bool { return score(q.jobs[i].sha) > score(q.jobs[j].sha) })
 }
 
 // length is how many jobs are waiting.
@@ -205,6 +214,7 @@ func (a *App) historyLimit() int {
 func (a *App) watch(ctx context.Context) {
 	a.baseline()
 	a.backlog()
+	go a.learnRisk()
 	last := a.repo.Head()
 	for {
 		select {
@@ -236,6 +246,7 @@ func (a *App) watch(ctx context.Context) {
 			}
 		}
 		last = head
+		go a.learnRisk()
 		go func() {
 			a.index() // rebuild the graph for the new code before telling the pages
 			a.events.publish("graph", map[string]string{"head": head})
@@ -245,7 +256,7 @@ func (a *App) watch(ctx context.Context) {
 }
 
 func (a *App) reviewer(model bool) *review.Reviewer {
-	r := &review.Reviewer{Repo: a.repo, Store: a.store, MaxFiles: a.cfg.MaxFiles, Ignored: a.cfg.Ignored}
+	r := &review.Reviewer{Repo: a.repo, Store: a.store, MaxFiles: a.cfg.MaxFiles, Ignored: a.cfg.Ignored, Learn: true}
 	if model && a.modelReady() {
 		r.Model = a.model
 	}
@@ -275,4 +286,52 @@ func (a *App) baseline() {
 		return
 	}
 	slog.Info("baseline", "files", len(files), "issues", n, "took", time.Since(start).Round(time.Millisecond))
+}
+
+// learnRisk trains the risk model on the repository's history and the issues Codist has found, at most every ten
+// minutes. When the model is good enough, the model lane reads the riskiest recent commits first.
+func (a *App) learnRisk() {
+	a.mu.Lock()
+	if time.Since(a.riskAt) < 10*time.Minute && a.risk != nil {
+		a.mu.Unlock()
+		return
+	}
+	a.riskAt = time.Now()
+	a.mu.Unlock()
+	known := map[string]bool{}
+	for _, is := range a.store.AllIssues() {
+		if is.FirstSHA != "" && is.FirstSHA != review.BaselineSHA {
+			known[is.FirstSHA] = true
+		}
+	}
+	m := risk.Train(a.repo, risk.Options{Known: known})
+	a.mu.Lock()
+	a.risk = m
+	a.mu.Unlock()
+	a.events.publish("status", map[string]any{"riskModel": m.Ready})
+	if m.Ready {
+		a.models.sortBy(func(sha string) float64 { return m.Scores[sha] })
+		slog.Info("risk model", "auc", m.AUC, "commits", m.Commits, "bug-bringing", m.Positives, "signals", m.Signals)
+	} else {
+		slog.Info("risk model not used", "reason", m.Reason)
+	}
+}
+
+// riskLevel is a commit's risk as a word, or "" while there is no usable model.
+func (a *App) riskLevel(sha string) string {
+	a.mu.RLock()
+	m := a.risk
+	a.mu.RUnlock()
+	return m.Level(sha)
+}
+
+// riskModel describes the risk model for the status page.
+func (a *App) riskModel() any {
+	a.mu.RLock()
+	m := a.risk
+	a.mu.RUnlock()
+	if m == nil {
+		return map[string]any{"ready": false, "reason": "Learning from the history..."}
+	}
+	return m
 }

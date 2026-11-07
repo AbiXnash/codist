@@ -103,6 +103,9 @@ func (a *App) commits(w http.ResponseWriter, r *http.Request) {
 		if fixed[c.SHA] > 0 {
 			item["fixed"] = fixed[c.SHA]
 		}
+		if level := a.riskLevel(c.SHA); level != "" {
+			item["risk"] = level
+		}
 		out = append(out, item)
 	}
 	web.JSON(w, out)
@@ -316,7 +319,7 @@ func (a *App) reviewJSON(c git.Commit, changes []git.FileChange) any {
 		files = append(files, map[string]any{"path": ch.Path, "summary": "", "findings": fs, "pending": status == "running" || status == "queued"})
 	}
 	out := map[string]any{"sha": c.SHA, "status": status, "model": rv.Model, "startedAt": ms(rv.Started), "finishedAt": ms(rv.Finished),
-		"summary": note, "risk": "", "highlights": []string{}, "files": files}
+		"summary": note, "risk": a.riskLevel(c.SHA), "highlights": []string{}, "files": files}
 	if rv.Status == "failed" {
 		out["error"] = rv.Note
 	}
