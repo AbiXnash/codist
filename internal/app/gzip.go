@@ -3,9 +3,11 @@ package app
 import (
 	"compress/gzip"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 )
 
 var zippers = sync.Pool{New: func() any { w, _ := gzip.NewWriterLevel(io.Discard, gzip.BestSpeed); return w }}
@@ -21,6 +23,9 @@ func (g gzipWriter) Write(b []byte) (int, error) { return g.z.Write(b) }
 // megabytes of JSON that shrinks many times over. The event stream is left alone: it must flush.
 func gzipped(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func(start time.Time) {
+			slog.Debug("request", "method", r.Method, "path", r.URL.Path, "took", time.Since(start))
+		}(time.Now())
 		if !strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api/events" || !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 			next.ServeHTTP(w, r)
 			return

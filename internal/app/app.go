@@ -2,6 +2,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"net/http"
 	"path/filepath"
@@ -125,21 +126,14 @@ func (a *App) watchModel(ctx context.Context) {
 	}
 }
 
-// viewRef is what the interface shows: the branch being viewed, or HEAD.
+// viewRef is what the interface shows: the branch being viewed, or HEAD. viewing says it is another branch.
 func (a *App) viewRef() string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	if a.view != "" {
-		return a.view
-	}
-	return "HEAD"
+	return cmp.Or(a.view, "HEAD")
 }
 
-func (a *App) viewing() bool {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.view != ""
-}
+func (a *App) viewing() bool { return a.viewRef() != "HEAD" }
 
 func ms(t time.Time) int64 {
 	if t.IsZero() {

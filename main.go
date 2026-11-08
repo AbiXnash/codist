@@ -4,6 +4,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -26,7 +27,13 @@ import (
 )
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	var level slog.Level // info unless CODIST_LOG is debug, warn or error; CODIST_LOG_JSON=1 writes JSON lines for log tools
+	_ = level.UnmarshalText([]byte(cmp.Or(os.Getenv("CODIST_LOG"), "info")))
+	var h slog.Handler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})
+	if os.Getenv("CODIST_LOG_JSON") != "" {
+		h = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level})
+	}
+	slog.SetDefault(slog.New(h))
 	args := os.Args[1:]
 	if len(args) > 0 && (args[0] == "help" || args[0] == "-h" || args[0] == "--help") {
 		fmt.Println("codist [path]    review the repository at path (default: here)\ncodist doctor    show what is installed and what is missing")

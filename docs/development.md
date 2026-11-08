@@ -63,6 +63,22 @@ order-service calls payment-service through Feign, one commit adds an empty catc
 is one commit ahead. The app's tests start the real server with a fake model server and go through every API route.
 Coverage is above 90% in every module except the app's `main` (85%) and settings (88%).
 
+## Logs
+
+Every module logs with `log/slog` through `slog.Default()`, so the app sets the level and format once in `main.go`
+(`CODIST_LOG`, `CODIST_LOG_JSON`) and the libraries follow it. Each library line carries `lib=<name>` (git, java,
+model, review, risk, store, behaviour, fix). The levels mean:
+
+- **error**: Codist cannot go on (the server stopped).
+- **warn**: something failed and Codist carried on without it, such as a save that did not stick, a model reply that
+  was not JSON, or a file that could not be read. These are worth a look.
+- **info**: one line per finished piece of work: a commit reviewed, an incident read, a fix prepared or applied.
+- **debug**: each step: every git command with its time, each model call with its tokens and speed, each dropped
+  model finding and why, Maven and javac failures in full, and every API request.
+
+Run with `CODIST_LOG=debug` when something looks wrong. A library used outside Codist logs through whatever
+`slog.Default()` that program sets.
+
 ## Changing a module
 
 1. Make the change in the module and its tests, and in the app if it uses it; `go.work` builds them together.

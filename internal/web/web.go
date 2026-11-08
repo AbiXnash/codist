@@ -4,6 +4,7 @@ package web
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 )
 
@@ -16,6 +17,7 @@ func JSON(w http.ResponseWriter, v any) {
 // Error writes an error the interface shows as a message.
 func Error(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
+	slog.Debug("api error", "code", code, "msg", msg)
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }

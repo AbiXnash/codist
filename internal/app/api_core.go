@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"encoding/json"
 	"net/http"
 	"path/filepath"
@@ -16,10 +17,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 	modelOK, note, view := a.modelOK, a.modelNote, a.view
 	a.mu.RUnlock()
 	checkedOut := a.repo.Branch()
-	branch := checkedOut
-	if view != "" {
-		branch = view
-	}
+	branch := cmp.Or(view, checkedOut)
 	problem := ""
 	if a.cfg.ModelOff {
 		problem = "Model review is off (CODIST_MODEL_REVIEW)."
@@ -72,10 +70,9 @@ func (a *App) follow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.mu.Lock()
+	a.view = in.Name
 	if in.Name == a.repo.Branch() {
 		a.view = ""
-	} else {
-		a.view = in.Name
 	}
 	a.mu.Unlock()
 	go func() {

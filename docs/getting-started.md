@@ -103,6 +103,8 @@ Environment variables override it for one run:
 | `CODIST_HISTORY` | how many recent commits the model reads; 0 for all |
 | `CODIST_BEHAVIOUR=1` | turn on running changed methods (see below) |
 | `CODIST_DATA_DIR` | where Codist keeps its data (default `~/.codist`) |
+| `CODIST_LOG` | how much it logs: `debug`, `info` (default), `warn` or `error` |
+| `CODIST_LOG_JSON=1` | log one JSON object per line, for log tools |
 
 ### Your team's rules
 
