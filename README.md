@@ -63,6 +63,14 @@ The script runs with no file, network or OS access. Environment variables overri
 `PORT`, `CODIST_MODEL`, `CODIST_MODEL_URL`, `CODIST_MODEL_REVIEW=false`, `CODIST_HISTORY`, `CODIST_BEHAVIOUR=1`,
 `CODIST_DATA_DIR`, `CODIST_LOG=debug`, `CODIST_LOG_JSON=1`.
 
+## Known issues
+
+What does not work yet, and what is planned, is tracked in [the open work list](https://github.com/AbiXnash/codist/issues/6). The most important:
+
+- **Merge commits are not reviewed.** A hand-resolved conflict is read as a commit that changes nothing ([codist-git#1](https://github.com/AbiXnash/codist-git/issues/1)).
+- **Very large commits and histories are reviewed thinly.** The AI reads the first 8 changed files of a commit by name, and checking a history of a million commits takes about a day ([codist-review#1](https://github.com/AbiXnash/codist-review/issues/1), [#1](https://github.com/AbiXnash/codist/issues/1)).
+- **Windows and Linux have not been tried on a real machine yet** ([#4](https://github.com/AbiXnash/codist/issues/4)).
+
 ## How it is built
 
 Codist is split into modules, each its own repository, and built into this one program:
