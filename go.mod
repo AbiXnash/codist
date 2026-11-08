@@ -11,7 +11,7 @@ require (
 	github.com/AbiXnash/codist-git v0.4.0
 	github.com/AbiXnash/codist-java v0.4.0
 	github.com/AbiXnash/codist-model v0.3.1
-	github.com/AbiXnash/codist-review v0.6.0
+	github.com/AbiXnash/codist-review v0.7.0
 	github.com/AbiXnash/codist-ui v0.6.0
 )
 

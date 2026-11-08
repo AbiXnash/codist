@@ -8,8 +8,8 @@ github.com/AbiXnash/codist-java v0.4.0 h1:zKra1drGX5jAst7mrAtaWDLwZ1kq+ekQnd2zDC
 github.com/AbiXnash/codist-java v0.4.0/go.mod h1:bIJs2YZpqp/4jvW2Uss/ZCBvAOIkwHcXDz7m6W3HNMs=
 github.com/AbiXnash/codist-model v0.3.1 h1:JnJBXHLqCWDhFJM57PgpOjW6+1Fv4SqEzBWpPPhT8Z4=
 github.com/AbiXnash/codist-model v0.3.1/go.mod h1:aChuSiyXbY45Ds2jZB6vgUEAw0DCQ56PAyQ2qKpblFM=
-github.com/AbiXnash/codist-review v0.6.0 h1:H8UxGvQy/Gr3QKao0JpcouObbut1lUdaKGRDbawjUPE=
-github.com/AbiXnash/codist-review v0.6.0/go.mod h1:5VMJ65x3ZZSB5iNhTvop++m242HAsCuvNK2GVxjxdzU=
+github.com/AbiXnash/codist-review v0.7.0 h1:GjeLK40WtsrHdFpg0T7xD6yOWfJ0aEqazrxPfswUZNI=
+github.com/AbiXnash/codist-review v0.7.0/go.mod h1:5VMJ65x3ZZSB5iNhTvop++m242HAsCuvNK2GVxjxdzU=
 github.com/AbiXnash/codist-ui v0.6.0 h1:bd3S1Sk7Jq/7Cq5pAX789Rnl6O86sbuAHIDDAdnO7Fg=
 github.com/AbiXnash/codist-ui v0.6.0/go.mod h1:Jr22VsqeQQVq0Vgg/JGLybTPMFt/qCTcHbZgMzh9Rzs=
 github.com/dustin/go-humanize v1.1.0 h1:dbKTrvD0klcbBV/h4AWJdMuZogJACoMlvWIWZ5b2xWg=
