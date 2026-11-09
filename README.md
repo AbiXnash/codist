@@ -53,6 +53,20 @@ curl -fsSL https://raw.githubusercontent.com/abxengg/codist/remaster/install.sh 
 irm https://raw.githubusercontent.com/abxengg/codist/remaster/install.ps1 | iex
 ```
 
+**Docker** (image includes git, a JDK and Maven, for amd64 and arm64)
+
+```bash
+cd ~/dev/your-spring-app
+docker run --rm -p 8080:8080 -v "$PWD:/repo" -v codist-data:/data \
+  --add-host=host.docker.internal:host-gateway ghcr.io/abxengg/codist
+```
+
+It reviews the folder mounted at `/repo`, keeps its database in the `codist-data` volume, and reaches Ollama on your
+machine at `host.docker.internal:11434` (set `-e CODIST_MODEL_URL=...` for another address). Open
+http://localhost:8080. Fixes are committed to the mounted repository only after you approve them, as usual; to
+commit as yourself, add `-e GIT_AUTHOR_NAME="$(git config user.name)" -e GIT_AUTHOR_EMAIL="$(git config user.email)"
+-e GIT_COMMITTER_NAME="$(git config user.name)" -e GIT_COMMITTER_EMAIL="$(git config user.email)"`.
+
 The script downloads the program for your system (or builds it from source if Go is installed and there is no
 release yet), puts it on your path, and checks git, Java and the model server. Then:
 
