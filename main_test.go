@@ -92,9 +92,22 @@ func TestServe(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, func() bool { return strings.Contains(out.String(), "codist ready") })
-	cmd.Process.Signal(os.Interrupt)
-	if err := cmd.Wait(); err != nil {
-		t.Errorf("exit: %v\n%s", err, out.String())
+	done := make(chan error, 1)
+	if err := cmd.Process.Signal(os.Interrupt); err != nil {
+		// Windows cannot send an interrupt to another process. The server started and is ready, so stop it.
+		cmd.Process.Kill()
+		cmd.Wait()
+		t.Skipf("interrupt not supported here (%v); checked that the server starts", err)
+	}
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("exit: %v\n%s", err, out.String())
+		}
+	case <-time.After(30 * time.Second):
+		cmd.Process.Kill()
+		t.Fatalf("did not stop within 30s of an interrupt\n%s", out.String())
 	}
 }
 
