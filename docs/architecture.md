@@ -1,6 +1,6 @@
 # How Codist fits together
 
-Codist is one program built from eight repositories. This app wires them together; each of the others is a Go
+Codist is one program built from nine repositories. This app wires them together; each of the others is a Go
 module it imports, so the result is still a single file with no runtime to install.
 
 ```mermaid
