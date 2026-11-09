@@ -5,6 +5,11 @@ watches the repository, and shows what it finds in your browser:
 
 - **Review**: every new commit is checked on its changed lines, then read by a local AI model. Each model claim is
   checked against the code before it is shown, and issues are followed until a later commit fixes them.
+- **Fix**: for a real bug, the model prepares a small fix and says why. You see the current and proposed code side by
+  side, the fix is built and tested in a separate copy first, and only when you approve is it committed (just its own
+  files). Tell it how you want it fixed, or reject it and say why; it remembers.
+- **Activity**: what Codist is doing right now: what code checks, the AI model and behaviour runs are working on, what
+  waits and what just finished, every model call with its prompt and reply, and the log as it happens.
 - **Graph**: your services, classes and methods on one canvas, with Feign calls between services, what the selected
   commit changed and what that change can affect.
 - **Incidents**: paste production logs to see each error, the line of your code it came from, and the commit that
@@ -13,7 +18,7 @@ watches the repository, and shows what it finds in your browser:
 - **Behaviour** (optional): runs the methods each commit changed on the code before and after it, with the same
   inputs, and shows what now behaves differently, so you can say whether it was meant.
 
-Nothing leaves your machine. Codist never changes your code.
+Nothing leaves your machine. Codist never changes your code unless you approve a fix.
 
 ## Install
 
@@ -69,6 +74,9 @@ What does not work yet, and what is planned, is tracked in [the open work list](
 
 - **Merge commits are not reviewed.** A hand-resolved conflict is read as a commit that changes nothing ([codist-git#1](https://github.com/AbiXnash/codist-git/issues/1)).
 - **Very large commits and histories are reviewed thinly.** The AI reads the first 8 changed files of a commit by name, and checking a history of a million commits takes about a day ([codist-review#1](https://github.com/AbiXnash/codist-review/issues/1), [#1](https://github.com/AbiXnash/codist/issues/1)).
+- **A written spec is followed only partly.** With your rules in `.codist/rules.md`, the model catches most broken
+  rules, but on the game test lab it missed changed numbers the rules state (20 s became 10 s, 60 fps became 30) and
+  once trusted its own memory over the rules. Behaviour runs catch some of these.
 - **Windows and Linux have not been tried on a real machine yet** ([#4](https://github.com/AbiXnash/codist/issues/4)).
 
 ## How it is built
@@ -78,7 +86,8 @@ Codist is split into modules, each its own repository, and built into this one p
 | Repository | What it holds |
 |---|---|
 | [codist](https://github.com/AbiXnash/codist) | this app: settings, the HTTP API and the review lanes |
-| [codist-review](https://github.com/AbiXnash/codist-review) | how a commit is reviewed, and the issue store |
+| [codist-review](https://github.com/AbiXnash/codist-review) | how a commit is reviewed, the issue store, and what the Activity page shows |
+| [codist-fix](https://github.com/AbiXnash/codist-fix) | preparing, checking and applying fixes a person approves |
 | [codist-behaviour](https://github.com/AbiXnash/codist-behaviour) | running changed methods before and after a commit |
 | [codist-java](https://github.com/AbiXnash/codist-java) | the Java parser, code checks, class graph and call graph |
 | [codist-git](https://github.com/AbiXnash/codist-git) | reading a repository through git, and a test repository builder |
@@ -96,7 +105,7 @@ make test
 make dist     # one file each for macOS, Linux and Windows
 ```
 
-Data is kept in `~/.codist/<repo>.db`, a SQLite file.
+Data is kept in `~/.codist/<repo>-<hash>.db`, a SQLite file named after the repository's folder and full path.
 
 ## Licence
 

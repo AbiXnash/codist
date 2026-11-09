@@ -38,7 +38,7 @@ func (a *App) status(w http.ResponseWriter, r *http.Request) {
 func (a *App) features(w http.ResponseWriter, r *http.Request) {
 	web.JSON(w, map[string]any{
 		"menus": map[string]bool{"review": true, "repo": true, "incidents": true, "branches": false, "mine": false, "team": false,
-			"release": false, "activity": false, "memory": false},
+			"release": false, "activity": true, "memory": false},
 		"panels":   map[string]bool{"issues": true, "commit": true, "code": true, "ask": false},
 		"features": map[string]bool{"explorer": true, "branchGraph": false, "branchSwitcher": true, "fix": true, "reword": false, "localPlan": false},
 		"sources":  []string{},

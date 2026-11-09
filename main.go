@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/AbiXnash/codist-review/activity"
 	"log/slog"
 	"net"
 	"net/http"
@@ -33,7 +34,8 @@ func main() {
 	if os.Getenv("CODIST_LOG_JSON") != "" {
 		h = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level})
 	}
-	slog.SetDefault(slog.New(h))
+	slog.SetDefault(slog.New(activity.Default.Wrap(h))) // also kept for the Activity page
+	activity.Watch()
 	args := os.Args[1:]
 	if len(args) > 0 && (args[0] == "help" || args[0] == "-h" || args[0] == "--help") {
 		fmt.Println("codist [path]    review the repository at path (default: here)\ncodist doctor    show what is installed and what is missing")

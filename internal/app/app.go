@@ -14,6 +14,7 @@ import (
 	"github.com/AbiXnash/codist-git"
 	"github.com/AbiXnash/codist-java"
 	"github.com/AbiXnash/codist-model"
+	"github.com/AbiXnash/codist-review/activity"
 	"github.com/AbiXnash/codist-review/risk"
 	"github.com/AbiXnash/codist-review/store"
 	"github.com/AbiXnash/codist-ui"
@@ -56,7 +57,7 @@ func New(ctx context.Context, cfg config.Config, repo *git.Repo) (*App, error) {
 		return nil, err
 	}
 	a := &App{cfg: cfg, repo: repo, model: model.New(cfg.ModelURL, cfg.Model, cfg.ModelCtx), store: st,
-		mux: http.NewServeMux(), checks: newQueue(), models: newQueue(), runs: newQueue(), events: newHub(), ctx: ctx,
+		mux: http.NewServeMux(), checks: newQueue("Code checks"), models: newQueue("AI model"), runs: newQueue("Behaviour runs"), events: newHub(), ctx: ctx,
 		fixer: &fix.Fixer{Repo: repo, Store: st, Model: model.New(cfg.ModelURL, cfg.Model, cfg.ModelCtx), Notes: filepath.Join(cfg.DataDir, store.Name(repo.Root)+"-fix-notes.json")}}
 	if cfg.Behaviour {
 		a.runner = &behaviour.Runner{Repo: repo, Work: filepath.Join(cfg.DataDir, "behaviour", store.Name(repo.Root)), Ignored: cfg.Ignored}
@@ -80,7 +81,8 @@ func (a *App) Close() { _ = a.store.Close() }
 
 func (a *App) routes() {
 	h := a.mux.HandleFunc
-	a.fixer.Routes(h) // prepare, check, apply and discard fixes; remember rejections
+	activity.Routes(h, a.checks, a.models, a.runs) // the Activity page: lanes, model calls, live log
+	a.fixer.Routes(h)                              // prepare, check, apply and discard fixes; remember rejections
 	h("GET /api/status", a.status)
 	h("GET /api/features", a.features)
 	h("GET /api/events", a.events.serve)

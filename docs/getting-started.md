@@ -118,6 +118,11 @@ for each review, so edits apply to the next commit it reads.
 - **Review** lists commits newest first. Pick one to see its diff with issues next to the lines. Issues from code
   checks are exact; issues from the model show the line it quoted, and claims Codist could not confirm are shown as
   notes. Mark an issue resolved by hand, or let the commit that fixes it close it.
+- **Fix**: on a real bug, press **Fix** to get a prepared change with the reason, the current and proposed code side by
+  side, and whether it still builds and passes the tests. **Apply & commit** commits just that fix; **Suggest how to
+  fix it…** asks for it your way; **Reject…** with a reason is remembered for later fixes.
+- **Activity** shows the three lanes (code checks, AI model, behaviour runs) with what runs now, what waits and what
+  finished, every model call with the exact prompt and reply, and the live log. Use it to see why a review is slow.
 - **Graph** draws services, then classes, then methods, with Feign calls between services. Pick a commit to see
   what it changed and what depends on that. Right-click a class for its blast radius.
 - **Incidents**: paste logs from a failing service. Codist finds each Java error, the line in your code, the commit

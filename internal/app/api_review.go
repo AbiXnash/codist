@@ -61,11 +61,11 @@ func (a *App) reviewStatus(sha string, reviews map[string]store.Review) string {
 	// review itself, so a long backlog does not hide every result behind "queued".
 	rv, ok := reviews[sha]
 	switch {
-	case a.models.running(sha) || ok && rv.Status == "running":
+	case a.models.Running(sha) || ok && rv.Status == "running":
 		return "running"
 	case ok:
 		return rv.Status
-	case a.models.waiting(sha) || a.checks.waiting(sha):
+	case a.models.Waiting(sha) || a.checks.Waiting(sha):
 		return "queued"
 	}
 	return ""
@@ -250,18 +250,18 @@ func category(rule, source string) string {
 
 func (a *App) reviewJSON(c git.Commit, changes []git.FileChange) any {
 	rv, ok := a.store.GetReview(c.SHA)
-	waiting := a.models.waiting(c.SHA) || a.checks.waiting(c.SHA)
+	waiting := a.models.Waiting(c.SHA) || a.checks.Waiting(c.SHA)
 	if !ok && !waiting {
 		return nil
 	}
 	status := rv.Status
 	note := rv.Note
 	switch {
-	case a.models.running(c.SHA):
+	case a.models.Running(c.SHA):
 		status = "running"
 	case !ok:
 		status = "queued"
-	case a.models.waiting(c.SHA):
+	case a.models.Waiting(c.SHA):
 		note = strings.TrimSpace(note + " Code checks are done; the model has not read this commit yet and will in the background.")
 	}
 	findings := a.store.Findings(c.SHA)
@@ -332,7 +332,7 @@ func (a *App) requestReview(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, http.StatusNotFound, "That commit is not in the repository.")
 		return
 	}
-	a.models.push(job{sha: c.SHA, opt: review.Options{}}, true)
+	a.models.Push(job{sha: c.SHA, opt: review.Options{}}, true)
 	a.events.publish("review", map[string]any{"sha": c.SHA, "status": "queued"})
 	web.JSON(w, map[string]any{"sha": c.SHA, "queued": true})
 }

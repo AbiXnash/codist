@@ -24,12 +24,12 @@ func TestBacklogAfterRestart(t *testing.T) {
 	st.SetReview(store.Review{SHA: tr.Fix, Status: "running", Model: "fake", Started: now}) // stopped while the model read it
 	st.SetReview(store.Review{SHA: tr.Bug, Status: "done", Started: now})                   // checked, not read by the model
 	st.SetReview(store.Review{SHA: tr.Init, Status: "done", Model: "fake", Started: now})   // finished
-	a := &App{cfg: config.Defaults(tr.Dir), repo: repo, store: st, checks: newQueue(), models: newQueue()}
+	a := &App{cfg: config.Defaults(tr.Dir), repo: repo, store: st, checks: newQueue("test"), models: newQueue("test")}
 	a.backlog()
-	if a.checks.length() != 1 || !a.checks.waiting(tr.Fix) {
-		t.Errorf("checks: %d queued", a.checks.length())
+	if a.checks.Length() != 1 || !a.checks.Waiting(tr.Fix) {
+		t.Errorf("checks: %d queued", a.checks.Length())
 	}
-	if a.models.length() != 2 || !a.models.waiting(tr.Fix) || !a.models.waiting(tr.Bug) || a.models.waiting(tr.Init) {
-		t.Errorf("model: %d queued", a.models.length())
+	if a.models.Length() != 2 || !a.models.Waiting(tr.Fix) || !a.models.Waiting(tr.Bug) || a.models.Waiting(tr.Init) {
+		t.Errorf("model: %d queued", a.models.Length())
 	}
 }

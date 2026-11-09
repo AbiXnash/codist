@@ -639,8 +639,8 @@ func TestHistoryLimit(t *testing.T) {
 			t.Errorf("older commit %+v", c)
 		}
 	}
-	if e.app.models.length() != 0 {
-		t.Errorf("%d commits still queued for the model", e.app.models.length())
+	if e.app.models.Length() != 0 {
+		t.Errorf("%d commits still queued for the model", e.app.models.Length())
 	}
 }
 
@@ -724,29 +724,29 @@ func quote(s string) string {
 }
 
 func TestQueue(t *testing.T) {
-	q := newQueue()
-	q.push(job{sha: "a"}, false)
-	q.push(job{sha: "b"}, false)
-	q.push(job{sha: "c"}, true)
-	q.push(job{sha: "b"}, true) // moves to the front
-	q.push(job{sha: "a"}, false)
-	if q.length() != 3 || !q.waiting("a") {
-		t.Fatalf("length %d", q.length())
+	q := newQueue("test")
+	q.Push(job{sha: "a"}, false)
+	q.Push(job{sha: "b"}, false)
+	q.Push(job{sha: "c"}, true)
+	q.Push(job{sha: "b"}, true) // moves to the front
+	q.Push(job{sha: "a"}, false)
+	if q.Length() != 3 || !q.Waiting("a") {
+		t.Fatalf("length %d", q.Length())
 	}
 	var order []string
 	for {
-		j, ok := q.pop()
+		j, ok := q.Pop()
 		if !ok {
 			break
 		}
-		if !q.running(j.sha) {
+		if !q.Running(j.sha) {
 			t.Error("popped job is running")
 		}
-		q.push(job{sha: j.sha}, true) // the running job is not queued again
+		q.Push(job{sha: j.sha}, true) // the running job is not queued again
 		order = append(order, j.sha)
-		q.done(j.sha)
+		q.Done(j.sha)
 	}
-	if strings.Join(order, "") != "bca" || q.waiting("a") {
+	if strings.Join(order, "") != "bca" || q.Waiting("a") {
 		t.Errorf("order %v", order)
 	}
 }
@@ -959,16 +959,16 @@ func TestRiskModelOnLittleHistory(t *testing.T) {
 }
 
 func TestQueueSortBy(t *testing.T) {
-	q := newQueue()
+	q := newQueue("test")
 	for _, s := range []string{"a", "b", "c", "d"} {
-		q.push(job{sha: s}, false)
+		q.Push(job{sha: s}, false)
 	}
 	score := map[string]float64{"c": 0.9, "a": 0.2, "d": 0.2}
-	q.sortBy(func(sha string) float64 { return score[sha] })
+	q.SortBy(func(sha string) float64 { return score[sha] })
 	var order []string
-	for j, ok := q.pop(); ok; j, ok = q.pop() {
+	for j, ok := q.Pop(); ok; j, ok = q.Pop() {
 		order = append(order, j.sha)
-		q.done(j.sha)
+		q.Done(j.sha)
 	}
 	if strings.Join(order, "") != "cadb" {
 		t.Errorf("order %v", order)

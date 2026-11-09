@@ -18,16 +18,16 @@ func (a *App) runBehaviour(ctx context.Context) {
 	log, _ := a.repo.LogRef("HEAD", a.historyLimit())
 	for _, c := range log {
 		if !done[c.SHA] {
-			a.runs.push(job{sha: c.SHA}, false)
+			a.runs.Push(job{sha: c.SHA}, false)
 		}
 	}
 	for {
-		j, ok := a.runs.pop()
+		j, ok := a.runs.Pop()
 		if !ok {
 			select {
 			case <-ctx.Done():
 				return
-			case <-a.runs.wake:
+			case <-a.runs.Wake:
 				continue
 			}
 		}
@@ -37,7 +37,7 @@ func (a *App) runBehaviour(ctx context.Context) {
 		if err := a.store.SetBehaviour(rep.SHA, raw); err != nil {
 			slog.Warn("behaviour not saved", "sha", short(j.sha), "err", err)
 		}
-		a.runs.done(j.sha)
+		a.runs.Done(j.sha)
 		slog.Info("behaviour", "sha", short(j.sha), "status", rep.Status, "differ", rep.Differ, "took", rep.Took, "reason", rep.Reason)
 		a.events.publish("behaviour", map[string]any{"sha": rep.SHA, "status": rep.Status, "differ": rep.Differ})
 	}
@@ -50,9 +50,9 @@ func (a *App) behaviourOf(sha string) any {
 		return nil
 	}
 	switch {
-	case a.runs.running(sha):
+	case a.runs.Running(sha):
 		return map[string]string{"sha": sha, "status": "running"}
-	case a.runs.waiting(sha):
+	case a.runs.Waiting(sha):
 		return map[string]string{"sha": sha, "status": "queued"}
 	}
 	if raw, ok := a.store.Behaviour(sha); ok {
@@ -85,7 +85,7 @@ func (a *App) requestBehaviour(w http.ResponseWriter, r *http.Request) {
 		web.Error(w, http.StatusNotFound, "That commit is not in the repository.")
 		return
 	}
-	a.runs.push(job{sha: c.SHA}, true)
+	a.runs.Push(job{sha: c.SHA}, true)
 	a.events.publish("behaviour", map[string]string{"sha": c.SHA, "status": "queued"})
 	web.JSON(w, map[string]any{"sha": c.SHA, "queued": true})
 }

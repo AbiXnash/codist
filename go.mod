@@ -10,13 +10,13 @@ require (
 	github.com/AbiXnash/codist-behaviour v0.2.1
 	github.com/AbiXnash/codist-git v0.4.0
 	github.com/AbiXnash/codist-java v0.4.0
-	github.com/AbiXnash/codist-model v0.3.1
-	github.com/AbiXnash/codist-review v0.7.0
-	github.com/AbiXnash/codist-ui v0.6.0
+	github.com/AbiXnash/codist-model v0.4.0
+	github.com/AbiXnash/codist-review v0.8.0
+	github.com/AbiXnash/codist-ui v0.7.0
 )
 
 require (
-	github.com/AbiXnash/codist-fix v0.1.1
+	github.com/AbiXnash/codist-fix v0.1.2
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect

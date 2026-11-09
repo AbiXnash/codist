@@ -5,11 +5,11 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sort"
 	"sync"
 	"time"
 
 	"github.com/AbiXnash/codist-review"
+	"github.com/AbiXnash/codist-review/activity"
 	"github.com/AbiXnash/codist-review/risk"
 )
 
@@ -22,90 +22,11 @@ type job struct {
 	opt review.Options
 }
 
-// queue holds commits waiting in one lane, worked one at a time.
-type queue struct {
-	mu      sync.Mutex
-	jobs    []job
-	queued  map[string]bool
-	wake    chan struct{}
-	current string
-}
+// queue is one lane of work: jobs wait, run one at a time, and the Activity page can see them.
+type queue = activity.Lane[job]
 
-func newQueue() *queue { return &queue{queued: map[string]bool{}, wake: make(chan struct{}, 1)} }
-
-// push adds a job; first puts it at the front. A job already waiting moves to the front when
-// pushed again with first.
-func (q *queue) push(j job, first bool) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	if q.queued[j.sha] {
-		if !first || q.current == j.sha {
-			return
-		}
-		for i, x := range q.jobs {
-			if x.sha == j.sha {
-				q.jobs = append(q.jobs[:i], q.jobs[i+1:]...)
-				break
-			}
-		}
-	}
-	q.queued[j.sha] = true
-	if first {
-		q.jobs = append([]job{j}, q.jobs...)
-	} else {
-		q.jobs = append(q.jobs, j)
-	}
-	select {
-	case q.wake <- struct{}{}:
-	default:
-	}
-}
-
-func (q *queue) pop() (job, bool) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	if len(q.jobs) == 0 {
-		return job{}, false
-	}
-	j := q.jobs[0]
-	q.jobs = q.jobs[1:]
-	q.current = j.sha
-	return j, true
-}
-
-func (q *queue) done(sha string) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	delete(q.queued, sha)
-	q.current = ""
-}
-
-// waiting says whether a commit is queued or being worked on in this lane.
-func (q *queue) waiting(sha string) bool {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	return q.queued[sha]
-}
-
-// running says whether this lane is working on the commit right now.
-func (q *queue) running(sha string) bool {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	return q.current == sha
-}
-
-// sortBy orders the waiting jobs by score, highest first, keeping the order of equal scores.
-func (q *queue) sortBy(score func(sha string) float64) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	sort.SliceStable(q.jobs, func(i, j int) bool { return score(q.jobs[i].sha) > score(q.jobs[j].sha) })
-}
-
-// length is how many jobs are waiting.
-func (q *queue) length() int {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	return len(q.jobs)
+func newQueue(name string) *queue {
+	return activity.NewLane(name, func(j job) string { return j.sha })
 }
 
 // lockSHA keeps the two lanes from writing the same commit's results at once.
@@ -128,12 +49,12 @@ func (a *App) work(ctx context.Context, q *queue, model bool) {
 				continue
 			}
 		}
-		j, ok := q.pop()
+		j, ok := q.Pop()
 		if !ok {
 			select {
 			case <-ctx.Done():
 				return
-			case <-q.wake:
+			case <-q.Wake:
 				continue
 			}
 		}
@@ -150,13 +71,13 @@ func (a *App) work(ctx context.Context, q *queue, model bool) {
 			err = a.reviewer(model).Review(ctx, j.sha, j.opt)
 			m.(*sync.Mutex).Unlock()
 		} // otherwise the model is reviewing it, which runs the checks too: the fast lane moves on
-		q.done(j.sha)
+		q.Done(j.sha)
 		status := "done"
 		if err != nil {
 			status = "failed"
 			slog.Warn("review failed", "sha", short(j.sha), "err", err)
 		} else {
-			slog.Info("reviewed", "sha", short(j.sha), "model", model, "took", time.Since(start).Round(time.Millisecond), "left", q.length())
+			slog.Info("reviewed", "sha", short(j.sha), "model", model, "took", time.Since(start).Round(time.Millisecond), "left", q.Length())
 		}
 		a.events.publish("review", map[string]any{"sha": j.sha, "status": a.statusOf(j.sha, status), "counts": a.store.Counts()[j.sha]})
 	}
@@ -171,10 +92,10 @@ func short(sha string) string {
 
 // statusOf is a commit's state after one lane finished: still queued if the other lane has it.
 func (a *App) statusOf(sha, finished string) string {
-	if a.models.running(sha) {
+	if a.models.Running(sha) {
 		return "running"
 	}
-	if a.models.waiting(sha) || a.checks.waiting(sha) {
+	if a.models.Waiting(sha) || a.checks.Waiting(sha) {
 		return "queued"
 	}
 	return finished
@@ -196,13 +117,13 @@ func (a *App) backlog() {
 		// A review still "running" was cut off when Codist stopped, so it is done again.
 		finished := seen && rv.Status != "running"
 		if !finished {
-			a.checks.push(job{sha: c.SHA, opt: review.Options{RulesOnly: true}}, false)
+			a.checks.Push(job{sha: c.SHA, opt: review.Options{RulesOnly: true}}, false)
 		}
 		if !a.cfg.ModelOff && i < a.historyLimit() && (!finished || rv.Model == "") {
-			a.models.push(job{sha: c.SHA}, false)
+			a.models.Push(job{sha: c.SHA}, false)
 		}
 	}
-	slog.Info("backlog", "checks", a.checks.length(), "model", a.models.length())
+	slog.Info("backlog", "checks", a.checks.Length(), "model", a.models.Length())
 }
 
 func (a *App) historyLimit() int {
@@ -239,12 +160,12 @@ func (a *App) watch(ctx context.Context) {
 			}
 		}
 		for i := len(fresh) - 1; i >= 0; i-- { // pushing to the front in reverse keeps the newest first
-			a.checks.push(job{sha: fresh[i], opt: review.Options{RulesOnly: true}}, true)
+			a.checks.Push(job{sha: fresh[i], opt: review.Options{RulesOnly: true}}, true)
 			if !a.cfg.ModelOff {
-				a.models.push(job{sha: fresh[i]}, true)
+				a.models.Push(job{sha: fresh[i]}, true)
 			}
 			if a.runner != nil {
-				a.runs.push(job{sha: fresh[i]}, true)
+				a.runs.Push(job{sha: fresh[i]}, true)
 			}
 		}
 		last = head
@@ -314,7 +235,7 @@ func (a *App) learnRisk() {
 	a.mu.Unlock()
 	a.events.publish("status", map[string]any{"riskModel": m.Ready})
 	if m.Ready {
-		a.models.sortBy(func(sha string) float64 { return m.Scores[sha] })
+		a.models.SortBy(func(sha string) float64 { return m.Scores[sha] })
 		slog.Info("risk model", "auc", m.AUC, "commits", m.Commits, "bug-bringing", m.Positives, "signals", m.Signals)
 	} else {
 		slog.Info("risk model not used", "reason", m.Reason)

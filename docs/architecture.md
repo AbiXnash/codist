@@ -33,9 +33,10 @@ flowchart LR
 | Repository | Holds | Depends on |
 |---|---|---|
 | **codist** | `main.go`, settings (`internal/config`), the HTTP API and the review lanes (`internal/app`) | all below |
-| **codist-review** | reviewing one commit, checking model claims, following issues across commits, the first-run baseline; `store/` keeps reviews, issues and incidents in SQLite | java, git, model |
+| **codist-review** | reviewing one commit, checking model claims, following issues across commits, the first-run baseline; `store/` keeps reviews, issues and incidents in SQLite; `risk/` ranks commits; `activity/` holds the work lanes, keeps and streams the log and records model calls | java, git, model |
+| **codist-fix** | preparing a fix with the model, building and testing it in a separate copy, committing only its files after a person approves | git, model, review |
 | **codist-behaviour** | running the methods a commit changed before and after it with a fixed Java harness, building with Maven or javac | java, git |
-| **codist-java** | the Java parser (pure-Go tree-sitter), 15 code checks, types and Spring facts, the class graph, the call graph, the Repository page numbers | none |
+| **codist-java** | the Java parser (pure-Go tree-sitter), 19 code checks and 3 habit checks, types and Spring facts, the class graph, the call graph, the Repository page numbers | none |
 | **codist-git** | commits, changed lines, files at any commit, blame and branches through the git command; `testrepo/` builds a sample repository for tests | none |
 | **codist-model** | the model server client; `incident/` reads production logs and analyses incidents | none |
 | **codist-ui** | the Svelte interface; its built `dist/` is committed and embedded | none |
@@ -57,16 +58,24 @@ through an interface (`incident.Code`) instead of importing the parser or git.
    - the **behaviour lane**, only when turned on, builds each recent commit and its parent and runs the changed
      methods on both with the same inputs.
    A new commit goes to the front of each. A restart picks up whatever was not finished.
-5. **Each model claim is checked** before it is stored: it must quote code that is near the line it names, and a
-   claim the code does not back is kept as a note with a lower severity.
+5. **Each model claim is checked** before it is stored, in three steps:
+   - it must quote code near the line it names, or it is dropped;
+   - exact facts settle what they can: a null claim needs a value that is dereferenced, "strings compared with ==" is
+     checked by the type-aware check on that line, and "not implemented" is checked against the commit's other files
+     (the model also sees those files' changes);
+   - a serious claim that survives gets a second look, and stays an alarm only when the model quotes code that proves
+     it. Anything contradicted or unproven is kept as a note, with the reason.
 6. **Issues are followed** by a key of rule or title, file and the flagged line, so a later commit that removes the
    problem closes the issue.
 7. **The page** reads everything through the JSON API, compressed with gzip, and gets live updates through server
-   events.
+   events. The Activity page reads each lane's queue, the recorded model calls and a live stream of the log.
+8. **A fix** is prepared only when a person asks: the model writes small edits to the current code, Codist builds and
+   tests them in a separate copy, and commits only the fix's files when the person approves. The new commit is then
+   reviewed like any other, which closes the issue.
 
 ## Where data lives
 
-Everything is in `~/.codist/<repo>.db` (or `CODIST_DATA_DIR`): reviews, findings, issues and incidents. Nothing is
+Everything is in `~/.codist/<repo>-<hash>.db` (or `CODIST_DATA_DIR`): reviews, findings, issues and incidents. Nothing is
 sent anywhere except to the model server you chose.
 
 ## Building one file
