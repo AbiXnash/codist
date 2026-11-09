@@ -4,7 +4,8 @@ Codist reviews a Java and Spring Boot repository on your own machine. It runs as
 watches the repository, and shows what it finds in your browser:
 
 - **Review**: every new commit is checked on its changed lines, then read by a local AI model. Each model claim is
-  checked against the code before it is shown, and issues are followed until a later commit fixes them.
+  checked against the code before it is shown, and issues are followed until a later commit fixes them. A claim
+  Codist cannot back, or that the code contradicts, is shown as a quiet note with the reason; it opens no issue.
 - **Fix**: for a real bug, the model prepares a small fix and says why. You see the current and proposed code side by
   side, the fix is built and tested in a separate copy first, and only when you approve is it committed (just its own
   files). Tell it how you want it fixed, or reject it and say why; it remembers.
@@ -19,6 +20,24 @@ watches the repository, and shows what it finds in your browser:
   inputs, and shows what now behaves differently, so you can say whether it was meant.
 
 Nothing leaves your machine. Codist never changes your code unless you approve a fix.
+
+## How well it finds bugs
+
+Codist is measured on three test projects with planted bugs. Each is built commit by commit by a script in
+[codist-eval](https://github.com/AbiXnash/codist-eval/tree/main/testbed), with an answer key kept outside the project.
+A bug counts as found when an alarm (not a note) lands within 6 lines of it; a clean commit fails if it gets any alarm.
+The model is `qwen2.5-coder:14b` on a 16 GB laptop.
+
+| Project | What it is | Bugs found | Clean commits with an alarm |
+|---|---|---|---|
+| records-lab | a Spring Boot gateway: JSON, XML, CSV and GraphQL over JDBC | 18 of 19 | 0 of 5 |
+| shop-lab | two Spring Boot services: Feign, Redis, Spring Batch, JDBC | 20 of 24 | 0 of 6 |
+| maze-lab | a Java Swing game written to a design spec | 15 of 19 | 2 of 3 (both low) |
+
+Code checks alone, with no model, find 11 of 19, 8 of 24 and 3 of 19: every known Java mistake, and code that breaks
+a habit the project follows elsewhere. The model finds the bugs that need reading the change against your rules, and
+behaviour runs confirm many logic bugs on the game. Each run's full result is in
+[codist-eval/testbed](https://github.com/AbiXnash/codist-eval/tree/main/testbed).
 
 ## Install
 
@@ -93,7 +112,7 @@ Codist is split into modules, each its own repository, and built into this one p
 | [codist-git](https://github.com/AbiXnash/codist-git) | reading a repository through git, and a test repository builder |
 | [codist-model](https://github.com/AbiXnash/codist-model) | the model server client, and reading production logs into incidents |
 | [codist-ui](https://github.com/AbiXnash/codist-ui) | the Svelte interface, embedded already built |
-| [codist-eval](https://github.com/AbiXnash/codist-eval) | the benchmark and the behaviour-difference experiment |
+| [codist-eval](https://github.com/AbiXnash/codist-eval) | the test projects with planted bugs and their scores, the benchmark, and the behaviour-difference experiment |
 
 [docs/architecture.md](docs/architecture.md) shows how they fit together, and
 [docs/development.md](docs/development.md) how to work on them: one script clones them all side by side.
