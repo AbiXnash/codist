@@ -67,6 +67,8 @@ http://localhost:8080. Fixes are committed to the mounted repository only after 
 commit as yourself, add `-e GIT_AUTHOR_NAME="$(git config user.name)" -e GIT_AUTHOR_EMAIL="$(git config user.email)"
 -e GIT_COMMITTER_NAME="$(git config user.name)" -e GIT_COMMITTER_EMAIL="$(git config user.email)"`.
 
+**With Go** 1.26 or later: `go install github.com/abxengg/codist@latest`
+
 The script downloads the program for your system (or builds it from source if Go is installed and there is no
 release yet), puts it on your path, and checks git, Java and the model server. Then:
 

@@ -40,7 +40,7 @@ flowchart LR
 | **codist-git** | commits, changed lines, files at any commit, blame and branches through the git command; `testrepo/` builds a sample repository for tests | none |
 | **codist-model** | the model server client; `incident/` reads production logs and analyses incidents | none |
 | **codist-ui** | the Svelte interface; its built `dist/` is committed and embedded | none |
-| **codist-eval** | the benchmark and the behaviour-difference experiment | java |
+| **codist-eval** | the benchmark and the behaviour-difference experiment | java, git, model, review |
 
 The arrows only point one way: the modules never import the app, and `codist-model` reaches the project's code
 through an interface (`incident.Code`) instead of importing the parser or git.

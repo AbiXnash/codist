@@ -28,10 +28,28 @@ Checking what Codist needs:
 
 If it says to add a folder to your `PATH`, do that and open a new terminal.
 
-You can choose a version or a folder:
+**Docker**: the image has git, Java 21 and Maven, so checks that run code and fixes work without installing
+anything else:
 
 ```bash
-CODIST_VERSION=v0.1.0 CODIST_BIN_DIR=/usr/local/bin sh install.sh
+cd ~/dev/your-spring-app
+docker run --rm -p 8080:8080 -v "$PWD:/repo" -v codist-data:/data \
+  --add-host=host.docker.internal:host-gateway ghcr.io/abxengg/codist
+```
+
+Then open http://localhost:8080. The container reaches Ollama on your machine at `host.docker.internal:11434`; set
+`-e CODIST_MODEL_URL=...` for another address. Pin a version with `ghcr.io/abxengg/codist:0.5.1`.
+
+**With Go** 1.26 or later:
+
+```bash
+go install github.com/abxengg/codist@latest
+```
+
+With the install script, you can choose a version or a folder:
+
+```bash
+CODIST_VERSION=v0.5.1 CODIST_BIN_DIR=/usr/local/bin sh install.sh
 CODIST_FROM_SOURCE=1 sh install.sh      # build with Go instead of downloading
 ```
 

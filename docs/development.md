@@ -2,7 +2,7 @@
 
 ## Set up
 
-You need git and Go 1.26 or later; Node 20 or later only to change the interface. One script clones all eight
+You need git and Go 1.26 or later; Node 20 or later only to change the interface. One script clones all nine
 repositories side by side and ties the Go modules together:
 
 ```bash
@@ -23,6 +23,7 @@ codist-java/
 codist-git/
 codist-model/
 codist-review/
+codist-fix/
 codist-behaviour/
 codist-ui/
 codist-eval/
@@ -82,18 +83,29 @@ Run with `CODIST_LOG=debug` when something looks wrong. A library used outside C
 ## Changing a module
 
 1. Make the change in the module and its tests, and in the app if it uses it; `go.work` builds them together.
-2. Commit and push the module, then tag a new version: `git tag v0.2.1 && git push origin v0.2.1`.
-3. In the app, require it: `GOWORK=off go get github.com/abxengg/codist-java@v0.5.0 && go mod tidy`, then check
+2. Commit and push the module, then tag a new version: `git tag v0.5.1 && git push origin v0.5.1`.
+3. In the app, require it: `GOWORK=off go get github.com/abxengg/codist-java@v0.5.1 && go mod tidy`, then check
    `GOWORK=off make test` passes without your local copies, and commit `go.mod` and `go.sum`.
 
-Tag modules before the app, and dependencies before what uses them: codist-git and codist-model, then codist-java,
-then codist-review and codist-behaviour, then codist.
+Tag modules before the app, and dependencies before what uses them: codist-git, codist-model and codist-ui, then
+codist-java, then codist-review, then codist-fix and codist-behaviour, then codist.
+
+The modules live under `github.com/abxengg/`. Versions before the move (codist v0.4.1, codist-java v0.4.0 and so on)
+declare the old path `github.com/AbiXnash/...`, so require v0.5.0 or later of each module (codist-review v0.9.0,
+codist-fix v0.2.0, codist-behaviour v0.3.0, codist-ui v0.8.0).
 
 ## Releases
 
 Pushing a tag such as `v0.1.0` to this repository runs `.github/workflows/release.yml`: it tests, builds one file
 each for macOS (Apple silicon and Intel), Linux (x64 and arm64) and Windows, and attaches them to a GitHub release.
 The install scripts download from the latest release.
+
+The same tag runs `.github/workflows/image.yml`, which builds the container image for amd64 and arm64 and pushes it
+to `ghcr.io/abxengg/codist` as `X.Y.Z`, `X.Y` and `latest`. On every push to `remaster` it builds the image without
+pushing it, so a broken `Dockerfile` shows up before a release.
+
+To release: make sure CI is green on `remaster`, then `git tag vX.Y.Z && git push origin vX.Y.Z`. The release notes
+are generated from the commits since the last tag.
 
 Every push also runs `.github/workflows/ci.yml`: the tests on Linux, macOS and Windows, both install scripts, and the
 development setup.
