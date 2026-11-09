@@ -30,9 +30,9 @@ The model is `qwen2.5-coder:14b` on a 16 GB laptop.
 
 | Project | What it is | Bugs found | Clean commits with an alarm |
 |---|---|---|---|
-| records-lab | a Spring Boot gateway: JSON, XML, CSV and GraphQL over JDBC | 18 of 19 | 0 of 5 |
-| shop-lab | two Spring Boot services: Feign, Redis, Spring Batch, JDBC | 20 of 24 | 0 of 6 |
-| maze-lab | a Java Swing game written to a design spec | 15 of 19 | 2 of 3 (both low) |
+| [records-lab](https://github.com/AbiXnash/records-lab) | a Spring Boot gateway: JSON, XML, CSV and GraphQL over JDBC | 18 of 19 | 0 of 5 |
+| [shop-lab](https://github.com/AbiXnash/shop-lab) | two Spring Boot services: Feign, Redis, Spring Batch, JDBC | 20 of 24 | 0 of 6 |
+| [maze-lab](https://github.com/AbiXnash/maze-lab) | a Java Swing game written to a design spec | 15 of 19 | 2 of 3 (both low) |
 
 Code checks alone, with no model, find 11 of 19, 8 of 24 and 3 of 19: every known Java mistake, and code that breaks
 a habit the project follows elsewhere. The model finds the bugs that need reading the change against your rules, and
