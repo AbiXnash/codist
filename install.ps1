@@ -1,6 +1,6 @@
 # Installs Codist on Windows, then checks what it needs. In PowerShell:
 #
-#   irm https://raw.githubusercontent.com/AbiXnash/codist/remaster/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/abxengg/codist/remaster/install.ps1 | iex
 #
 # Settings, all optional, as environment variables:
 #   CODIST_VERSION   a release tag such as v0.1.0 (default: the latest release)
@@ -8,7 +8,7 @@
 #   CODIST_FROM_SOURCE=1  build from source with Go instead of downloading
 $ErrorActionPreference = 'Stop'
 
-$Repo    = 'AbiXnash/codist'
+$Repo    = 'abxengg/codist'
 $Branch  = 'remaster'
 $BinDir  = if ($env:CODIST_BIN_DIR) { $env:CODIST_BIN_DIR } else { Join-Path $env:LOCALAPPDATA 'codist\bin' }
 $Version = if ($env:CODIST_VERSION) { $env:CODIST_VERSION } else { 'latest' }

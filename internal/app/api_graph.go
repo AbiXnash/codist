@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AbiXnash/codist-java"
-	"github.com/AbiXnash/codist/internal/web"
+	"github.com/abxengg/codist-java"
+	"github.com/abxengg/codist/internal/web"
 )
 
 func (a *App) graph(w http.ResponseWriter, r *http.Request) {

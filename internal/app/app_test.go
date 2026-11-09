@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AbiXnash/codist-git"
-	"github.com/AbiXnash/codist-git/testrepo"
-	"github.com/AbiXnash/codist-java"
-	"github.com/AbiXnash/codist/internal/config"
+	"github.com/abxengg/codist-git"
+	"github.com/abxengg/codist-git/testrepo"
+	"github.com/abxengg/codist-java"
+	"github.com/abxengg/codist/internal/config"
 )
 
 // fakeModel is a model server: it has one model, "fake", and answers reviews and incident

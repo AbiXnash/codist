@@ -8,11 +8,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/AbiXnash/codist-git"
-	"github.com/AbiXnash/codist-java"
-	"github.com/AbiXnash/codist-review"
-	"github.com/AbiXnash/codist-review/store"
-	"github.com/AbiXnash/codist/internal/web"
+	"github.com/abxengg/codist-git"
+	"github.com/abxengg/codist-java"
+	"github.com/abxengg/codist-review"
+	"github.com/abxengg/codist-review/store"
+	"github.com/abxengg/codist/internal/web"
 )
 
 type commitJSON struct {

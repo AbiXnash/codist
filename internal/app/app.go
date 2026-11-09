@@ -9,17 +9,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AbiXnash/codist-behaviour"
-	"github.com/AbiXnash/codist-fix"
-	"github.com/AbiXnash/codist-git"
-	"github.com/AbiXnash/codist-java"
-	"github.com/AbiXnash/codist-model"
-	"github.com/AbiXnash/codist-review/activity"
-	"github.com/AbiXnash/codist-review/risk"
-	"github.com/AbiXnash/codist-review/store"
-	"github.com/AbiXnash/codist-ui"
-	"github.com/AbiXnash/codist/internal/config"
-	"github.com/AbiXnash/codist/internal/web"
+	"github.com/abxengg/codist-behaviour"
+	"github.com/abxengg/codist-fix"
+	"github.com/abxengg/codist-git"
+	"github.com/abxengg/codist-java"
+	"github.com/abxengg/codist-model"
+	"github.com/abxengg/codist-review/activity"
+	"github.com/abxengg/codist-review/risk"
+	"github.com/abxengg/codist-review/store"
+	"github.com/abxengg/codist-ui"
+	"github.com/abxengg/codist/internal/config"
+	"github.com/abxengg/codist/internal/web"
 )
 
 // App is one running Codist for one repository.

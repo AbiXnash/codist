@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	review "github.com/AbiXnash/codist-review"
-	"github.com/AbiXnash/codist/internal/web"
+	review "github.com/abxengg/codist-review"
+	"github.com/abxengg/codist/internal/web"
 )
 
 func (a *App) status(w http.ResponseWriter, r *http.Request) {

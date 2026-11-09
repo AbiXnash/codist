@@ -6,12 +6,12 @@ You need git and Go 1.26 or later; Node 20 or later only to change the interface
 repositories side by side and ties the Go modules together:
 
 ```bash
-git clone https://github.com/AbiXnash/codist.git
+git clone https://github.com/abxengg/codist.git
 sh codist/scripts/dev-setup.sh             # macOS and Linux
 ```
 
 ```powershell
-git clone https://github.com/AbiXnash/codist.git
+git clone https://github.com/abxengg/codist.git
 .\codist\scripts\dev-setup.ps1             # Windows
 ```
 
@@ -83,7 +83,7 @@ Run with `CODIST_LOG=debug` when something looks wrong. A library used outside C
 
 1. Make the change in the module and its tests, and in the app if it uses it; `go.work` builds them together.
 2. Commit and push the module, then tag a new version: `git tag v0.2.1 && git push origin v0.2.1`.
-3. In the app, require it: `GOWORK=off go get github.com/AbiXnash/codist-java@v0.2.1 && go mod tidy`, then check
+3. In the app, require it: `GOWORK=off go get github.com/abxengg/codist-java@v0.2.1 && go mod tidy`, then check
    `GOWORK=off make test` passes without your local copies, and commit `go.mod` and `go.sum`.
 
 Tag modules before the app, and dependencies before what uses them: codist-git and codist-model, then codist-java,

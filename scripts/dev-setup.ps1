@@ -6,7 +6,7 @@
 # Needs git and Go 1.26 or later; Node 20 or later only to work on the interface.
 param([string]$Dir)
 $ErrorActionPreference = 'Stop'
-$Owner = 'https://github.com/AbiXnash'
+$Owner = 'https://github.com/abxengg'
 $Repos = 'codist', 'codist-java', 'codist-git', 'codist-model', 'codist-review', 'codist-behaviour', 'codist-ui', 'codist-eval'
 function Have($name) { [bool](Get-Command $name -ErrorAction SilentlyContinue) }
 if (-not (Have git)) { throw 'Install git first: https://git-scm.com/download/win' }
@@ -14,7 +14,7 @@ if (-not (Have go))  { throw 'Install Go 1.26 or later first: https://go.dev/dl'
 
 if (-not $Dir) {
   $here = Split-Path -Parent $PSScriptRoot
-  if ((Test-Path "$here\go.mod") -and (Select-String -Quiet -Path "$here\go.mod" -Pattern 'module github.com/AbiXnash/codist$')) { $Dir = Split-Path -Parent $here }
+  if ((Test-Path "$here\go.mod") -and (Select-String -Quiet -Path "$here\go.mod" -Pattern 'module github.com/abxengg/codist$')) { $Dir = Split-Path -Parent $here }
   else { $Dir = Join-Path (Get-Location) 'codist-dev' }
 }
 New-Item -ItemType Directory -Force -Path $Dir | Out-Null

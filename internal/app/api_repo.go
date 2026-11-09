@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/AbiXnash/codist-java"
-	"github.com/AbiXnash/codist/internal/web"
+	"github.com/abxengg/codist-java"
+	"github.com/abxengg/codist/internal/web"
 )
 
 // repoReport is the Repository page: the code's shape from the index, joined with git history and open issues.

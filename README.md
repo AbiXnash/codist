@@ -24,7 +24,7 @@ Nothing leaves your machine. Codist never changes your code unless you approve a
 ## How well it finds bugs
 
 Codist is measured on three test projects with planted bugs. Each is built commit by commit by a script in
-[codist-eval](https://github.com/AbiXnash/codist-eval/tree/main/testbed), with an answer key kept outside the project.
+[codist-eval](https://github.com/abxengg/codist-eval/tree/main/testbed), with an answer key kept outside the project.
 A bug counts as found when an alarm (not a note) lands within 6 lines of it; a clean commit fails if it gets any alarm.
 The model is `qwen2.5-coder:14b` on a 16 GB laptop.
 
@@ -37,20 +37,20 @@ The model is `qwen2.5-coder:14b` on a 16 GB laptop.
 Code checks alone, with no model, find 11 of 19, 8 of 24 and 3 of 19: every known Java mistake, and code that breaks
 a habit the project follows elsewhere. The model finds the bugs that need reading the change against your rules, and
 behaviour runs confirm many logic bugs on the game. Each run's full result is in
-[codist-eval/testbed](https://github.com/AbiXnash/codist-eval/tree/main/testbed).
+[codist-eval/testbed](https://github.com/abxengg/codist-eval/tree/main/testbed).
 
 ## Install
 
 **macOS and Linux**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AbiXnash/codist/remaster/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/abxengg/codist/remaster/install.sh | sh
 ```
 
 **Windows** (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/AbiXnash/codist/remaster/install.ps1 | iex
+irm https://raw.githubusercontent.com/abxengg/codist/remaster/install.ps1 | iex
 ```
 
 The script downloads the program for your system (or builds it from source if Go is installed and there is no
@@ -89,14 +89,14 @@ The script runs with no file, network or OS access. Environment variables overri
 
 ## Known issues
 
-What does not work yet, and what is planned, is tracked in [the open work list](https://github.com/AbiXnash/codist/issues/6). The most important:
+What does not work yet, and what is planned, is tracked in [the open work list](https://github.com/abxengg/codist/issues/6). The most important:
 
-- **Merge commits are not reviewed.** A hand-resolved conflict is read as a commit that changes nothing ([codist-git#1](https://github.com/AbiXnash/codist-git/issues/1)).
-- **Very large commits and histories are reviewed thinly.** The AI reads the first 8 changed files of a commit by name, and checking a history of a million commits takes about a day ([codist-review#1](https://github.com/AbiXnash/codist-review/issues/1), [#1](https://github.com/AbiXnash/codist/issues/1)).
+- **Merge commits are not reviewed.** A hand-resolved conflict is read as a commit that changes nothing ([codist-git#1](https://github.com/abxengg/codist-git/issues/1)).
+- **Very large commits and histories are reviewed thinly.** The AI reads the first 8 changed files of a commit by name, and checking a history of a million commits takes about a day ([codist-review#1](https://github.com/abxengg/codist-review/issues/1), [#1](https://github.com/abxengg/codist/issues/1)).
 - **A written spec is followed only partly.** With your rules in `.codist/rules.md`, the model catches most broken
   rules, but on the game test lab it missed changed numbers the rules state (20 s became 10 s, 60 fps became 30) and
   once trusted its own memory over the rules. Behaviour runs catch some of these.
-- **Windows and Linux have not been tried on a real machine yet** ([#4](https://github.com/AbiXnash/codist/issues/4)).
+- **Windows and Linux have not been tried on a real machine yet** ([#4](https://github.com/abxengg/codist/issues/4)).
 
 ## How it is built
 
@@ -104,15 +104,15 @@ Codist is split into modules, each its own repository, and built into this one p
 
 | Repository | What it holds |
 |---|---|
-| [codist](https://github.com/AbiXnash/codist) | this app: settings, the HTTP API and the review lanes |
-| [codist-review](https://github.com/AbiXnash/codist-review) | how a commit is reviewed, the issue store, and what the Activity page shows |
-| [codist-fix](https://github.com/AbiXnash/codist-fix) | preparing, checking and applying fixes a person approves |
-| [codist-behaviour](https://github.com/AbiXnash/codist-behaviour) | running changed methods before and after a commit |
-| [codist-java](https://github.com/AbiXnash/codist-java) | the Java parser, code checks, class graph and call graph |
-| [codist-git](https://github.com/AbiXnash/codist-git) | reading a repository through git, and a test repository builder |
-| [codist-model](https://github.com/AbiXnash/codist-model) | the model server client, and reading production logs into incidents |
-| [codist-ui](https://github.com/AbiXnash/codist-ui) | the Svelte interface, embedded already built |
-| [codist-eval](https://github.com/AbiXnash/codist-eval) | the test projects with planted bugs and their scores, the benchmark, and the behaviour-difference experiment |
+| [codist](https://github.com/abxengg/codist) | this app: settings, the HTTP API and the review lanes |
+| [codist-review](https://github.com/abxengg/codist-review) | how a commit is reviewed, the issue store, and what the Activity page shows |
+| [codist-fix](https://github.com/abxengg/codist-fix) | preparing, checking and applying fixes a person approves |
+| [codist-behaviour](https://github.com/abxengg/codist-behaviour) | running changed methods before and after a commit |
+| [codist-java](https://github.com/abxengg/codist-java) | the Java parser, code checks, class graph and call graph |
+| [codist-git](https://github.com/abxengg/codist-git) | reading a repository through git, and a test repository builder |
+| [codist-model](https://github.com/abxengg/codist-model) | the model server client, and reading production logs into incidents |
+| [codist-ui](https://github.com/abxengg/codist-ui) | the Svelte interface, embedded already built |
+| [codist-eval](https://github.com/abxengg/codist-eval) | the test projects with planted bugs and their scores, the benchmark, and the behaviour-difference experiment |
 
 [docs/architecture.md](docs/architecture.md) shows how they fit together, and
 [docs/development.md](docs/development.md) how to work on them: one script clones them all side by side.
@@ -131,7 +131,7 @@ Data is kept in `~/.codist/<repo>-<hash>.db`, a SQLite file named after the repo
 Source available under the [PolyForm Noncommercial License 1.0.0](LICENSE): free for any noncommercial purpose, such
 as personal study, research, hobby projects and testing, and for use by charities, schools, public research and
 public health bodies and government institutions. **Using it for a business, or in anything sold, needs a commercial
-licence** from the author: open an issue at [github.com/AbiXnash/codist](https://github.com/AbiXnash/codist/issues)
+licence** from the author: open an issue at [github.com/abxengg/codist](https://github.com/abxengg/codist/issues)
 to ask. Third-party code included in Codist keeps its own licence.
 
 Required Notice: Copyright 2026 Abinash (https://github.com/AbiXnash)

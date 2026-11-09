@@ -17,7 +17,7 @@ combining several methods because no single one is enough. Codist follows it in 
 3. **Behaviour over opinion.** Running the changed methods before and after a commit gives a fact to show,
    "this returned 1200 and now returns 1201", not a guess.
 4. **A private benchmark.** Public benchmarks only filter out weak models (chapter 4); Codist is measured on real
-   Java bugs in [codist-eval](https://github.com/AbiXnash/codist-eval), and a change ships only if it helps there.
+   Java bugs in [codist-eval](https://github.com/abxengg/codist-eval), and a change ships only if it helps there.
 
 ## What is built
 

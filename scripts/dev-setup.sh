@@ -6,7 +6,7 @@
 #
 # Needs git and Go 1.26 or later; Node 20 or later only to work on the interface.
 set -eu
-OWNER="https://github.com/AbiXnash"
+OWNER="https://github.com/abxengg"
 REPOS="codist codist-java codist-git codist-model codist-review codist-behaviour codist-ui codist-eval"
 
 have() { command -v "$1" >/dev/null 2>&1; }
@@ -15,7 +15,7 @@ have go  || { echo "dev-setup: install Go 1.26 or later from https://go.dev/dl f
 
 here=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd || true)
 if [ $# -gt 0 ]; then dir=$1
-elif [ -n "$here" ] && [ -f "$here/go.mod" ] && grep -q 'module github.com/AbiXnash/codist$' "$here/go.mod"; then dir=$(dirname "$here")
+elif [ -n "$here" ] && [ -f "$here/go.mod" ] && grep -q 'module github.com/abxengg/codist$' "$here/go.mod"; then dir=$(dirname "$here")
 else dir=$PWD/codist-dev
 fi
 mkdir -p "$dir"

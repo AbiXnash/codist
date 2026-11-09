@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	model "github.com/AbiXnash/codist-model"
-	"github.com/AbiXnash/codist-model/incident"
-	"github.com/AbiXnash/codist-review/store"
-	"github.com/AbiXnash/codist/internal/web"
+	model "github.com/abxengg/codist-model"
+	"github.com/abxengg/codist-model/incident"
+	"github.com/abxengg/codist-review/store"
+	"github.com/abxengg/codist/internal/web"
 )
 
 // projectCode answers the incident analysis's questions about the project from the index, git and the issue store.

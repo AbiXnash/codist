@@ -8,7 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/AbiXnash/codist-review/activity"
+	"github.com/abxengg/codist-review/activity"
 	"log/slog"
 	"net"
 	"net/http"
@@ -21,10 +21,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/AbiXnash/codist-git"
-	"github.com/AbiXnash/codist-model"
-	"github.com/AbiXnash/codist/internal/app"
-	"github.com/AbiXnash/codist/internal/config"
+	"github.com/abxengg/codist-git"
+	"github.com/abxengg/codist-model"
+	"github.com/abxengg/codist/internal/app"
+	"github.com/abxengg/codist/internal/config"
 )
 
 func main() {

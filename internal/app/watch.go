@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AbiXnash/codist-review"
-	"github.com/AbiXnash/codist-review/activity"
-	"github.com/AbiXnash/codist-review/risk"
+	"github.com/abxengg/codist-review"
+	"github.com/abxengg/codist-review/activity"
+	"github.com/abxengg/codist-review/risk"
 )
 
 // Reviews run in two lanes. Code checks take milliseconds, so they have their own lane and never

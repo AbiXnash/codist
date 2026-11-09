@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/AbiXnash/codist/internal/web"
+	"github.com/abxengg/codist/internal/web"
 )
 
 // The behaviour lane runs the methods each recent commit changed, before and after it, and keeps what differs.

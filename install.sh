@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs Codist on macOS or Linux, then checks what it needs.
 #
-#   curl -fsSL https://raw.githubusercontent.com/AbiXnash/codist/remaster/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/abxengg/codist/remaster/install.sh | sh
 #
 # Settings, all optional:
 #   CODIST_VERSION   a release tag such as v0.1.0 (default: the latest release)
@@ -9,7 +9,7 @@
 #   CODIST_FROM_SOURCE=1  build from source with Go instead of downloading
 set -eu
 
-REPO="AbiXnash/codist"
+REPO="abxengg/codist"
 BRANCH="remaster"
 BIN_DIR="${CODIST_BIN_DIR:-$HOME/.local/bin}"
 VERSION="${CODIST_VERSION:-latest}"

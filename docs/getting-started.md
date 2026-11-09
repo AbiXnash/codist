@@ -7,13 +7,13 @@ This takes about ten minutes, most of it downloading a model.
 **macOS and Linux**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AbiXnash/codist/remaster/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/abxengg/codist/remaster/install.sh | sh
 ```
 
 **Windows**, in PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/AbiXnash/codist/remaster/install.ps1 | iex
+irm https://raw.githubusercontent.com/abxengg/codist/remaster/install.ps1 | iex
 ```
 
 The script puts one file, `codist` (`codist.exe` on Windows), in `~/.local/bin` (`%LOCALAPPDATA%\codist\bin` on
