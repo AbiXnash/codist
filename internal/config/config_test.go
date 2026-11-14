@@ -71,3 +71,22 @@ func TestBehaviourSetting(t *testing.T) {
 		t.Error("env on")
 	}
 }
+
+// Values that would spin the watcher or silence the model fall back to the defaults, and extra host names come
+// from the environment only, never from the repository's own file.
+func TestUnusableValuesAndHosts(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".codist"), 0o755)
+	os.WriteFile(filepath.Join(dir, ".codist", "config.lua"), []byte("poll_ms = 0\nmax_files = -2\nhosts = { 'evil.example' }\n"), 0o644)
+	t.Setenv("CODIST_HOSTS", "Codist.internal, box")
+	c, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.PollMs != 3000 || c.MaxFiles != 8 {
+		t.Errorf("poll %d, files %d", c.PollMs, c.MaxFiles)
+	}
+	if len(c.Hosts) != 2 || c.Hosts[0] != "codist.internal" || c.Hosts[1] != "box" {
+		t.Errorf("hosts %q", c.Hosts)
+	}
+}

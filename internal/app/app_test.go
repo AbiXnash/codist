@@ -6,9 +6,11 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -973,4 +975,86 @@ func TestQueueSortBy(t *testing.T) {
 	if strings.Join(order, "") != "cadb" {
 		t.Errorf("order %v", order)
 	}
+}
+
+// The API has no login, so it answers only pages from this machine, and never reads outside the repository.
+func TestOnlyOwnPagesAndOwnFiles(t *testing.T) {
+	e := start(t, func(c *config.Config) { c.ModelOff, c.Hosts = true, []string{"codist.box"} })
+	ask := func(method, path, host, origin, site string) int {
+		req, _ := http.NewRequest(method, e.url+path, strings.NewReader(`{"title":"t","logs":"x"}`))
+		if host != "" {
+			req.Host = host
+		}
+		if origin != "" {
+			req.Header.Set("Origin", origin)
+		}
+		if site != "" {
+			req.Header.Set("Sec-Fetch-Site", site)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	for _, c := range []struct {
+		what, method, path, host, origin, site string
+		want                                   int
+	}{
+		{"this machine", "GET", "/api/status", "", "", "", 200},
+		{"localhost by name", "GET", "/api/status", "localhost:8080", "http://localhost:8080", "same-origin", 200},
+		{"an allowed name", "GET", "/api/status", "codist.box:8080", "", "", 200},
+		{"a name pointed at this machine", "GET", "/api/status", "evil.example", "", "", 403},
+		{"another site's script", "POST", "/api/incidents", "", "http://evil.example", "", 403},
+		{"a sandboxed page", "POST", "/api/incidents", "", "null", "", 403},
+		{"a cross-site fetch", "GET", "/api/status", "", "", "cross-site", 403},
+		{"the interface itself, from anywhere", "GET", "/", "evil.example", "", "", 200},
+		{"a file above the repository", "GET", "/api/file?path=../outside.txt", "", "", "", 404},
+		{"a commit id that is an option", "GET", "/api/commits/--output=" + filepath.Join(t.TempDir(), "x"), "", "", "", 404},
+	} {
+		if got := ask(c.method, c.path, c.host, c.origin, c.site); got != c.want {
+			t.Errorf("%s: %d, want %d", c.what, got, c.want)
+		}
+	}
+	var f struct{ Content string }
+	if e.get("/api/file?path="+testrepo.ServicePath, &f) != 200 || f.Content == "" {
+		t.Error("a file of the repository is still read")
+	}
+}
+
+// A model server that fails every call does not use up the backlog: the commits stay without a model review and
+// are queued again at the next start.
+func TestFailingModelLeavesCommitsForLater(t *testing.T) {
+	e := start(t, func(c *config.Config) { c.History = 2 })
+	e.model.mu.Lock()
+	e.model.fail = true
+	e.model.mu.Unlock()
+	e.reviewed(3, false)
+	waitFor(t, "the model lane to stop trying", func() bool {
+		var st map[string]any
+		e.get("/api/status", &st)
+		return strings.Contains(st["llmProblem"].(string), "stopped answering")
+	})
+	for _, rv := range e.app.store.Reviews() {
+		if rv.Model != "" {
+			t.Errorf("%s is stored as read by %s", short(rv.SHA), rv.Model)
+		}
+	}
+	if e.app.models.Length() == 0 {
+		t.Error("nothing is left queued for the model")
+	}
+}
+
+// A pull that brings more than 50 commits queues all of them.
+func TestManyNewCommitsAtOnce(t *testing.T) {
+	e := start(t, func(c *config.Config) { c.ModelOff = true })
+	before := len(e.commits())
+	e.reviewed(before, false)
+	tree, tip := e.repo.Git("rev-parse", "HEAD^{tree}"), e.repo.Head()
+	for i := 0; i < 60; i++ { // made aside, so they all arrive in one move of HEAD
+		tip = e.repo.Git("commit-tree", tree, "-p", tip, "-m", fmt.Sprintf("Note %d", i))
+	}
+	e.repo.Git("merge", "-q", "--ff-only", tip)
+	e.reviewed(before+60, false)
 }

@@ -72,6 +72,9 @@ func (a *App) index() *java.Index {
 
 // source reads a file as the interface shows it: at a commit, or from the view.
 func (a *App) source(path, sha string) ([]byte, bool) {
+	if !filepath.IsLocal(filepath.FromSlash(path)) { // never a file outside the repository, such as ../../secret
+		return nil, false
+	}
 	if sha == "" && !a.viewing() {
 		b, err := os.ReadFile(filepath.Join(a.repo.Root, filepath.FromSlash(path)))
 		return b, err == nil

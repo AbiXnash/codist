@@ -208,9 +208,10 @@ func (a *App) commit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	resolved := []map[string]any{}
+	feedback := a.store.AllFeedback()
 	for _, is := range a.store.AllIssues() {
 		if is.State == "resolved" && is.FixedSHA == c.SHA {
-			resolved = append(resolved, a.issueJSON(is))
+			resolved = append(resolved, a.issueJSON(is, feedback))
 		}
 	}
 	web.JSON(w, map[string]any{
@@ -355,7 +356,7 @@ func urgency(sev string) string {
 	return "When convenient"
 }
 
-func (a *App) issueJSON(is store.TrackedIssue) map[string]any {
+func (a *App) issueJSON(is store.TrackedIssue, feedback map[string]store.Feedback) map[string]any {
 	f := is.Latest
 	source := "rule"
 	if f.Source == "model" {
@@ -364,7 +365,7 @@ func (a *App) issueJSON(is store.TrackedIssue) map[string]any {
 	cat := category(f.Rule, f.Source)
 	j := map[string]any{"id": is.Key, "state": is.State, "severity": f.Severity, "category": cat, "kind": kinds[cat], "urgency": urgency(f.Severity),
 		"title": f.Title, "detail": f.Detail, "suggestion": f.Suggestion, "source": source, "path": is.Path, "line": f.Line,
-		"snippet": f.Snippet, "feedback": a.store.AllFeedback()[is.Key].Verdict, "firstSeen": is.FirstSHA, "lastSeen": lastSeen(f.SHA, is.FirstSHA), "commits": orEmptyS(is.Commits), "reviewLine": f.Line}
+		"snippet": f.Snippet, "feedback": feedback[is.Key].Verdict, "firstSeen": is.FirstSHA, "lastSeen": lastSeen(f.SHA, is.FirstSHA), "commits": orEmptyS(is.Commits), "reviewLine": f.Line}
 	if f.Rule != "" {
 		j["ref"] = f.Rule
 	}
@@ -386,13 +387,14 @@ func (a *App) issues(w http.ResponseWriter, r *http.Request) {
 	counts := map[string]int{}
 	bySev := map[string]int{}
 	out := []map[string]any{}
+	feedback := a.store.AllFeedback() // read once, not once per issue
 	for _, is := range a.store.AllIssues() {
 		counts[is.State]++
 		if is.State == "open" {
 			bySev[is.Latest.Severity]++
 		}
 		if want == "" || want == "all" || want == is.State {
-			out = append(out, a.issueJSON(is))
+			out = append(out, a.issueJSON(is, feedback))
 		}
 	}
 	web.JSON(w, map[string]any{"issues": out, "counts": counts, "openBySeverity": bySev})

@@ -15,9 +15,10 @@ import (
 
 // Config is everything Codist can be told.
 type Config struct {
-	Repo    string // repository root
-	DataDir string // where Codist keeps its database
-	Addr    string // listen address, 127.0.0.1 only by default: there is no login
+	Repo    string   // repository root
+	DataDir string   // where Codist keeps its database
+	Addr    string   // listen address, 127.0.0.1 only by default: there is no login
+	Hosts   []string // host names besides this machine's that pages may reach Codist by (CODIST_HOSTS); never from the repository
 
 	ModelURL  string // the model server the user runs, e.g. Ollama
 	Model     string // model name on that server
@@ -157,6 +158,15 @@ func (c *Config) applyEnv() {
 	}
 	if os.Getenv("CODIST_NO_BROWSER") != "" {
 		c.OpenPage = false
+	}
+	if v := os.Getenv("CODIST_HOSTS"); v != "" {
+		c.Hosts = strings.Split(strings.ToLower(strings.ReplaceAll(v, " ", "")), ",")
+	}
+	if c.PollMs < 1 { // zero would spin the watcher
+		c.PollMs = 3000
+	}
+	if c.MaxFiles < 1 { // zero would have the model read nothing, silently
+		c.MaxFiles = 8
 	}
 	c.ModelURL = strings.TrimRight(c.ModelURL, "/")
 }

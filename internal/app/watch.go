@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -73,13 +74,31 @@ func (a *App) work(ctx context.Context, q *queue, model bool) {
 		} // otherwise the model is reviewing it, which runs the checks too: the fast lane moves on
 		q.Done(j.sha)
 		status := "done"
-		if err != nil {
+		switch {
+		case errors.Is(err, review.ErrModelFailed):
+			a.modelFailed(j)
+		case err != nil:
 			status = "failed"
 			slog.Warn("review failed", "sha", short(j.sha), "err", err)
-		} else {
+		default:
 			slog.Info("reviewed", "sha", short(j.sha), "model", model, "took", time.Since(start).Round(time.Millisecond), "left", q.Length())
 		}
-		a.events.publish("review", map[string]any{"sha": j.sha, "status": a.statusOf(j.sha, status), "counts": a.store.Counts()[j.sha]})
+		a.events.publish("review", map[string]any{"sha": j.sha, "status": a.statusOf(j.sha, status), "counts": a.store.CountsOf(j.sha)})
+	}
+}
+
+// modelFailed is called when the model could not read any of a commit, as when its server stops. The lane waits
+// until the server answers again and then reads the commit once more, three times at most, so that one commit the
+// model cannot take does not hold up the rest. The review is stored without a model, so a restart tries it again.
+func (a *App) modelFailed(j job) {
+	a.mu.Lock()
+	a.modelOK, a.modelNote = false, "the model server stopped answering; Codist will try again shortly"
+	a.tries[j.sha]++
+	again := a.tries[j.sha] < 3
+	a.mu.Unlock()
+	slog.Warn("the model could not read a commit", "sha", short(j.sha), "again", again)
+	if again {
+		a.models.Push(j, true)
 	}
 }
 
@@ -114,8 +133,8 @@ func (a *App) backlog() {
 	log, _ := a.repo.LogRef("HEAD", 1_000_000)
 	for i, c := range log { // newest first
 		rv, seen := reviews[c.SHA]
-		// A review still "running" was cut off when Codist stopped, so it is done again.
-		finished := seen && rv.Status != "running"
+		// A review still "running" was cut off when Codist stopped, and a failed one may work now: both are done again.
+		finished := seen && rv.Status == "done"
 		if !finished {
 			a.checks.Push(job{sha: c.SHA, opt: review.Options{RulesOnly: true}}, false)
 		}
@@ -149,7 +168,10 @@ func (a *App) watch(ctx context.Context) {
 		if head == "" || head == last {
 			continue
 		}
-		recent, _ := a.repo.Log(50)
+		recent, err := a.repo.LogRef(last+"..HEAD", 100_000) // everything new, however much a pull brought
+		if err != nil {
+			recent, _ = a.repo.Log(50) // the old HEAD is gone, as after a rewrite
+		}
 		fresh := []string{}
 		for _, c := range recent {
 			if c.SHA == last {
@@ -161,7 +183,7 @@ func (a *App) watch(ctx context.Context) {
 		}
 		for i := len(fresh) - 1; i >= 0; i-- { // pushing to the front in reverse keeps the newest first
 			a.checks.Push(job{sha: fresh[i], opt: review.Options{RulesOnly: true}}, true)
-			if !a.cfg.ModelOff {
+			if !a.cfg.ModelOff && i < a.historyLimit() {
 				a.models.Push(job{sha: fresh[i]}, true)
 			}
 			if a.runner != nil {

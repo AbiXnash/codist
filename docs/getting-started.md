@@ -38,7 +38,7 @@ docker run --rm -p 8080:8080 -v "$PWD:/repo" -v codist-data:/data \
 ```
 
 Then open http://localhost:8080. The container reaches Ollama on your machine at `host.docker.internal:11434`; set
-`-e CODIST_MODEL_URL=...` for another address. Pin a version with `ghcr.io/abxengg/codist:0.5.1`.
+`-e CODIST_MODEL_URL=...` for another address. To open it from another machine by name, add `-e CODIST_HOSTS=that-name`. Pin a version with `ghcr.io/abxengg/codist:0.5.1`.
 
 **With Go** 1.26 or later:
 
@@ -121,8 +121,13 @@ Environment variables override it for one run:
 | `CODIST_HISTORY` | how many recent commits the model reads; 0 for all |
 | `CODIST_BEHAVIOUR=1` | turn on running changed methods (see below) |
 | `CODIST_DATA_DIR` | where Codist keeps its data (default `~/.codist`) |
+| `CODIST_HOSTS` | extra host names the pages may reach Codist by, separated by commas (see below) |
 | `CODIST_LOG` | how much it logs: `debug`, `info` (default), `warn` or `error` |
 | `CODIST_LOG_JSON=1` | log one JSON object per line, for log tools |
+
+Codist has no login, so it only answers pages opened as `localhost` or `127.0.0.1`, and refuses requests that come
+through another website. To open it by another name, such as a machine on your network, name it:
+`CODIST_HOSTS=devbox.local codist`. This setting is read from the environment only, never from the repository.
 
 ### Your team's rules
 
@@ -178,6 +183,9 @@ have (`ollama list`).
 
 **macOS says the program cannot be opened**: the installer clears the download mark; if you copied the file by hand,
 run `xattr -d com.apple.quarantine ~/.local/bin/codist`.
+
+**"Codist only answers its own pages"**: you opened it by a name other than `localhost`, or another site tried to
+call it. Open `http://localhost:8080`, or allow the name with `CODIST_HOSTS`.
 
 **Reviews are slow**: that is the model. Use `qwen2.5-coder:7b`, lower `history`, or set `max_files` smaller. Code
 check results show at once either way.
