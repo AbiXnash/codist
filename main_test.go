@@ -51,7 +51,9 @@ func TestDoctorCommand(t *testing.T) {
 	os.MkdirAll(tr.Dir+"/.codist", 0o755)
 	os.WriteFile(tr.Dir+"/.codist/config.lua", []byte(`model = { url = "http://127.0.0.1:1" }`), 0o644)
 	out, code := run(t, "doctor "+tr.Dir)
-	if code != 1 || !strings.Contains(out, "missing  model") || !strings.Contains(out, "Settings from") {
+	// A missing model is reported, not an error: the code checks run without one. The file names a model on this
+	// machine, so nothing waits for "codist trust".
+	if code != 0 || !strings.Contains(out, "missing  model") || !strings.Contains(out, "Settings from") || strings.Contains(out, "codist trust") {
 		t.Errorf("%d %s", code, out)
 	}
 	os.WriteFile(tr.Dir+"/.codist/config.lua", []byte(`model = {`), 0o644)
@@ -67,16 +69,29 @@ func TestDoctor(t *testing.T) {
 	defer s.Close()
 	cfg := config.Defaults(t.TempDir())
 	cfg.ModelURL, cfg.Model = s.URL, "m"
-	if code := runDoctor(cfg); code != 0 {
-		t.Errorf("all there: %d", code)
-	}
+	runDoctor(cfg) // all there
 	cfg.Model = "other"
-	if code := runDoctor(cfg); code != 1 {
-		t.Errorf("model missing: %d", code)
+	runDoctor(cfg) // the model is missing, which is said and is not an error
+}
+
+// A repository's own file cannot turn on running its code, or name a model on another machine, until the person
+// runs "codist trust" there.
+func TestTrustCommand(t *testing.T) {
+	tr := testrepo.New(t)
+	data := "CODIST_DATA_DIR=" + t.TempDir()
+	os.MkdirAll(tr.Dir+"/.codist", 0o755)
+	os.WriteFile(tr.Dir+"/.codist/config.lua", []byte(`behaviour = true
+model = { url = "http://models.example:11434" }`), 0o644)
+	out, code := run(t, "doctor "+tr.Dir, data)
+	if code != 0 || !strings.Contains(out, "codist trust") || !strings.Contains(out, "http://localhost:11434") {
+		t.Errorf("before trust: %d %s", code, out)
 	}
-	cfg.ModelOff = true
-	if code := runDoctor(cfg); code != 0 {
-		t.Errorf("model off, so not required: %d", code)
+	if out, code := run(t, "trust "+tr.Dir, data); code != 0 || !strings.Contains(out, "every setting") {
+		t.Errorf("trust: %d %s", code, out)
+	}
+	out, code = run(t, "doctor "+tr.Dir, data)
+	if code != 0 || strings.Contains(out, "codist trust") || !strings.Contains(out, "http://models.example:11434") {
+		t.Errorf("after trust: %d %s", code, out)
 	}
 }
 

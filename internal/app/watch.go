@@ -87,9 +87,8 @@ func (a *App) work(ctx context.Context, q *queue, model bool) {
 	}
 }
 
-// modelFailed is called when the model could not read any of a commit, as when its server stops. The lane waits
-// until the server answers again and then reads the commit once more, three times at most, so that one commit the
-// model cannot take does not hold up the rest. The review is stored without a model, so a restart tries it again.
+// modelFailed is called when the model could not read any of a commit, as when its server stops. The lane waits for
+// the server and reads the commit again, three times at most, so one commit the model cannot take holds up nothing.
 func (a *App) modelFailed(j job) {
 	a.mu.Lock()
 	a.modelOK, a.modelNote = false, "the model server stopped answering; Codist will try again shortly"

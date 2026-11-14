@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/abxengg/codist-review/store"
 )
 
 func TestLuaConfig(t *testing.T) {
@@ -16,6 +18,11 @@ local skip = { "target/", "generated/" }
 table.insert(skip, "docs/")
 ignore = skip
 `), 0o644)
+	data := t.TempDir() // the file names a model on another machine, which needs the person's trust
+	t.Setenv("CODIST_DATA_DIR", data)
+	if err := store.Trust(data, dir); err != nil {
+		t.Fatal(err)
+	}
 	c, err := Load(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -88,5 +95,35 @@ func TestUnusableValuesAndHosts(t *testing.T) {
 	}
 	if len(c.Hosts) != 2 || c.Hosts[0] != "codist.internal" || c.Hosts[1] != "box" {
 		t.Errorf("hosts %q", c.Hosts)
+	}
+}
+
+// What the repository's file may not decide alone: running its code, and a model on another machine. The
+// environment, which is the person's, still can.
+func TestRepositoryFileNeedsTrust(t *testing.T) {
+	dir, data := t.TempDir(), t.TempDir()
+	t.Setenv("CODIST_DATA_DIR", data)
+	os.MkdirAll(filepath.Join(dir, ".codist"), 0o755)
+	write := func(s string) { os.WriteFile(filepath.Join(dir, ".codist", "config.lua"), []byte(s), 0o644) }
+	write("behaviour = true\nmodel = { url = 'http://models.example:11434', name = 'm' }\nhistory = 7\n")
+	c, _ := Load(dir)
+	if c.Behaviour || c.ModelURL != "http://localhost:11434" || !c.Held || c.Model != "m" || c.History != 7 {
+		t.Errorf("untrusted: %+v", c)
+	}
+	write("model = { url = 'http://127.0.0.1:9999' }\n") // this machine: nothing to agree to
+	if c, _ := Load(dir); c.Held || c.ModelURL != "http://127.0.0.1:9999" {
+		t.Errorf("a local model: %+v", c)
+	}
+	write("history = 3\n")
+	t.Setenv("CODIST_BEHAVIOUR", "1")
+	t.Setenv("CODIST_MODEL_URL", "http://gpu-box:11434")
+	if c, _ := Load(dir); c.Held || !c.Behaviour || c.ModelURL != "http://gpu-box:11434" {
+		t.Errorf("the environment decides: %+v", c)
+	}
+	for host, want := range map[string]bool{"localhost": true, "LOCALHOST:8080": true, "app.localhost": true, "127.0.0.1:1": true, "[::1]:8080": true,
+		"http://localhost:5173": true, "box": true, "evil.example": false, "http://evil.example": false, "null": false, "": false, "localhost.evil.example": false} {
+		if got := Local(host, []string{"box"}); got != want {
+			t.Errorf("Local(%q) = %v", host, got)
+		}
 	}
 }

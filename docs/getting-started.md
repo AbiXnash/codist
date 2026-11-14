@@ -111,6 +111,11 @@ behaviour = false        -- run changed methods before and after each recent com
 ```
 
 The file is Lua, so a team can compute values instead of copying them; it runs with no file, network or OS access.
+
+The file comes with the repository, so two settings in it wait for your word: `behaviour = true`, which runs the
+repository's code, and a `model.url` on another machine, which sends your code there. Codist says so when it
+starts. To agree for a repository, run `codist trust` in it once; Codist remembers it in its data folder. The
+environment variables below are yours, so they need no trust.
 Environment variables override it for one run:
 
 | Variable | Meaning |
@@ -163,10 +168,14 @@ The branch picker in the top bar shows any branch, read from git, without changi
 
 ## Behaviour: running the changed code (optional)
 
-Turn it on per repository with `behaviour = true` in `.codist/config.lua`, or `CODIST_BEHAVIOUR=1` for one run. It
+Turn it on per repository with `behaviour = true` in `.codist/config.lua` and `codist trust` (once, see
+[Settings](#4-settings)), or `CODIST_BEHAVIOUR=1` for one run. It
 needs a JDK 17 or later (`java` and `javac`) and, for Maven projects, the project's `mvnw` or `mvn`; Gradle is not
 supported yet. It is off by default because it runs your project's code. Codist runs it in a scratch folder with an
 environment cut down to the path, the JDK and the locale, so keys and passwords in your environment do not reach it.
+This is not a sandbox: the code and its Maven build run as you and can read your files, and Maven downloads what
+the project needs the first time (later builds run offline). Turn it on only for code you would build yourself.
+Each commit is built once and the last six builds are kept, so a run of commits builds quickly.
 
 Inputs are standard edge cases for each parameter type, so it finds differences in logic that takes plain values
 best. A service that needs a database or another service is not covered yet.
@@ -192,4 +201,4 @@ check results show at once either way.
 
 **Start over**: stop Codist and delete `~/.codist/<repo>.db`.
 
-`codist doctor` runs the same checks as the installer at any time.
+`codist doctor` runs the same checks as the installer at any time. A missing model is reported, not an error.

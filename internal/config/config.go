@@ -4,12 +4,17 @@
 package config
 
 import (
+	"cmp"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/abxengg/codist-review/store"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -31,6 +36,7 @@ type Config struct {
 	Ignore    []string
 	OpenPage  bool
 	FromLua   bool // a config.lua was found and read
+	Held      bool // the file asked to run the code or use a model on another machine, and waits for "codist trust"
 	LuaSource string
 }
 
@@ -61,6 +67,10 @@ func Load(repo string) (Config, error) {
 			return c, fmt.Errorf("%s: %w", path, err)
 		}
 		c.FromLua, c.LuaSource = true, path
+		// The file comes with the repository. What runs its code or sends it to another machine waits for the person.
+		if (c.Behaviour || !Local(c.ModelURL, nil)) && !store.Trusted(cmp.Or(os.Getenv("CODIST_DATA_DIR"), c.DataDir), repo) {
+			c.Behaviour, c.ModelURL, c.Held = false, Defaults(repo).ModelURL, true
+		}
 	}
 	c.applyEnv()
 	return c, nil
@@ -162,13 +172,21 @@ func (c *Config) applyEnv() {
 	if v := os.Getenv("CODIST_HOSTS"); v != "" {
 		c.Hosts = strings.Split(strings.ToLower(strings.ReplaceAll(v, " ", "")), ",")
 	}
-	if c.PollMs < 1 { // zero would spin the watcher
-		c.PollMs = 3000
-	}
-	if c.MaxFiles < 1 { // zero would have the model read nothing, silently
-		c.MaxFiles = 8
-	}
+	// Zero would spin the watcher, or have the model read nothing without saying so.
+	c.PollMs, c.MaxFiles = cmp.Or(max(c.PollMs, 0), 3000), cmp.Or(max(c.MaxFiles, 0), 8)
 	c.ModelURL = strings.TrimRight(c.ModelURL, "/")
+}
+
+// Local says a host, given alone, with a port or as a URL, is this machine or one of the extra names allowed.
+func Local(host string, extra []string) bool {
+	if u, err := url.Parse(host); err == nil && u.Host != "" {
+		host = u.Host
+	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	host = strings.ToLower(strings.Trim(host, "[]"))
+	return host == "localhost" || strings.HasSuffix(host, ".localhost") || net.ParseIP(host).IsLoopback() || slices.Contains(extra, host)
 }
 
 // Ignored says whether a repository path is excluded.

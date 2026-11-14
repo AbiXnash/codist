@@ -4,11 +4,8 @@ package app
 import (
 	"cmp"
 	"context"
-	"net"
 	"net/http"
-	"net/url"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -81,16 +78,12 @@ func New(ctx context.Context, cfg config.Config, repo *git.Repo) (*App, error) {
 // Handler serves the API and the interface.
 func (a *App) Handler() http.Handler { return gzipped(a.guard(a.mux)) }
 
-// guard refuses API requests that reach Codist through another website. There is no login, so only pages served
-// from this machine may call it: a foreign Host is a name pointed at this machine to read answers (DNS rebinding),
-// and a foreign Origin or a cross-site fetch is another page's script.
+// guard refuses API requests that come through another website, since there is no login: a foreign Host is a name
+// pointed at this machine to read answers (DNS rebinding); a foreign Origin or cross-site fetch is another page's script.
 func (a *App) guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if u, err := url.Parse(origin); err == nil && origin != "" {
-			origin = u.Host
-		}
-		if strings.HasPrefix(r.URL.Path, "/api/") && (!a.local(r.Host) || r.Header.Get("Origin") != "" && !a.local(origin) ||
+		if strings.HasPrefix(r.URL.Path, "/api/") && (!config.Local(r.Host, a.cfg.Hosts) || origin != "" && !config.Local(origin, a.cfg.Hosts) ||
 			r.Header.Get("Sec-Fetch-Site") == "cross-site") {
 			web.Error(w, http.StatusForbidden, "Codist only answers its own pages. Set CODIST_HOSTS to allow another host name.")
 			return
@@ -99,18 +92,8 @@ func (a *App) guard(next http.Handler) http.Handler {
 	})
 }
 
-// local says a host, with or without a port, is this machine or a name the settings allow (CODIST_HOSTS).
-func (a *App) local(host string) bool {
-	if h, _, err := net.SplitHostPort(host); err == nil {
-		host = h
-	}
-	host = strings.ToLower(strings.Trim(host, "[]"))
-	ip := net.ParseIP(host)
-	return host == "localhost" || strings.HasSuffix(host, ".localhost") || ip != nil && ip.IsLoopback() || slices.Contains(a.cfg.Hosts, host)
-}
-
 // Close stops background work.
-func (a *App) Close() { _ = a.store.Close() }
+func (a *App) Close() { a.repo.Close(); _ = a.store.Close() }
 
 func (a *App) routes() {
 	h := a.mux.HandleFunc

@@ -23,6 +23,7 @@ import (
 
 	"github.com/abxengg/codist-git"
 	"github.com/abxengg/codist-model"
+	"github.com/abxengg/codist-review/store"
 	"github.com/abxengg/codist/internal/app"
 	"github.com/abxengg/codist/internal/config"
 )
@@ -38,12 +39,12 @@ func main() {
 	activity.Watch()
 	args := os.Args[1:]
 	if len(args) > 0 && (args[0] == "help" || args[0] == "-h" || args[0] == "--help") {
-		fmt.Println("codist [path]    review the repository at path (default: here)\ncodist doctor    show what is installed and what is missing")
+		fmt.Println("codist [path]    review the repository at path (default: here)\ncodist doctor    show what is installed and what is missing\ncodist trust     let this repository's .codist/config.lua turn on running its code and name a model on another machine")
 		return
 	}
-	doctor := len(args) > 0 && args[0] == "doctor"
-	if doctor {
-		args = args[1:]
+	cmd := ""
+	if len(args) > 0 && (args[0] == "doctor" || args[0] == "trust") {
+		cmd, args = args[0], args[1:]
 	}
 	dir := "."
 	for _, a := range args {
@@ -67,8 +68,19 @@ func main() {
 			cfg.OpenPage = false
 		}
 	}
-	if doctor {
-		os.Exit(runDoctor(cfg))
+	if cmd == "trust" {
+		if err := store.Trust(cfg.DataDir, repo.Root); err != nil {
+			fail(err.Error())
+		}
+		fmt.Println("Codist now takes every setting from .codist/config.lua in", repo.Root)
+		return
+	}
+	if cfg.Held {
+		fmt.Fprintln(os.Stderr, "codist: .codist/config.lua asks to run this repository's code or to use a model on another machine. That is off until you agree: run \"codist trust\" here, or set CODIST_BEHAVIOUR=1 or CODIST_MODEL_URL for one run.")
+	}
+	if cmd == "doctor" {
+		runDoctor(cfg)
+		return
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -110,21 +122,18 @@ func fail(msg string) {
 }
 
 func openBrowser(url string) {
-	cmd := map[string]string{"darwin": "open", "windows": "rundll32", "linux": "xdg-open"}[runtime.GOOS]
-	if cmd == "" {
-		return
-	}
+	cmd, args := map[string]string{"darwin": "open", "windows": "rundll32", "linux": "xdg-open"}[runtime.GOOS], []string{url}
 	if runtime.GOOS == "windows" {
-		_ = exec.Command(cmd, "url.dll,FileProtocolHandler", url).Start()
-		return
+		args = []string{"url.dll,FileProtocolHandler", url}
 	}
-	_ = exec.Command(cmd, url).Start()
+	if cmd != "" {
+		_ = exec.Command(cmd, args...).Start()
+	}
 }
 
-// runDoctor prints what Codist found, each with what to do about it, and returns 1 if something
-// required is missing.
-func runDoctor(cfg config.Config) int {
-	code := 0
+// runDoctor prints what Codist found, each with what to do about it. Only git is required, and without it Codist
+// has already stopped; a missing model is reported, not an error, since the code checks run without one.
+func runDoctor(cfg config.Config) {
 	line := func(ok bool, what, note string) {
 		mark := "ok     "
 		if !ok {
@@ -137,14 +146,10 @@ func runDoctor(cfg config.Config) int {
 	fmt.Println("Model (you run the server; Codist connects to it)")
 	ok, note := model.New(cfg.ModelURL, cfg.Model, cfg.ModelCtx).Status(context.Background())
 	line(ok, "model", cfg.Model+" at "+cfg.ModelURL+": "+note)
-	if !ok && !cfg.ModelOff {
-		code = 1
-	}
 	fmt.Println("Optional")
 	_, javaErr := exec.LookPath("java")
 	line(javaErr == nil, "java", "runs checks that execute code")
 	if cfg.FromLua {
 		fmt.Println("Settings from " + filepath.ToSlash(cfg.LuaSource))
 	}
-	return code
 }
