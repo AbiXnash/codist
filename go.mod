@@ -7,16 +7,16 @@ toolchain go1.26.10
 require github.com/yuin/gopher-lua v1.1.2
 
 require (
-	github.com/abxengg/codist-behaviour v0.3.0
-	github.com/abxengg/codist-git v0.5.0
+	github.com/abxengg/codist-behaviour v0.4.0
+	github.com/abxengg/codist-git v0.6.0
 	github.com/abxengg/codist-java v0.5.0
 	github.com/abxengg/codist-model v0.5.0
-	github.com/abxengg/codist-review v0.9.0
+	github.com/abxengg/codist-review v0.10.0
 	github.com/abxengg/codist-ui v0.8.0
 )
 
 require (
-	github.com/abxengg/codist-fix v0.2.0
+	github.com/abxengg/codist-fix v0.3.0
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
